@@ -291,3 +291,20 @@ body {
   box-shadow: 0 25px 50px rgba(0, 0, 0, 0.2);
   transition: all 0.3s ease;
 }
+.signup-text2 {
+  margin-top: 15px;
+  font-size: 14px;
+  color: #333;
+}
+
+.signup-text2 a {
+  color: #f97316;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.3s ease;
+}
+
+.signup-text2 a:hover {
+  text-decoration: underline;
+  color: #ea580c;
+}
