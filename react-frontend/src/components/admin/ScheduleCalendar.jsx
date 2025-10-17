@@ -8,7 +8,8 @@ import {
   faDownload, 
   faFilter, 
   faGraduationCap, 
-  faCode 
+  faCode,
+  faTimes 
 } from '@fortawesome/free-solid-svg-icons';
 import '../../styles/ScheduleCalendar.css';const ScheduleCalendar = () => {
   const { course, year } = useParams();
@@ -16,6 +17,7 @@ import '../../styles/ScheduleCalendar.css';const ScheduleCalendar = () => {
   const [deleteMode, setDeleteMode] = useState(false);
   const [dayFilter, setDayFilter] = useState('all');
   const [scheduleData, setScheduleData] = useState({});
+  const [showAddClassPopup, setShowAddClassPopup] = useState(false);
 
   // Time slots from 7:30 AM to 9:00 PM
   const timeSlots = [
@@ -30,14 +32,12 @@ import '../../styles/ScheduleCalendar.css';const ScheduleCalendar = () => {
       '7:30 - 8:00', '8:00 - 8:30', '8:30 - 9:00'
   ];
 
-  const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
-  const dayGroups = {
-    monday: 'mth',
-    tuesday: 'tf',
-    wednesday: 'w',
-    thursday: 'mth',
-    friday: 'tf'
-  };
+  // Grouped day display for the calendar
+  const dayDisplayGroups = [
+    { label: 'Monday/Thursday', days: ['monday', 'thursday'], group: 'mth' },
+    { label: 'Tuesday/Friday', days: ['tuesday', 'friday'], group: 'tf' },
+    { label: 'Wednesday', days: ['wednesday'], group: 'w' }
+  ];
 
   const sections = ['A', 'B', 'C', 'D', 'E', 'F'];
 
@@ -54,6 +54,15 @@ import '../../styles/ScheduleCalendar.css';const ScheduleCalendar = () => {
     }
   };
 
+  // Sample instructor data
+  const instructors = [
+    { id: '10001', name: 'Instructor 1', email: 'Instructor1@buksu.edu.ph' },
+    { id: '10002', name: 'Instructor 2', email: 'Instructor2@buksu.edu.ph' },
+    { id: '10003', name: 'Instructor 3', email: 'Instructor3@buksu.edu.ph' },
+    { id: '10004', name: 'Instructor 4', email: 'Instructor4@buksu.edu.ph' },
+    { id: '10005', name: 'Instructor 5', email: 'Instructor5@buksu.edu.ph' }
+  ];
+
   useEffect(() => {
     // Load saved schedule data
     const saved = localStorage.getItem(`schedule-${course}-${year}`);
@@ -63,7 +72,7 @@ import '../../styles/ScheduleCalendar.css';const ScheduleCalendar = () => {
   }, [course, year]);
 
   const addNewClass = () => {
-    alert('Add New Class functionality would open a form to add a new class to the schedule.');
+    setShowAddClassPopup(true);
   };
 
   const toggleDeleteMode = () => {
@@ -72,6 +81,12 @@ import '../../styles/ScheduleCalendar.css';const ScheduleCalendar = () => {
 
   const downloadSchedule = () => {
     alert('Download functionality would export the schedule as PDF or Excel file.');
+  };
+
+  const handleAddClassSubmit = (classData) => {
+    // Add logic to add the new class to the system
+    setShowAddClassPopup(false);
+    alert(`Class added successfully!\nSection Code: ${classData.sectionCode}\nSubject: ${classData.subjectName}\nDay: ${classData.day}\nStart Time: ${classData.startTime}\nEnd Time: ${classData.endTime}\nInstructor: ${classData.instructor}`);
   };
 
   const filterByDay = (selectedFilter) => {
@@ -90,11 +105,6 @@ import '../../styles/ScheduleCalendar.css';const ScheduleCalendar = () => {
 
   const getCellValue = (day, timeIndex, section) => {
     return scheduleData[`${day}-${timeIndex}-${section}`] || '';
-  };
-
-  const shouldShowRow = (day) => {
-    if (dayFilter === 'all') return true;
-    return dayGroups[day] === dayFilter;
   };
 
   const handleCellBlur = (e, day, timeIndex, section) => {
@@ -161,9 +171,9 @@ import '../../styles/ScheduleCalendar.css';const ScheduleCalendar = () => {
                       onChange={(e) => filterByDay(e.target.value)}
                     >
                       <option value="all">All Days</option>
-                      <option value="mth">MondayThursday</option>
+                      <option value="mth">Monday/Thursday</option>
                       <option value="w">Wednesday</option>
-                      <option value="tf">TuesdayFriday</option>
+                      <option value="tf">Tuesday/Friday</option>
                     </select>
                   </div>
                 </div>
@@ -183,28 +193,27 @@ import '../../styles/ScheduleCalendar.css';const ScheduleCalendar = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {days.map(day => 
+                    {dayDisplayGroups.map(dayGroup => 
                       timeSlots.map((time, timeIndex) => (
                         <tr 
-                          key={`${day}-${timeIndex}`}
-                          className={!shouldShowRow(day) ? 'hidden-row' : ''}
-                          data-day={day}
-                          data-day-group={dayGroups[day]}
+                          key={`${dayGroup.label}-${timeIndex}`}
+                          className={dayFilter !== 'all' && dayFilter !== dayGroup.group ? 'hidden-row' : ''}
+                          data-day-group={dayGroup.group}
                         >
                           <td className="day-column">
-                            {day.charAt(0).toUpperCase() + day.slice(1)}
+                            {dayGroup.label}
                           </td>
                           <td className="time-column">{time}</td>
                           {sections.map(section => (
                             <td
                               key={section}
                               contentEditable={!deleteMode}
-                              className={`${getCellValue(day, timeIndex, section) && getCellValue(day, timeIndex, section) !== 'LUNCH BREAK' ? 'subject-cell' : ''} ${deleteMode && getCellValue(day, timeIndex, section) ? 'delete-mode' : ''}`}
-                              onBlur={(e) => handleCellBlur(e, day, timeIndex, section)}
-                              onClick={() => handleCellClick(day, timeIndex, section)}
+                              className={`${getCellValue(dayGroup.days[0], timeIndex, section) && getCellValue(dayGroup.days[0], timeIndex, section) !== 'LUNCH BREAK' ? 'subject-cell' : ''} ${deleteMode && getCellValue(dayGroup.days[0], timeIndex, section) ? 'delete-mode' : ''}`}
+                              onBlur={(e) => handleCellBlur(e, dayGroup.days[0], timeIndex, section)}
+                              onClick={() => handleCellClick(dayGroup.days[0], timeIndex, section)}
                               suppressContentEditableWarning={true}
                               dangerouslySetInnerHTML={{
-                                __html: getCellValue(day, timeIndex, section)
+                                __html: getCellValue(dayGroup.days[0], timeIndex, section)
                               }}
                             />
                           ))}
@@ -218,6 +227,342 @@ import '../../styles/ScheduleCalendar.css';const ScheduleCalendar = () => {
           </div>
         </main>
       </div>
+
+      {showAddClassPopup && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            background: 'white',
+            borderRadius: '15px',
+            padding: '30px',
+            width: '600px',
+            maxWidth: '95vw',
+            boxShadow: '0 10px 40px rgba(0, 0, 0, 0.3)',
+            position: 'relative'
+          }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '25px',
+              borderBottom: '2px solid #f1f5f9',
+              paddingBottom: '15px'
+            }}>
+              <h3 style={{
+                margin: 0,
+                color: '#1e293b',
+                fontSize: '20px',
+                fontWeight: '700',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px'
+              }}>
+                <FontAwesomeIcon icon={faPlus} style={{color: '#059669'}} />
+                Add New Class Section
+              </h3>
+              <button
+                onClick={() => setShowAddClassPopup(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '20px',
+                  cursor: 'pointer',
+                  color: '#64748b',
+                  padding: '5px',
+                  borderRadius: '50%',
+                  width: '35px',
+                  height: '35px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'all 0.3s ease'
+                }}
+                onMouseOver={(e) => {
+                  e.target.style.background = '#f1f5f9';
+                  e.target.style.color = '#374151';
+                }}
+                onMouseOut={(e) => {
+                  e.target.style.background = 'none';
+                  e.target.style.color = '#64748b';
+                }}
+              >
+                <FontAwesomeIcon icon={faTimes} />
+              </button>
+            </div>
+
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const formData = new FormData(e.target);
+              const classData = {
+                sectionCode: formData.get('sectionCode'),
+                subjectName: formData.get('subjectName'),
+                day: formData.get('day'),
+                startTime: formData.get('startTime'),
+                endTime: formData.get('endTime'),
+                instructor: formData.get('instructor')
+              };
+              handleAddClassSubmit(classData);
+            }}>
+              <div style={{marginBottom: '20px'}}>
+                <label style={{
+                  display: 'block',
+                  marginBottom: '8px',
+                  fontWeight: '600',
+                  color: '#374151',
+                  fontSize: '14px'
+                }}>
+                  Section Code *
+                </label>
+                <input
+                  type="text"
+                  name="sectionCode"
+                  placeholder="e.g., T111"
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '12px 15px',
+                    border: '2px solid #e2e8f0',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    color: '#374151',
+                    background: 'white',
+                    transition: 'border-color 0.3s ease',
+                    outline: 'none'
+                  }}
+                  onFocus={(e) => e.target.style.borderColor = '#059669'}
+                  onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
+                />
+              </div>
+
+              <div style={{marginBottom: '20px'}}>
+                <label style={{
+                  display: 'block',
+                  marginBottom: '8px',
+                  fontWeight: '600',
+                  color: '#374151',
+                  fontSize: '14px'
+                }}>
+                  Subject Name *
+                </label>
+                <input
+                  type="text"
+                  name="subjectName"
+                  placeholder="e.g., Introduction to Computing, Data Structures"
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '12px 15px',
+                    border: '2px solid #e2e8f0',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    color: '#374151',
+                    background: 'white',
+                    transition: 'border-color 0.3s ease',
+                    outline: 'none'
+                  }}
+                  onFocus={(e) => e.target.style.borderColor = '#059669'}
+                  onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
+                />
+              </div>
+
+              <div style={{marginBottom: '20px'}}>
+                <label style={{
+                  display: 'block',
+                  marginBottom: '8px',
+                  fontWeight: '600',
+                  color: '#374151',
+                  fontSize: '14px'
+                }}>
+                  Day *
+                </label>
+                <select
+                  name="day"
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '12px 15px',
+                    border: '2px solid #e2e8f0',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    color: '#374151',
+                    background: 'white',
+                    transition: 'border-color 0.3s ease',
+                    outline: 'none'
+                  }}
+                  onFocus={(e) => e.target.style.borderColor = '#059669'}
+                  onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
+                >
+                  <option value="">Select Day</option>
+                  <option value="Monday/Thursday">Monday/Thursday</option>
+                  <option value="Tuesday/Friday">Tuesday/Friday</option>
+                  <option value="Wednesday">Wednesday</option>
+                </select>
+              </div>
+
+              <div style={{marginBottom: '20px'}}>
+                <label style={{
+                  display: 'block',
+                  marginBottom: '8px',
+                  fontWeight: '600',
+                  color: '#374151',
+                  fontSize: '14px'
+                }}>
+                  Start Time *
+                </label>
+                <input
+                  type="text"
+                  name="startTime"
+                  placeholder="e.g., 9:00 AM"
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '12px 15px',
+                    border: '2px solid #e2e8f0',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    color: '#374151',
+                    background: 'white',
+                    transition: 'border-color 0.3s ease',
+                    outline: 'none'
+                  }}
+                  onFocus={(e) => e.target.style.borderColor = '#059669'}
+                  onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
+                />
+              </div>
+
+              <div style={{marginBottom: '20px'}}>
+                <label style={{
+                  display: 'block',
+                  marginBottom: '8px',
+                  fontWeight: '600',
+                  color: '#374151',
+                  fontSize: '14px'
+                }}>
+                  End Time *
+                </label>
+                <input
+                  type="text"
+                  name="endTime"
+                  placeholder="e.g., 10:00 AM"
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '12px 15px',
+                    border: '2px solid #e2e8f0',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    color: '#374151',
+                    background: 'white',
+                    transition: 'border-color 0.3s ease',
+                    outline: 'none'
+                  }}
+                  onFocus={(e) => e.target.style.borderColor = '#059669'}
+                  onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
+                />
+              </div>
+
+              <div style={{marginBottom: '30px'}}>
+                <label style={{
+                  display: 'block',
+                  marginBottom: '8px',
+                  fontWeight: '600',
+                  color: '#374151',
+                  fontSize: '14px'
+                }}>
+                  Instructor *
+                </label>
+                <select
+                  name="instructor"
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '12px 15px',
+                    border: '2px solid #e2e8f0',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    color: '#374151',
+                    background: 'white',
+                    transition: 'border-color 0.3s ease',
+                    outline: 'none'
+                  }}
+                  onFocus={(e) => e.target.style.borderColor = '#059669'}
+                  onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
+                >
+                  <option value="">Select Instructor</option>
+                  {instructors.map(instructor => (
+                    <option key={instructor.id} value={instructor.name}>
+                      {instructor.name} ({instructor.id})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{
+                display: 'flex',
+                gap: '15px',
+                justifyContent: 'flex-end'
+              }}>
+                <button
+                  type="button"
+                  onClick={() => setShowAddClassPopup(false)}
+                  style={{
+                    padding: '12px 24px',
+                    background: '#f1f5f9',
+                    color: '#64748b',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s ease'
+                  }}
+                  onMouseOver={(e) => {
+                    e.target.style.background = '#e2e8f0';
+                    e.target.style.color = '#374151';
+                  }}
+                  onMouseOut={(e) => {
+                    e.target.style.background = '#f1f5f9';
+                    e.target.style.color = '#64748b';
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  style={{
+                    padding: '12px 24px',
+                    background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s ease',
+                    boxShadow: '0 4px 15px rgba(5, 150, 105, 0.3)'
+                  }}
+                  onMouseOver={(e) => e.target.style.transform = 'translateY(-2px)'}
+                  onMouseOut={(e) => e.target.style.transform = 'translateY(0)'}
+                >
+                  <FontAwesomeIcon icon={faPlus} style={{marginRight: '8px'}} />
+                  Add Class
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

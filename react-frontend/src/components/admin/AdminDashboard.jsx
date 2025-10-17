@@ -69,7 +69,7 @@ const AdminDashboard = () => {
         <Header title="Admin Dashboard" />
 
         <div style={{padding: '30px', background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)', minHeight: 'calc(100vh - 80px)', overflowY: 'auto'}}>
-          <div style={{background: '#dedede', padding: '30px', borderRadius: '15px', boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)', marginBottom: '30px', borderLeft: '5px solid #0f2c63'}}>
+          <div style={{background: '#ffffffff', padding: '30px', borderRadius: '15px', boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)', marginBottom: '30px', borderLeft: '5px solid #0f2c63'}}>
             <h2 style={{color: '#1e293b', fontSize: '28px', fontWeight: '700', marginBottom: '8px'}}>Welcome to the Admin Dashboard</h2>
             <p style={{color: '#64748b', fontSize: '16px', margin: '0'}}>Manage your class scheduling system efficiently</p>
           </div>
@@ -151,13 +151,13 @@ const AdminDashboard = () => {
             </div>
           </div>
 
-          <div style={{background: '#dedede', padding: '30px', borderRadius: '15px', boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)', borderLeft: '5px solid #f97316'}}>
+          <div style={{background: '#ffffffff', padding: '30px', borderRadius: '15px', boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)', borderLeft: '5px solid #f97316'}}>
             <h3 style={{color: '#1e293b', fontSize: '20px', fontWeight: '600', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px'}}>
               <FontAwesomeIcon icon={faDoorOpen} />
               Room Status Overview
             </h3>
             <div style={{overflowX: 'auto', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0, 0, 0, 0.1)'}}>
-              <table style={{width: '100%', borderCollapse: 'collapse', background: '#dedede', fontSize: '14px'}}>
+              <table style={{width: '100%', borderCollapse: 'collapse', background: '#ffffffff', fontSize: '14px'}}>
                 <thead>
                   <tr style={{background: 'linear-gradient(135deg, #0f2c63 0%, #1e40af 100%)'}}>
                     <th style={{padding: '15px 20px', textAlign: 'left', fontWeight: '600', color: '#dedede', fontSize: '14px', textTransform: 'uppercase', letterSpacing: '0.5px'}}>Room</th>

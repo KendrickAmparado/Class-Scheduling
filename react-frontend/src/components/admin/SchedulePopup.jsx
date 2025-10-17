@@ -24,7 +24,7 @@ const SchedulePopup = ({ onClose, onSubmit }) => {
     '11:30 - 12:30', '1:30 - 2:30', '2:30 - 3:30', '3:30 - 4:30',
     '4:30 - 5:30', '5:30 - 6:30', '6:30 - 7:30', '7:30 - 8:30', '8:30 - 9:00'
   ];
-  const rooms = ['Room 101', 'Room 102', 'Room 201', 'Room 202', 'Room 301', 'Room 302'];
+  const rooms = ['ComLab 1', 'ComLab 2', 'ComLab 3', 'ComLab 4', 'ComLab 5', 'ComLab 6', 'ComLab 7', 'ComLab 8', 'ComLab 9', 'ComLab 10', 'ComLab 11', 'ComLab 12'];
 
   const handleChange = (e) => {
     setFormData({

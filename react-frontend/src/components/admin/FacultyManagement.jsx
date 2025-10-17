@@ -9,15 +9,22 @@ const FacultyManagement = () => {
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [selectedInstructor, setSelectedInstructor] = useState(null);
   const [selectedDay, setSelectedDay] = useState('Monday/Thursday');
+  const [showAddInstructorModal, setShowAddInstructorModal] = useState(false);
+  const [newInstructorData, setNewInstructorData] = useState({
+    id: '',
+    name: '',
+    contactNumber: '',
+    email: ''
+  });
 
   // Sample instructor data
   const [instructors, setInstructors] = useState([
-    { id: '10001', name: 'Instructor 1', email: 'Instructor1@buksu.edu.ph', status: 'active' },
-    { id: '10002', name: 'Instructor 2', email: 'Instructor2@buksu.edu.ph', status: 'active' },
-    { id: '10003', name: 'Instructor 3', email: 'Instructor3@buksu.edu.ph', status: 'active' },
-    { id: '10004', name: 'Instructor 4', email: 'Instructor4@buksu.edu.ph', status: 'pending', registrationDate: '2025-10-08' },
-    { id: '10005', name: 'Instructor 5', email: 'Instructor5@buksu.edu.ph', status: 'pending', registrationDate: '2025-10-09' },
-    { id: '10006', name: 'Instructor 6', email: 'Instructor6@buksu.edu.ph', status: 'deleted', deletedDate: '2025-10-07' },
+    { id: '10001', name: 'Instructor 1', email: 'Instructor1@buksu.edu.ph', contactNumber: '09123456789', status: 'active' },
+    { id: '10002', name: 'Instructor 2', email: 'Instructor2@buksu.edu.ph', contactNumber: '09123456790', status: 'active' },
+    { id: '10003', name: 'Instructor 3', email: 'Instructor3@buksu.edu.ph', contactNumber: '09123456791', status: 'active' },
+    { id: '10004', name: 'Instructor 4', email: 'Instructor4@buksu.edu.ph', contactNumber: '09123456792', status: 'pending', registrationDate: '2025-10-08' },
+    { id: '10005', name: 'Instructor 5', email: 'Instructor5@buksu.edu.ph', contactNumber: '09123456793', status: 'pending', registrationDate: '2025-10-09' },
+    { id: '10006', name: 'Instructor 6', email: 'Instructor6@buksu.edu.ph', contactNumber: '09123456794', status: 'deleted', deletedDate: '2025-10-07' },
   ]);
 
   const filteredInstructors = instructors.filter(instructor => {
@@ -68,7 +75,45 @@ const FacultyManagement = () => {
   };
 
   const handleAddInstructor = () => {
-    alert('Add new instructor functionality');
+    setShowAddInstructorModal(true);
+  };
+
+  const handleAddInstructorSubmit = (e) => {
+    e.preventDefault();
+    
+    // Validate required fields
+    if (!newInstructorData.id || !newInstructorData.name || !newInstructorData.contactNumber || !newInstructorData.email) {
+      alert('Please fill in all required fields.');
+      return;
+    }
+
+    // Check if ID already exists
+    if (instructors.some(inst => inst.id === newInstructorData.id)) {
+      alert('An instructor with this ID already exists.');
+      return;
+    }
+
+    // Add new instructor
+    const newInstructor = {
+      id: newInstructorData.id,
+      name: newInstructorData.name,
+      email: newInstructorData.email,
+      contactNumber: newInstructorData.contactNumber,
+      status: 'active'
+    };
+
+    setInstructors(prev => [...prev, newInstructor]);
+    
+    // Reset form and close modal
+    setNewInstructorData({
+      id: '',
+      name: '',
+      contactNumber: '',
+      email: ''
+    });
+    setShowAddInstructorModal(false);
+    
+    alert(`Instructor ${newInstructor.name} has been added successfully!`);
   };
 
   return (
@@ -78,7 +123,7 @@ const FacultyManagement = () => {
         <Header title="Faculty Management" />
 
         <div style={{padding: '30px', background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)', minHeight: 'calc(100vh - 80px)', overflowY: 'auto'}}>
-          <div style={{background: '#dedede', padding: '30px', borderRadius: '15px', boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)', marginBottom: '30px', borderLeft: '5px solid #0f2c63'}}>
+          <div style={{background: '#ffffffff', padding: '30px', borderRadius: '15px', boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)', marginBottom: '30px', borderLeft: '5px solid #0f2c63'}}>
             <h2 style={{margin: '0 0 10px 0', color: '#1e293b', fontSize: '28px', fontWeight: '700'}}>
               <FontAwesomeIcon icon={faUserPlus} style={{marginRight: '15px', color: '#0f2c63'}} />
               Faculty Management
@@ -692,6 +737,241 @@ const FacultyManagement = () => {
                 </table>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Instructor Modal */}
+      {showAddInstructorModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            background: 'white',
+            borderRadius: '15px',
+            padding: '32px',
+            width: '90%',
+            maxWidth: '500px',
+            boxShadow: '0 20px 40px rgba(0, 0, 0, 0.15)',
+            animation: 'fadeIn 0.3s ease-out'
+          }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              marginBottom: '24px'
+            }}>
+              <FontAwesomeIcon
+                icon={faUserPlus}
+                style={{
+                  color: '#0f2c63',
+                  fontSize: '24px',
+                  marginRight: '12px'
+                }}
+              />
+              <h3 style={{
+                margin: 0,
+                color: '#1e293b',
+                fontSize: '20px',
+                fontWeight: '700'
+              }}>
+                Add New Instructor
+              </h3>
+            </div>
+
+            <form onSubmit={handleAddInstructorSubmit}>
+              <div style={{marginBottom: '20px'}}>
+                <label style={{
+                  display: 'block',
+                  marginBottom: '8px',
+                  fontWeight: '600',
+                  color: '#374151',
+                  fontSize: '14px'
+                }}>
+                  ID Number *
+                </label>
+                <input
+                  type="text"
+                  value={newInstructorData.id}
+                  onChange={(e) => setNewInstructorData({...newInstructorData, id: e.target.value})}
+                  placeholder="Enter ID number"
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    border: '2px solid #e2e8f0',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    background: 'white',
+                    transition: 'border-color 0.3s ease',
+                    outline: 'none'
+                  }}
+                  onFocus={(e) => e.target.style.borderColor = '#0f2c63'}
+                  onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
+                />
+              </div>
+
+              <div style={{marginBottom: '20px'}}>
+                <label style={{
+                  display: 'block',
+                  marginBottom: '8px',
+                  fontWeight: '600',
+                  color: '#374151',
+                  fontSize: '14px'
+                }}>
+                  Full Name *
+                </label>
+                <input
+                  type="text"
+                  value={newInstructorData.name}
+                  onChange={(e) => setNewInstructorData({...newInstructorData, name: e.target.value})}
+                  placeholder="Enter full name"
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    border: '2px solid #e2e8f0',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    background: 'white',
+                    transition: 'border-color 0.3s ease',
+                    outline: 'none'
+                  }}
+                  onFocus={(e) => e.target.style.borderColor = '#0f2c63'}
+                  onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
+                />
+              </div>
+
+              <div style={{marginBottom: '20px'}}>
+                <label style={{
+                  display: 'block',
+                  marginBottom: '8px',
+                  fontWeight: '600',
+                  color: '#374151',
+                  fontSize: '14px'
+                }}>
+                  Contact Number *
+                </label>
+                <input
+                  type="tel"
+                  value={newInstructorData.contactNumber}
+                  onChange={(e) => setNewInstructorData({...newInstructorData, contactNumber: e.target.value})}
+                  placeholder="Enter contact number"
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    border: '2px solid #e2e8f0',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    background: 'white',
+                    transition: 'border-color 0.3s ease',
+                    outline: 'none'
+                  }}
+                  onFocus={(e) => e.target.style.borderColor = '#0f2c63'}
+                  onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
+                />
+              </div>
+
+              <div style={{marginBottom: '30px'}}>
+                <label style={{
+                  display: 'block',
+                  marginBottom: '8px',
+                  fontWeight: '600',
+                  color: '#374151',
+                  fontSize: '14px'
+                }}>
+                  Email Address *
+                </label>
+                <input
+                  type="email"
+                  value={newInstructorData.email}
+                  onChange={(e) => setNewInstructorData({...newInstructorData, email: e.target.value})}
+                  placeholder="Enter email address"
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    border: '2px solid #e2e8f0',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    background: 'white',
+                    transition: 'border-color 0.3s ease',
+                    outline: 'none'
+                  }}
+                  onFocus={(e) => e.target.style.borderColor = '#0f2c63'}
+                  onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
+                />
+              </div>
+
+              <div style={{
+                display: 'flex',
+                gap: '15px',
+                justifyContent: 'flex-end'
+              }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAddInstructorModal(false);
+                    setNewInstructorData({
+                      id: '',
+                      name: '',
+                      contactNumber: '',
+                      email: ''
+                    });
+                  }}
+                  style={{
+                    padding: '12px 24px',
+                    background: '#f1f5f9',
+                    color: '#64748b',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s ease'
+                  }}
+                  onMouseOver={(e) => {
+                    e.target.style.background = '#e2e8f0';
+                    e.target.style.color = '#374151';
+                  }}
+                  onMouseOut={(e) => {
+                    e.target.style.background = '#f1f5f9';
+                    e.target.style.color = '#64748b';
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  style={{
+                    padding: '12px 24px',
+                    background: 'linear-gradient(135deg, #0f2c63 0%, #1e40af 100%)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s ease',
+                    boxShadow: '0 4px 15px rgba(15, 44, 99, 0.3)'
+                  }}
+                  onMouseOver={(e) => e.target.style.transform = 'translateY(-2px)'}
+                  onMouseOut={(e) => e.target.style.transform = 'translateY(0)'}
+                >
+                  <FontAwesomeIcon icon={faPlus} style={{marginRight: '8px'}} />
+                  Add Instructor
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
