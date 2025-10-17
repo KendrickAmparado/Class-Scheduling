@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faUser, faLock, faCalendarAlt, faRightToBracket } from '@fortawesome/free-solid-svg-icons';
+import { faUser, faLock, faEnvelope, faCalendarAlt, faUserPlus } from '@fortawesome/free-solid-svg-icons';
 
-const InstructorLogin = () => {
+const InstructorSignup = () => {
   const [formData, setFormData] = useState({
-    num1: '',
-    password: ''
+    firstname: '',
+    lastname: '',
+    email: '',
+    password: '',
+    confirm_password: ''
   });
   const navigate = useNavigate();
 
@@ -17,11 +20,36 @@ const InstructorLogin = () => {
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // Add authentication logic here
-    console.log('Instructor login:', formData);
-    navigate('/instructor/dashboard');
+    
+    if (formData.password !== formData.confirm_password) {
+      alert('Passwords do not match!');
+      return;
+    }
+
+    try {
+      const res = await fetch('http://localhost:5000/api/instructors/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          firstname: formData.firstname,
+          lastname: formData.lastname,
+          email: formData.email,
+          password: formData.password
+        })
+      });
+
+      const data = await res.json();
+      alert(data.message);
+
+      if (res.ok) {
+        navigate('/instructor/login');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Something went wrong');
+    }
   };
 
   return (
@@ -103,14 +131,14 @@ const InstructorLogin = () => {
             color: "#333",
             fontSize: "28px",
             fontWeight: "700"
-          }}>Instructor Login</h2>
+          }}>Instructor Sign Up</h2>
           
           <p className="subtitle2" style={{
             marginBottom: "30px",
             color: "#666",
             fontSize: "14px",
             lineHeight: "1.5"
-          }}>Please enter your credentials to access the system</p>
+          }}>Create your account to access the system</p>
           
           <form className="login-form2" onSubmit={handleSubmit} style={{ marginBottom: "30px" }}>
             <div className="input-group2" style={{
@@ -142,11 +170,92 @@ const InstructorLogin = () => {
                   }}
                 />
                 <input
-                  type="number"
-                  id="num1"
-                  name="num1"
-                  placeholder="User ID"
-                  value={formData.num1}
+                  type="text"
+                  name="firstname"
+                  placeholder="First Name"
+                  value={formData.firstname}
+                  onChange={handleChange}
+                  required
+                  style={{
+                    flex: 1,
+                    border: "none",
+                    outline: "none",
+                    padding: "18px 15px 18px 0",
+                    fontSize: "16px",
+                    background: "transparent",
+                    color: "#333"
+                  }}
+                />
+              </div>
+
+              <div className="input-field2" style={{
+                position: "relative",
+                display: "flex",
+                alignItems: "center",
+                background: "white",
+                border: "2px solid #ddd",
+                borderRadius: "12px",
+                padding: 0,
+                transition: "all 0.3s ease",
+                boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)"
+              }}>
+                <FontAwesomeIcon 
+                  icon={faUser} 
+                  style={{
+                    padding: "0 15px",
+                    color: "#666",
+                    fontSize: "16px",
+                    minWidth: "50px",
+                    display: "flex",
+                    justifyContent: "center"
+                  }}
+                />
+                <input
+                  type="text"
+                  name="lastname"
+                  placeholder="Last Name"
+                  value={formData.lastname}
+                  onChange={handleChange}
+                  required
+                  style={{
+                    flex: 1,
+                    border: "none",
+                    outline: "none",
+                    padding: "18px 15px 18px 0",
+                    fontSize: "16px",
+                    background: "transparent",
+                    color: "#333"
+                  }}
+                />
+              </div>
+
+              <div className="input-field2" style={{
+                position: "relative",
+                display: "flex",
+                alignItems: "center",
+                background: "white",
+                border: "2px solid #ddd",
+                borderRadius: "12px",
+                padding: 0,
+                transition: "all 0.3s ease",
+                boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)"
+              }}>
+                <FontAwesomeIcon 
+                  icon={faEnvelope} 
+                  style={{
+                    padding: "0 15px",
+                    color: "#666",
+                    fontSize: "16px",
+                    minWidth: "50px",
+                    display: "flex",
+                    justifyContent: "center"
+                  }}
+                />
+                <input
+                  type="email"
+                  name="email"
+                  placeholder="Email"
+                  value={formData.email}
                   onChange={handleChange}
                   required
                   style={{
@@ -185,10 +294,50 @@ const InstructorLogin = () => {
                 />
                 <input
                   type="password"
-                  id="password"
                   name="password"
                   placeholder="Password"
                   value={formData.password}
+                  onChange={handleChange}
+                  required
+                  style={{
+                    flex: 1,
+                    border: "none",
+                    outline: "none",
+                    padding: "18px 15px 18px 0",
+                    fontSize: "16px",
+                    background: "transparent",
+                    color: "#333"
+                  }}
+                />
+              </div>
+
+              <div className="input-field2" style={{
+                position: "relative",
+                display: "flex",
+                alignItems: "center",
+                background: "white",
+                border: "2px solid #ddd",
+                borderRadius: "12px",
+                padding: 0,
+                transition: "all 0.3s ease",
+                boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)"
+              }}>
+                <FontAwesomeIcon 
+                  icon={faLock} 
+                  style={{
+                    padding: "0 15px",
+                    color: "#666",
+                    fontSize: "16px",
+                    minWidth: "50px",
+                    display: "flex",
+                    justifyContent: "center"
+                  }}
+                />
+                <input
+                  type="password"
+                  name="confirm_password"
+                  placeholder="Confirm Password"
+                  value={formData.confirm_password}
                   onChange={handleChange}
                   required
                   style={{
@@ -225,8 +374,7 @@ const InstructorLogin = () => {
                 overflow: "hidden",
                 background: "linear-gradient(135deg, #0f2c63 0%, #1e40af 100%)",
                 color: "white",
-                boxShadow: "0 8px 20px rgba(15, 44, 99, 0.3)",
-                marginBottom: "10px"
+                boxShadow: "0 8px 20px rgba(15, 44, 99, 0.3)"
               }}
               onMouseEnter={(e) => {
                 e.target.style.transform = "translateY(-3px)";
@@ -237,54 +385,16 @@ const InstructorLogin = () => {
                 e.target.style.boxShadow = "0 8px 20px rgba(15, 44, 99, 0.3)";
               }}
             >
-              <FontAwesomeIcon icon={faRightToBracket} />
-              <span>Login</span>
+              <FontAwesomeIcon icon={faUserPlus} />
+              <span>Sign Up</span>
             </button>
-            
-            <br />
-            
-            <Link 
-              to="/login" 
-              className="login-btn3 instructor-btn3"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "15px",
-                padding: "10px 20px",
-                border: "none",
-                borderRadius: "15px",
-                fontSize: "18px",
-                fontWeight: "400",
-                cursor: "pointer",
-                transition: "all 0.3s ease",
-                textDecoration: "none",
-                position: "relative",
-                overflow: "hidden",
-                width: "100%",
-                background: "linear-gradient(135deg, #f97316 0%, #ea580c 100%)",
-                color: "white",
-                boxShadow: "0 8px 20px rgba(249, 115, 22, 0.3)"
-              }}
-              onMouseEnter={(e) => {
-                e.target.style.transform = "translateY(-3px)";
-                e.target.style.boxShadow = "0 12px 25px rgba(249, 115, 22, 0.4)";
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.transform = "translateY(0)";
-                e.target.style.boxShadow = "0 8px 20px rgba(249, 115, 22, 0.3)";
-              }}
-            >
-              <FontAwesomeIcon icon={faRightToBracket} />
-              <span>Back to User Selection</span>
-            </Link>
           </form>
 
           <p className="signup-text2" style={{
             color: "#666",
             fontSize: "14px"
           }}>
-            Don't have an account? <Link to="/instructor/signup" style={{ color: "#f97316", textDecoration: "none", fontWeight: "600" }}>Sign up here!</Link>
+            Already have an account? <Link to="/instructor/login" style={{ color: "#f97316", textDecoration: "none", fontWeight: "600" }}>Login here!</Link>
           </p>
         </div>
       </div>
@@ -292,4 +402,4 @@ const InstructorLogin = () => {
   );
 };
 
-export default InstructorLogin;
+export default InstructorSignup;
