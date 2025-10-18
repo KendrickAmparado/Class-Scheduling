@@ -7,7 +7,7 @@
 
 body {
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+  background: linear-gradient(135deg, #0f2c63 0%, #f97316 100%);
   min-height: 100vh;
   color: #334155;
 }
@@ -22,7 +22,7 @@ body {
 /* Main Content */
 .main-content {
   flex: 1;
-  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+  background: linear-gradient(135deg, #0f2c63 0%, #f97316 100%);
   overflow-y: auto;
 }
 
@@ -33,7 +33,7 @@ body {
 /* Dashboard Content */
 .dashboard-content {
   padding: 30px;
-  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+  background: linear-gradient(135deg, #0f2c63 0%, #f97316 100%);
   min-height: calc(100vh - 80px);
   overflow-y: auto;
 }

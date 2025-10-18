@@ -1,12 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faLock, faCalendarAlt, faRightToBracket } from '@fortawesome/free-solid-svg-icons';
+import axios from "axios";
+
 
 const AdminLogin = () => {
   const [formData, setFormData] = useState({
     password: ''
   });
+  const [popup, setPopup] = useState({ show: false, message: '', type: '' });
   const navigate = useNavigate();
 
   const handleChange = (e) => {
@@ -16,10 +19,29 @@ const AdminLogin = () => {
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // Add authentication logic here
-    navigate('/admin/dashboard');
+
+    try {
+      const res = await axios.post("http://localhost:5000/api/admin/login", {
+        password: formData.password,
+      });
+
+      if (res.data.success) {
+        // ✅ Show success popup
+        setPopup({ show: true, message: "Welcome, Admin!", type: "success" });
+        setTimeout(() => {
+          setPopup({ show: false, message: "", type: "" });
+          navigate("/admin/dashboard");
+        }, 2000);
+      }
+    } catch (err) {
+      // ❌ Show error popup
+      setPopup({ show: true, message: "Wrong password!", type: "error" });
+      setTimeout(() => {
+        setPopup({ show: false, message: "", type: "" });
+      }, 2000);
+    }
   };
 
   return (
@@ -28,8 +50,34 @@ const AdminLogin = () => {
       background: "linear-gradient(135deg, #0f2c63 0%, #1e40af 100%)",
       minHeight: "100vh",
       display: "flex",
-      flexDirection: "column"
+      flexDirection: "column",
+      position: "relative"
     }}>
+      {/* ✅ Popup Component */}
+      {popup.show && (
+        <div
+          style={{
+            position: "fixed",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            background: popup.type === "success" ? "#d1fae5" : "#fee2e2",
+            color: popup.type === "success" ? "#065f46" : "#991b1b",
+            border: `2px solid ${popup.type === "success" ? "#10b981" : "#f87171"}`,
+            padding: "20px 40px",
+            borderRadius: "12px",
+            fontWeight: "600",
+            fontSize: "16px",
+            boxShadow: "0 8px 25px rgba(0, 0, 0, 0.2)",
+            zIndex: 1000,
+            textAlign: "center",
+            animation: "fadeInOut 2s ease-in-out"
+          }}
+        >
+          {popup.message}
+        </div>
+      )}
+
       <div className="header1" style={{
         width: "100%",
         height: "80px",

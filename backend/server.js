@@ -1,31 +1,33 @@
-const express = require('express');
-const mongoose = require('mongoose');
-const cors = require('cors');
-require('dotenv').config();
+// ✅ server.js — Clean and ES Module compliant
+
+import express from "express";
+import mongoose from "mongoose";
+import cors from "cors";
+import dotenv from "dotenv";
+
+import adminRoutes from "./routes/adminRoutes.js";
+import scheduleRoutes from "./routes/scheduleRoutes.js";
+import instructorRoutes from "./routes/instructorRoutes.js"; // ✅ fixed import
+
+dotenv.config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Import routes
-const instructorRoutes = require('./routes/instructors');
-app.use('/api/instructors', instructorRoutes);
+// ✅ Connect to MongoDB
+mongoose.connect("mongodb://127.0.0.1:27017/class_scheduling", {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+})
+  .then(() => console.log("✅ MongoDB connected"))
+  .catch((err) => console.log("❌ MongoDB connection error:", err));
 
-// Import routes
-const instructorRoutes = require('./routes/instructors');
-const adminRoutes = require('./routes/admin'); // <-- new admin route
+// ✅ API Routes
+app.use("/api/admin", adminRoutes);
+app.use("/api/schedule", scheduleRoutes);
+app.use("/api/instructors", instructorRoutes); // ✅ correctly attached
 
-app.use('/api/instructors', instructorRoutes);
-app.use('/api/admin', adminRoutes); // <-- use admin route
-
-// Connect to MongoDB
-mongoose.connect(process.env.MONGO_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true
-  })
-  .then(() => console.log('MongoDB connected'))
-  .catch(err => console.log(err));
-
-
+// ✅ Start Server
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));

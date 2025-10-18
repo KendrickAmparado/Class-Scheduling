@@ -41,7 +41,6 @@
 .year-card:hover {
   transform: translateY(-5px);
   box-shadow: 0 15px 35px rgba(0, 0, 0, 0.15);
-  border-color: #f97316;
 }
 
 .year-card i {

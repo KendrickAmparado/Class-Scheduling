@@ -1,74 +1,288 @@
-import React, { useState } from 'react';
-import Sidebar from '../common/Sidebar.jsx';
-import Header from '../common/Header.jsx';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faClock, faTrash, faPlus, faEye, faEdit, faTrashAlt, faUserPlus, faCheck, faTimes, faDownload } from '@fortawesome/free-solid-svg-icons';
+import React, { useState, useEffect } from "react";
+import Sidebar from "../common/Sidebar.jsx";
+import Header from "../common/Header.jsx";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faClock,
+  faTrash,
+  faPlus,
+  faEye,
+  faEdit,
+  faTrashAlt,
+  faUserPlus,
+  faCheck,
+  faTimes,
+} from "@fortawesome/free-solid-svg-icons";
+
+const Modal = ({ show, onClose, title, children, actions }) => {
+  if (!show) return null;
+  return (
+    <>
+      {/* Overlay */}
+      <div
+        style={{
+          position: "fixed",
+          zIndex: 1000,
+          top: 0,
+          left: 0,
+          width: "100vw",
+          height: "100vh",
+          background: "rgba(0,0,0,0.5)",
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+        onClick={onClose}
+      >
+        {/* Modal content */}
+        <div
+          style={{
+            position: "relative",
+            zIndex: 1001,
+            background: "white",
+            padding: 32,
+            borderRadius: 14,
+            minWidth: 360,
+            maxWidth: "90vw",
+            maxHeight: "90vh",
+            overflowY: "auto",
+            boxShadow: "0 20px 40px rgba(0,0,0,0.25)",
+            fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+            display: "flex",
+            flexDirection: "column",
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {title && <h2 style={{ margin: "0 0 16px 0", fontWeight: 700 }}>{title}</h2>}
+          <div style={{ marginBottom: 16 }}>{children}</div>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>{actions}</div>
+        </div>
+      </div>
+      <style>
+        {`
+        @keyframes fadeInScale {
+          0% { opacity: 0; transform: scale(0.75);}
+          100% { opacity: 1; transform: scale(1);}
+        }
+        `}
+      </style>
+    </>
+  );
+};
+
 
 const FacultyManagement = () => {
-  const [activeTab, setActiveTab] = useState('active');
+  const [activeTab, setActiveTab] = useState("active");
+  const [instructors, setInstructors] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newInstructorName, setNewInstructorName] = useState("");
+  const [newInstructorEmail, setNewInstructorEmail] = useState("");
+  const [newInstructorContact, setNewInstructorContact] = useState("");
+  const [newInstructorDepartment, setNewInstructorDepartment] = useState("");
+
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editInstructor, setEditInstructor] = useState(null);
+  const [editEmail, setEditEmail] = useState("");
+  const [editContact, setEditContact] = useState("");
+
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [selectedInstructor, setSelectedInstructor] = useState(null);
-  const [selectedDay, setSelectedDay] = useState('Monday/Thursday');
 
-  // Sample instructor data
-  const [instructors, setInstructors] = useState([
-    { id: '10001', name: 'Instructor 1', email: 'Instructor1@buksu.edu.ph', status: 'active' },
-    { id: '10002', name: 'Instructor 2', email: 'Instructor2@buksu.edu.ph', status: 'active' },
-    { id: '10003', name: 'Instructor 3', email: 'Instructor3@buksu.edu.ph', status: 'active' },
-    { id: '10004', name: 'Instructor 4', email: 'Instructor4@buksu.edu.ph', status: 'pending', registrationDate: '2025-10-08' },
-    { id: '10005', name: 'Instructor 5', email: 'Instructor5@buksu.edu.ph', status: 'pending', registrationDate: '2025-10-09' },
-    { id: '10006', name: 'Instructor 6', email: 'Instructor6@buksu.edu.ph', status: 'deleted', deletedDate: '2025-10-07' },
-  ]);
+  const [confirmModal, setConfirmModal] = useState({
+    show: false,
+    title: "",
+    message: "",
+    onConfirm: null,
+    onCancel: null,
+    confirmText: "Confirm",
+    cancelText: "Cancel",
+  });
 
-  const filteredInstructors = instructors.filter(instructor => {
-    if (activeTab === 'active') return instructor.status === 'active';
-    if (activeTab === 'pending') return instructor.status === 'pending';
-    if (activeTab === 'trash') return instructor.status === 'deleted';
+  const [alertModal, setAlertModal] = useState({ show: false, message: "" });
+
+  useEffect(() => {
+    setLoading(true);
+    fetch("http://localhost:5000/api/instructors")
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error("Network response was not ok"))))
+      .then((data) => {
+        setInstructors(data);
+        setLoading(false);
+      })
+      .catch((e) => {
+        setError("Failed to fetch instructors: " + e.message);
+        setLoading(false);
+      });
+  }, []);
+
+  const filteredInstructors = instructors.filter((inst) => {
+    if (activeTab === "active") return inst.status === "active";
+    if (activeTab === "pending") return inst.status === "pending";
+    if (activeTab === "trash") return inst.status === "deleted";
     return true;
   });
 
+  // Modal Controls
+  const openAddModal = () => setShowAddModal(true);
+  const closeAddModal = () => setShowAddModal(false);
+
+  const openEditModal = (instructor) => {
+    setEditInstructor(instructor);
+    setEditEmail(instructor.email);
+    setEditContact(instructor.contact || "");
+    setShowEditModal(true);
+  };
+  const closeEditModal = () => setShowEditModal(false);
+
+  const openScheduleModal = (instructor) => {
+    setSelectedInstructor(instructor);
+    setShowScheduleModal(true);
+  };
+  const closeScheduleModal = () => setShowScheduleModal(false);
+
+  // Confirmation and alert helpers
+  const showConfirmDialog = (title, message, onConfirm) => {
+    setConfirmModal({
+      show: true,
+      title,
+      message,
+      onConfirm: () => {
+        onConfirm();
+        setConfirmModal({ ...confirmModal, show: false });
+      },
+      onCancel: () => setConfirmModal({ ...confirmModal, show: false }),
+      confirmText: "Yes",
+      cancelText: "No",
+    });
+  };
+
+  const showAlert = (message) => setAlertModal({ show: true, message });
+
+  // Handler implementations
+  const handleAddInstructor = (e) => {
+    e.preventDefault();
+    const payload = {
+      name: newInstructorName,
+      email: newInstructorEmail,
+      contact: newInstructorContact,
+      department: newInstructorDepartment,
+      status: "active",
+    };
+    fetch("http://localhost:5000/api/instructors", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    })
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error("Failed to add instructor"))))
+      .then((newInstructor) => {
+        setInstructors((prev) => [...prev, newInstructor]);
+        closeAddModal();
+        setNewInstructorName("");
+        setNewInstructorEmail("");
+        setNewInstructorContact("");
+        setNewInstructorDepartment("");
+        showAlert("Instructor added and activated by admin.");
+      })
+      .catch((err) => {
+        if (err.message.includes("duplicate key")) {
+          showAlert("An instructor with this email already exists.");
+        } else {
+          showAlert(err.message);
+        }
+      });
+  };
+
+  const handleEditSave = () => {
+    fetch(`http://localhost:5000/api/instructors/${editInstructor._id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: editEmail, contact: editContact }),
+    })
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error("Failed to update instructor"))))
+      .then((updatedInstructor) => {
+        setInstructors((prev) =>
+          prev.map((inst) => (inst._id === updatedInstructor._id ? updatedInstructor : inst))
+        );
+        closeEditModal();
+        showAlert("Instructor updated successfully.");
+      })
+      .catch((err) => {
+        showAlert(err.message);
+      });
+  };
+
   const handleViewSchedule = (instructorId) => {
-    const instructor = instructors.find(inst => inst.id === instructorId);
+    const instructor = instructors.find((i) => i._id === instructorId);
     setSelectedInstructor(instructor);
     setShowScheduleModal(true);
   };
 
-  const handleEdit = (instructorId) => {
-    alert(`Editing instructor ${instructorId}`);
-  };
+  const handleApprove = (id) =>
+    showConfirmDialog("Approve Instructor", "Approve this instructor?", () => {
+      setInstructors((prev) =>
+        prev.map((i) => (i._id === id ? { ...i, status: "active" } : i))
+      );
+      showAlert("Instructor approved.");
+    });
 
-  const handleApprove = (instructorId) => {
-    setInstructors(prev => prev.map(inst =>
-      inst.id === instructorId ? { ...inst, status: 'active' } : inst
-    ));
-    alert(`Instructor ${instructorId} has been approved and is now active.`);
-  };
+  const handleReject = (id) =>
+    showConfirmDialog("Reject Instructor", "Reject this instructor?", () => {
+      setInstructors((prev) =>
+        prev.map((i) =>
+          i._id === id ? { ...i, status: "deleted", deletedDate: new Date().toISOString().split("T")[0] } : i
+        )
+      );
+      showAlert("Instructor rejected.");
+    });
 
-  const handleReject = (instructorId) => {
-    setInstructors(prev => prev.map(inst =>
-      inst.id === instructorId ? { ...inst, status: 'deleted' } : inst
-    ));
-    alert(`Instructor ${instructorId} has been rejected and moved to trash.`);
-  };
+  const handleDelete = (id) =>
+    showConfirmDialog("Move to Trash", "Move this instructor to trash?", () => {
+      setInstructors((prev) =>
+        prev.map((i) =>
+          i._id === id ? { ...i, status: "deleted", deletedDate: new Date().toISOString().split("T")[0] } : i
+        )
+      );
+      showAlert("Instructor moved to trash.");
+    });
 
-  const handleDelete = (instructorId) => {
-    if (window.confirm('Are you sure you want to move this instructor to trash?')) {
-      setInstructors(prev => prev.map(inst =>
-        inst.id === instructorId ? { ...inst, status: 'deleted', deletedDate: new Date().toISOString().split('T')[0] } : inst
-      ));
-      alert(`Instructor ${instructorId} has been moved to trash.`);
-    }
-  };
+  const handlePermanentDelete = (id) =>
+    showConfirmDialog("Delete Permanently", "Permanently delete this instructor?", () => {
+      setInstructors((prev) => prev.filter((i) => i._id !== id));
+      showAlert("Instructor permanently deleted.");
+    });
 
-  const handlePermanentDelete = (instructorId) => {
-    if (window.confirm('Are you sure you want to permanently delete this instructor? This action cannot be undone.')) {
-      setInstructors(prev => prev.filter(inst => inst.id !== instructorId));
-      alert(`Instructor ${instructorId} has been permanently deleted.`);
-    }
-  };
-
-  const handleAddInstructor = () => {
-    alert('Add new instructor functionality');
+  // Reusable styled button for actions with icon + text
+  const ActionButton = ({ onClick, bg, hover, title, icon, text }) => {
+    const [hovered, setHovered] = useState(false);
+    return (
+      <button
+        onClick={onClick}
+        title={title}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        style={{
+          padding: "8px 14px",
+          borderRadius: 6,
+          border: "none",
+          cursor: "pointer",
+          backgroundColor: hovered ? hover : bg,
+          color: "white",
+          fontSize: 14,
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          minHeight: 36,
+          userSelect: "none",
+          outline: "none",
+          whiteSpace: "nowrap",
+        }}
+      >
+        <FontAwesomeIcon icon={icon} />
+        {text}
+      </button>
+    );
   };
 
   return (
@@ -76,625 +290,672 @@ const FacultyManagement = () => {
       <Sidebar />
       <main className="main-content">
         <Header title="Faculty Management" />
-
-        <div style={{padding: '30px', background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)', minHeight: 'calc(100vh - 80px)', overflowY: 'auto'}}>
-          <div style={{background: '#dedede', padding: '30px', borderRadius: '15px', boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)', marginBottom: '30px', borderLeft: '5px solid #0f2c63'}}>
-            <h2 style={{margin: '0 0 10px 0', color: '#1e293b', fontSize: '28px', fontWeight: '700'}}>
-              <FontAwesomeIcon icon={faUserPlus} style={{marginRight: '15px', color: '#0f2c63'}} />
+        <div
+          style={{
+            padding: 30,
+            background: "linear-gradient(135deg, #f97316 0%, #ea580c 100%)",
+            minHeight: "calc(100vh - 80px)",
+            overflowY: "auto",
+          }}
+        >
+          <div
+            style={{
+              background: "#dedede",
+              padding: 30,
+              borderRadius: 15,
+              boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
+              marginBottom: 30,
+              borderLeft: "5px solid #0f2c63",
+            }}
+          >
+            <h2 style={{ margin: 0, color: "#1e293b", fontSize: 28, fontWeight: 700 }}>
+              <FontAwesomeIcon icon={faUserPlus} style={{ marginRight: 15, color: "#0f2c63" }} />
               Faculty Management
             </h2>
-            <p style={{margin: '0', color: '#64748b', fontSize: '16px'}}>Manage instructors and faculty members</p>
+            <p style={{ margin: 0, color: "#64748b", fontSize: 16 }}>
+              Manage instructors and faculty members
+            </p>
           </div>
 
-          {/* Tab Buttons and Add Instructor */}
-          <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px'}}>
-            <div style={{display: 'flex', gap: '15px'}}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 30 }}>
+            <div style={{ display: "flex", gap: 15 }}>
               <button
-                onClick={() => setActiveTab('active')}
+                onClick={() => setActiveTab("active")}
                 style={{
-                  padding: '12px 24px',
-                  background: activeTab === 'active' ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : '#f1f5f9',
-                  color: activeTab === 'active' ? 'white' : '#64748b',
-                  border: 'none',
-                  borderRadius: '8px',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease',
-                  boxShadow: activeTab === 'active' ? '0 4px 15px rgba(16, 185, 129, 0.3)' : 'none'
+                  padding: "12px 24px",
+                  background: activeTab === "active" ? "linear-gradient(135deg, #10b981 0%, #059669 100%)" : "#f1f5f9",
+                  color: activeTab === "active" ? "white" : "#64748b",
+                  border: "none",
+                  borderRadius: 8,
+                  fontSize: 14,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  transition: "all 0.3s ease",
+                  boxShadow: activeTab === "active" ? "0 4px 15px rgba(16, 185, 129, 0.3)" : "none",
                 }}
               >
-                Active ({instructors.filter(i => i.status === 'active').length})
+                Active ({instructors.filter((i) => i.status === "active").length})
               </button>
               <button
-                onClick={() => setActiveTab('pending')}
+                onClick={() => setActiveTab("pending")}
                 style={{
-                  padding: '12px 24px',
-                  background: activeTab === 'pending' ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)' : '#f1f5f9',
-                  color: activeTab === 'pending' ? 'white' : '#64748b',
-                  border: 'none',
-                  borderRadius: '8px',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease',
-                  boxShadow: activeTab === 'pending' ? '0 4px 15px rgba(245, 158, 11, 0.3)' : 'none',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
+                  padding: "12px 24px",
+                  background: activeTab === "pending" ? "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)" : "#f1f5f9",
+                  color: activeTab === "pending" ? "white" : "#64748b",
+                  border: "none",
+                  borderRadius: 8,
+                  fontSize: 14,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  transition: "all 0.3s ease",
+                  boxShadow: activeTab === "pending" ? "0 4px 15px rgba(245, 158, 11, 0.3)" : "none",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
                 }}
               >
                 <FontAwesomeIcon icon={faClock} />
-                Pending ({instructors.filter(i => i.status === 'pending').length})
+                Pending ({instructors.filter((i) => i.status === "pending").length})
               </button>
               <button
-                onClick={() => setActiveTab('trash')}
+                onClick={() => setActiveTab("trash")}
                 style={{
-                  padding: '12px 24px',
-                  background: activeTab === 'trash' ? 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)' : '#f1f5f9',
-                  color: activeTab === 'trash' ? 'white' : '#64748b',
-                  border: 'none',
-                  borderRadius: '8px',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease',
-                  boxShadow: activeTab === 'trash' ? '0 4px 15px rgba(220, 38, 38, 0.3)' : 'none',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
+                  padding: "12px 24px",
+                  background: activeTab === "trash" ? "linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)" : "#f1f5f9",
+                  color: activeTab === "trash" ? "white" : "#64748b",
+                  border: "none",
+                  borderRadius: 8,
+                  fontSize: 14,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  transition: "all 0.3s ease",
+                  boxShadow: activeTab === "trash" ? "0 4px 15px rgba(220, 38, 38, 0.3)" : "none",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
                 }}
               >
                 <FontAwesomeIcon icon={faTrash} />
-                Trash ({instructors.filter(i => i.status === 'deleted').length})
+                Trash ({instructors.filter((i) => i.status === "deleted").length})
               </button>
             </div>
 
             <button
-              onClick={handleAddInstructor}
+              onClick={openAddModal}
               style={{
-                padding: '12px 24px',
-                background: 'linear-gradient(135deg, #0f2c63 0%, #1e40af 100%)',
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                fontSize: '14px',
-                fontWeight: '600',
-                cursor: 'pointer',
-                transition: 'all 0.3s ease',
-                boxShadow: '0 4px 15px rgba(15, 44, 99, 0.3)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
+                padding: "12px 24px",
+                background: "linear-gradient(135deg, #2563eb 0%, #1e40af 100%)",
+                color: "white",
+                border: "none",
+                borderRadius: 8,
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: "pointer",
+                boxShadow: "0 4px 15px rgba(37, 99, 235, 0.15)",
               }}
-              onMouseOver={(e) => e.target.style.transform = 'translateY(-2px)'}
-              onMouseOut={(e) => e.target.style.transform = 'translateY(0)'}
             >
-              <FontAwesomeIcon icon={faPlus} />
+              <FontAwesomeIcon icon={faPlus} style={{ marginRight: 8 }} />
               Add Instructor
             </button>
           </div>
 
-          {/* Instructors Table */}
-          <div style={{background: 'white', borderRadius: '15px', overflow: 'hidden', boxShadow: '0 10px 40px rgba(0, 0, 0, 0.1)'}}>
-            <table style={{width: '100%', borderCollapse: 'collapse'}}>
-              <thead>
-                <tr style={{background: 'linear-gradient(135deg, #0f2c63 0%, #1e40af 100%)', color: 'white'}}>
-                  <th style={{padding: '15px', textAlign: 'left', fontWeight: '600', fontSize: '14px'}}>Instructor ID</th>
-                  <th style={{padding: '15px', textAlign: 'left', fontWeight: '600', fontSize: '14px'}}>Name</th>
-                  <th style={{padding: '15px', textAlign: 'left', fontWeight: '600', fontSize: '14px'}}>Email</th>
-                  <th style={{padding: '15px', textAlign: 'center', fontWeight: '600', fontSize: '14px'}}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredInstructors.map((instructor, index) => (
-                  <tr key={instructor.id} style={{
-                    background: index % 2 === 0 ? '#f8fafc' : 'white',
-                    borderBottom: '1px solid #e2e8f0'
-                  }}>
-                    <td style={{padding: '15px', fontSize: '14px', color: '#374151', fontWeight: '500'}}>
-                      {instructor.id}
-                    </td>
-                    <td style={{padding: '15px', fontSize: '14px', color: '#374151', fontWeight: '500'}}>
-                      {instructor.name}
-                    </td>
-                    <td style={{padding: '15px', fontSize: '14px', color: '#374151'}}>
-                      {instructor.email}
-                    </td>
-                    <td style={{padding: '15px', textAlign: 'center'}}>
-                      <div style={{display: 'flex', gap: '8px', justifyContent: 'center'}}>
-                        {activeTab === 'pending' ? (
-                          // Pending tab actions: Approve/Reject
-                          <>
-                            <button
-                              onClick={() => handleApprove(instructor.id)}
-                              style={{
-                                padding: '8px 12px',
-                                background: '#10b981',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '6px',
-                                fontSize: '12px',
-                                fontWeight: '500',
-                                cursor: 'pointer',
-                                transition: 'all 0.3s ease',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '5px'
-                              }}
-                              onMouseOver={(e) => e.target.style.background = '#059669'}
-                              onMouseOut={(e) => e.target.style.background = '#10b981'}
-                            >
-                              <FontAwesomeIcon icon={faCheck} />
-                              Approve
-                            </button>
-                            <button
-                              onClick={() => handleReject(instructor.id)}
-                              style={{
-                                padding: '8px 12px',
-                                background: '#dc2626',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '6px',
-                                fontSize: '12px',
-                                fontWeight: '500',
-                                cursor: 'pointer',
-                                transition: 'all 0.3s ease',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '5px'
-                              }}
-                              onMouseOver={(e) => e.target.style.background = '#b91c1c'}
-                              onMouseOut={(e) => e.target.style.background = '#dc2626'}
-                            >
-                              <FontAwesomeIcon icon={faTimes} />
-                              Reject
-                            </button>
-                          </>
-                        ) : activeTab === 'trash' ? (
-                          // Trash tab actions: Only permanent delete
-                          <button
-                            onClick={() => handlePermanentDelete(instructor.id)}
-                            style={{
-                              padding: '8px 12px',
-                              background: '#dc2626',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '6px',
-                              fontSize: '12px',
-                              fontWeight: '500',
-                              cursor: 'pointer',
-                              transition: 'all 0.3s ease',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '5px'
-                            }}
-                            onMouseOver={(e) => e.target.style.background = '#b91c1c'}
-                            onMouseOut={(e) => e.target.style.background = '#dc2626'}
-                          >
-                            <FontAwesomeIcon icon={faTrashAlt} />
-                            Delete Permanently
-                          </button>
-                        ) : (
-                          // Active tab actions: View Schedule, Edit, Delete (to trash)
-                          <>
-                            <button
-                              onClick={() => handleViewSchedule(instructor.id)}
-                              style={{
-                                padding: '8px 12px',
-                                background: '#3b82f6',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '6px',
-                                fontSize: '12px',
-                                fontWeight: '500',
-                                cursor: 'pointer',
-                                transition: 'all 0.3s ease',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '5px'
-                              }}
-                              onMouseOver={(e) => e.target.style.background = '#2563eb'}
-                              onMouseOut={(e) => e.target.style.background = '#3b82f6'}
-                            >
-                              <FontAwesomeIcon icon={faEye} />
-                              View Schedule
-                            </button>
-                            <button
-                              onClick={() => handleEdit(instructor.id)}
-                              style={{
-                                padding: '8px 12px',
-                                background: '#f59e0b',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '6px',
-                                fontSize: '12px',
-                                fontWeight: '500',
-                                cursor: 'pointer',
-                                transition: 'all 0.3s ease',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '5px'
-                              }}
-                              onMouseOver={(e) => e.target.style.background = '#d97706'}
-                              onMouseOut={(e) => e.target.style.background = '#f59e0b'}
-                            >
-                              <FontAwesomeIcon icon={faEdit} />
-                              Edit
-                            </button>
-                            <button
-                              onClick={() => handleDelete(instructor.id)}
-                              style={{
-                                padding: '8px 12px',
-                                background: '#dc2626',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '6px',
-                                fontSize: '12px',
-                                fontWeight: '500',
-                                cursor: 'pointer',
-                                transition: 'all 0.3s ease',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '5px'
-                              }}
-                              onMouseOver={(e) => e.target.style.background = '#b91c1c'}
-                              onMouseOut={(e) => e.target.style.background = '#dc2626'}
-                            >
-                              <FontAwesomeIcon icon={faTrashAlt} />
-                              Delete
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            {filteredInstructors.length === 0 && (
-              <div style={{padding: '40px', textAlign: 'center', color: '#64748b'}}>
-                <FontAwesomeIcon icon={faUserPlus} style={{fontSize: '48px', marginBottom: '15px', opacity: '0.5'}} />
-                <p>No instructors found in this category.</p>
-              </div>
-            )}
-          </div>
-        </div>
-      </main>
-
-      {/* Schedule Modal */}
-      {showScheduleModal && selectedInstructor && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(0, 0, 0, 0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000
-        }}>
-          <div style={{
-            background: 'white',
-            borderRadius: '15px',
-            width: '90%',
-            maxWidth: '1200px',
-            maxHeight: '90vh',
-            overflow: 'auto',
-            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)'
-          }}>
-            {/* Modal Header */}
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              padding: '20px 30px',
-              borderBottom: '2px solid #f1f5f9',
-              background: 'linear-gradient(135deg, #0f2c63 0%, #1e40af 100%)',
-              color: 'white',
-              borderRadius: '15px 15px 0 0'
-            }}>
-              <div style={{display: 'flex', alignItems: 'center', gap: '20px'}}>
-                <h3 style={{
-                  margin: '0',
-                  fontSize: '20px',
-                  fontWeight: '700',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px'
-                }}>
-                  <FontAwesomeIcon icon={faEye} />
-                  Schedule for {selectedInstructor.name}
-                </h3>
-                <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
-                  <label style={{fontSize: '14px', fontWeight: '500'}}>Day:</label>
-                  <select
-                    value={selectedDay}
-                    onChange={(e) => setSelectedDay(e.target.value)}
-                    style={{
-                      padding: '6px 12px',
-                      border: '1px solid rgba(255, 255, 255, 0.3)',
-                      borderRadius: '6px',
-                      background: 'rgba(255, 255, 255, 0.2)',
-                      color: 'white',
-                      fontSize: '14px',
-                      outline: 'none',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <option value="Monday/Thursday">Monday/Thursday</option>
-                    <option value="Tuesday/Friday">Tuesday/Friday</option>
-                  </select>
-                </div>
-                <button
-                  onClick={() => alert('Download functionality to be implemented')}
-                  style={{
-                    padding: '8px 16px',
-                    background: 'rgba(255, 255, 255, 0.2)',
-                    color: 'white',
-                    border: '1px solid rgba(255, 255, 255, 0.3)',
-                    borderRadius: '6px',
-                    fontSize: '14px',
-                    fontWeight: '500',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    transition: 'all 0.3s ease'
-                  }}
-                  onMouseOver={(e) => {
-                    e.target.style.background = 'rgba(255, 255, 255, 0.3)';
-                  }}
-                  onMouseOut={(e) => {
-                    e.target.style.background = 'rgba(255, 255, 255, 0.2)';
-                  }}
-                >
-                  <FontAwesomeIcon icon={faDownload} />
-                  Download
-                </button>
-              </div>
-              <button
-                onClick={() => setShowScheduleModal(false)}
+          <div style={{ overflowX: "auto" }}>
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "separate",
+                borderSpacing: "0 10px",
+                fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+                minWidth: 900,
+                boxShadow: "0 8px 20px rgba(0,0,0,0.12)",
+                borderRadius: 14,
+                overflow: "hidden",
+                backgroundColor: "white",
+              }}
+            >
+              <thead
                 style={{
-                  background: 'none',
-                  border: 'none',
-                  fontSize: '24px',
-                  cursor: 'pointer',
-                  color: 'white',
-                  padding: '5px',
-                  borderRadius: '50%',
-                  width: '40px',
-                  height: '40px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  transition: 'all 0.3s ease'
-                }}
-                onMouseOver={(e) => {
-                  e.target.style.background = 'rgba(255, 255, 255, 0.2)';
-                }}
-                onMouseOut={(e) => {
-                  e.target.style.background = 'none';
+                  backgroundColor: "#0f2c63",
+                  color: "white",
+                  userSelect: "none",
+                  fontSize: 16,
                 }}
               >
-                <FontAwesomeIcon icon={faTimes} />
-              </button>
-            </div>
-
-            {/* Modal Content */}
-            <div style={{padding: '30px'}}>
-              {/* Schedule Table */}
-              <div style={{background: 'white', borderRadius: '10px', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)', overflowX: 'auto'}}>
-                <table style={{width: '100%', borderCollapse: 'collapse', minWidth: '1400px'}}>
-                  <thead>
-                    <tr style={{background: 'linear-gradient(135deg, #0f2c63 0%, #1e40af 100%)', color: 'white'}}>
-                      <th style={{padding: '12px', textAlign: 'left', fontWeight: '600', fontSize: '14px', minWidth: '100px', position: 'sticky', left: 0, background: 'linear-gradient(135deg, #0f2c63 0%, #1e40af 100%)', zIndex: 2}}>Day</th>
-                      <th style={{padding: '12px', textAlign: 'left', fontWeight: '600', fontSize: '14px', minWidth: '120px', position: 'sticky', left: '100px', background: 'linear-gradient(135deg, #0f2c63 0%, #1e40af 100%)', zIndex: 2}}>Time</th>
-                      {Array.from({length: 12}, (_, i) => (
-                        <th key={i} style={{padding: '8px', textAlign: 'center', fontWeight: '600', fontSize: '12px', minWidth: '120px'}}>
-                          ComLab {i + 1}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {[
-                      // Monday - 30 minute intervals
-                      { day: 'Monday', time: '7:00 AM - 7:30 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Monday', time: '7:30 AM - 8:00 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Monday', time: '8:00 AM - 8:30 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Monday', time: '8:30 AM - 9:00 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Monday', time: '9:00 AM - 9:30 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Monday', time: '9:30 AM - 10:00 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Monday', time: '10:00 AM - 10:30 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Monday', time: '10:30 AM - 11:00 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Monday', time: '11:00 AM - 11:30 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Monday', time: '11:30 AM - 12:00 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Monday', time: '12:00 PM - 12:30 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Monday', time: '12:30 PM - 1:00 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Monday', time: '1:00 PM - 1:30 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Monday', time: '1:30 PM - 2:00 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Monday', time: '2:00 PM - 2:30 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Monday', time: '2:30 PM - 3:00 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Monday', time: '3:00 PM - 3:30 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Monday', time: '3:30 PM - 4:00 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Monday', time: '4:00 PM - 4:30 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Monday', time: '4:30 PM - 5:00 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Monday', time: '5:00 PM - 5:30 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Monday', time: '5:30 PM - 6:00 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Monday', time: '6:00 PM - 6:30 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Monday', time: '6:30 PM - 7:00 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-
-                      // Tuesday - 30 minute intervals
-                      { day: 'Tuesday', time: '7:00 AM - 7:30 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Tuesday', time: '7:30 AM - 8:00 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Tuesday', time: '8:00 AM - 8:30 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Tuesday', time: '8:30 AM - 9:00 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Tuesday', time: '9:00 AM - 9:30 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Tuesday', time: '9:30 AM - 10:00 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Tuesday', time: '10:00 AM - 10:30 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Tuesday', time: '10:30 AM - 11:00 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Tuesday', time: '11:00 AM - 11:30 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Tuesday', time: '11:30 AM - 12:00 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Tuesday', time: '12:00 PM - 12:30 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Tuesday', time: '12:30 PM - 1:00 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Tuesday', time: '1:00 PM - 1:30 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Tuesday', time: '1:30 PM - 2:00 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Tuesday', time: '2:00 PM - 2:30 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Tuesday', time: '2:30 PM - 3:00 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Tuesday', time: '3:00 PM - 3:30 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Tuesday', time: '3:30 PM - 4:00 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Tuesday', time: '4:00 PM - 4:30 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Tuesday', time: '4:30 PM - 5:00 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Tuesday', time: '5:00 PM - 5:30 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Tuesday', time: '5:30 PM - 6:00 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Tuesday', time: '6:00 PM - 6:30 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Tuesday', time: '6:30 PM - 7:00 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-
-                      // Wednesday - 30 minute intervals
-                      { day: 'Wednesday', time: '7:00 AM - 7:30 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Wednesday', time: '7:30 AM - 8:00 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Wednesday', time: '8:00 AM - 8:30 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Wednesday', time: '8:30 AM - 9:00 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Wednesday', time: '9:00 AM - 9:30 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Wednesday', time: '9:30 AM - 10:00 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Wednesday', time: '10:00 AM - 10:30 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Wednesday', time: '10:30 AM - 11:00 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Wednesday', time: '11:00 AM - 11:30 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Wednesday', time: '11:30 AM - 12:00 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Wednesday', time: '12:00 PM - 12:30 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Wednesday', time: '12:30 PM - 1:00 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Wednesday', time: '1:00 PM - 1:30 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Wednesday', time: '1:30 PM - 2:00 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Wednesday', time: '2:00 PM - 2:30 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Wednesday', time: '2:30 PM - 3:00 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Wednesday', time: '3:00 PM - 3:30 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Wednesday', time: '3:30 PM - 4:00 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Wednesday', time: '4:00 PM - 4:30 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Wednesday', time: '4:30 PM - 5:00 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Wednesday', time: '5:00 PM - 5:30 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Wednesday', time: '5:30 PM - 6:00 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Wednesday', time: '6:00 PM - 6:30 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Wednesday', time: '6:30 PM - 7:00 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-
-                      // Thursday - 30 minute intervals
-                      { day: 'Thursday', time: '7:00 AM - 7:30 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Thursday', time: '7:30 AM - 8:00 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Thursday', time: '8:00 AM - 8:30 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Thursday', time: '8:30 AM - 9:00 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Thursday', time: '9:00 AM - 9:30 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Thursday', time: '9:30 AM - 10:00 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Thursday', time: '10:00 AM - 10:30 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Thursday', time: '10:30 AM - 11:00 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Thursday', time: '11:00 AM - 11:30 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Thursday', time: '11:30 AM - 12:00 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Thursday', time: '12:00 PM - 12:30 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Thursday', time: '12:30 PM - 1:00 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Thursday', time: '1:00 PM - 1:30 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Thursday', time: '1:30 PM - 2:00 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Thursday', time: '2:00 PM - 2:30 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Thursday', time: '2:30 PM - 3:00 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Thursday', time: '3:00 PM - 3:30 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Thursday', time: '3:30 PM - 4:00 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Thursday', time: '4:00 PM - 4:30 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Thursday', time: '4:30 PM - 5:00 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Thursday', time: '5:00 PM - 5:30 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Thursday', time: '5:30 PM - 6:00 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Thursday', time: '6:00 PM - 6:30 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Thursday', time: '6:30 PM - 7:00 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-
-                      // Friday - 30 minute intervals
-                      { day: 'Friday', time: '7:00 AM - 7:30 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Friday', time: '7:30 AM - 8:00 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Friday', time: '8:00 AM - 8:30 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Friday', time: '8:30 AM - 9:00 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Friday', time: '9:00 AM - 9:30 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Friday', time: '9:30 AM - 10:00 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Friday', time: '10:00 AM - 10:30 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Friday', time: '10:30 AM - 11:00 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Friday', time: '11:00 AM - 11:30 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Friday', time: '11:30 AM - 12:00 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Friday', time: '12:00 PM - 12:30 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Friday', time: '12:30 PM - 1:00 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Friday', time: '1:00 PM - 1:30 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Friday', time: '1:30 PM - 2:00 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Friday', time: '2:00 PM - 2:30 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Friday', time: '2:30 PM - 3:00 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Friday', time: '3:00 PM - 3:30 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Friday', time: '3:30 PM - 4:00 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Friday', time: '4:00 PM - 4:30 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Friday', time: '4:30 PM - 5:00 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Friday', time: '5:00 PM - 5:30 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Friday', time: '5:30 PM - 6:00 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Friday', time: '6:00 PM - 6:30 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Friday', time: '6:30 PM - 7:00 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-
-                      // Saturday - 30 minute intervals
-                      { day: 'Saturday', time: '7:00 AM - 7:30 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Saturday', time: '7:30 AM - 8:00 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Saturday', time: '8:00 AM - 8:30 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Saturday', time: '8:30 AM - 9:00 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Saturday', time: '9:00 AM - 9:30 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Saturday', time: '9:30 AM - 10:00 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Saturday', time: '10:00 AM - 10:30 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Saturday', time: '10:30 AM - 11:00 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Saturday', time: '11:00 AM - 11:30 AM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Saturday', time: '11:30 AM - 12:00 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Saturday', time: '12:00 PM - 12:30 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Saturday', time: '12:30 PM - 1:00 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Saturday', time: '1:00 PM - 1:30 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Saturday', time: '1:30 PM - 2:00 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Saturday', time: '2:00 PM - 2:30 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Saturday', time: '2:30 PM - 3:00 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Saturday', time: '3:00 PM - 3:30 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Saturday', time: '3:30 PM - 4:00 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Saturday', time: '4:00 PM - 4:30 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Saturday', time: '4:30 PM - 5:00 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Saturday', time: '5:00 PM - 5:30 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Saturday', time: '5:30 PM - 6:00 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Saturday', time: '6:00 PM - 6:30 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] },
-                      { day: 'Saturday', time: '6:30 PM - 7:00 PM', labs: ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'] }
-                    ].filter(slot => {
-                      if (selectedDay === 'Monday/Thursday') {
-                        return slot.day === 'Monday' || slot.day === 'Thursday';
-                      } else if (selectedDay === 'Tuesday/Friday') {
-                        return slot.day === 'Tuesday' || slot.day === 'Friday';
+                <tr>
+                  {[
+                    "Instructor ID",
+                    "Name",
+                    "Email",
+                    "Contact Number",
+                    "Department",
+                    "Status",
+                    "Actions",
+                  ].map((header) => (
+                    <th
+                      key={header}
+                      style={{
+                        padding: "18px 24px",
+                        fontWeight: 700,
+                        borderBottom: "2px solid #164e94",
+                        textAlign: "left",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {header}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody style={{ fontSize: 15 }}>
+                {filteredInstructors.length === 0 && !loading ? (
+                  <tr>
+                    <td
+                      colSpan={7}
+                      style={{ padding: 30, textAlign: "center", color: "#64748b" }}
+                    >
+                      No instructors found.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredInstructors.map((inst, idx) => (
+                    <tr
+                      key={inst._id}
+                      style={{
+                        backgroundColor: idx % 2 === 0 ? "white" : "#f7f9fc",
+                        cursor: "default",
+                        transition: "background-color 0.2s",
+                        boxShadow: "inset 0 -1px 0 #dadde1",
+                        userSelect: "none",
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#e4edff")}
+                      onMouseLeave={(e) =>
+                        (e.currentTarget.style.backgroundColor =
+                          idx % 2 === 0 ? "white" : "#f7f9fc")
                       }
-                      return false;
-                    }).map((slot, index) => (
-                      <tr key={`${slot.day}-${slot.time}`} style={{
-                        background: index % 2 === 0 ? '#f8fafc' : 'white',
-                        borderBottom: '1px solid #e2e8f0'
-                      }}>
-                        <td style={{padding: '8px', fontSize: '13px', color: '#374151', fontWeight: '600', background: '#f1f5f9', position: 'sticky', left: 0, zIndex: 1}}>
-                          {slot.day}
-                        </td>
-                        <td style={{padding: '8px', fontSize: '13px', color: '#374151', fontWeight: '500', background: '#f1f5f9', position: 'sticky', left: '100px', zIndex: 1}}>
-                          {slot.time}
-                        </td>
-                        {slot.labs.map((lab, labIndex) => (
-                          <td key={labIndex} style={{
-                            padding: '6px',
-                            fontSize: '11px',
-                            textAlign: 'center',
-                            color: lab === '-' ? '#64748b' : '#1e40af',
-                            fontWeight: lab !== '-' ? '500' : 'normal'
-                          }}>
-                            {lab}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    >
+                      <td
+                        style={{
+                          padding: "16px 24px",
+                          fontWeight: 600,
+                          color: "#0f2c63",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {inst.instructorId || "-"}
+                      </td>
+                      <td style={{ padding: "16px 24px", fontWeight: 600, color: "#0f2c63" }}>
+                        {inst.name}
+                      </td>
+                      <td style={{ padding: "16px 24px", color: "#212529" }}>
+                        {inst.email}
+                      </td>
+                      <td style={{ padding: "16px 24px", color: "#212529" }}>
+                        {inst.contact || "-"}
+                      </td>
+                      <td style={{ padding: "16px 24px", color: "#212529" }}>
+                        {inst.department || "-"}
+                      </td>
+                      <td
+                        style={{
+                          padding: "16px 24px",
+                          fontWeight: 700,
+                          fontSize: 14,
+                          color:
+                            inst.status === "active"
+                              ? "#059669"
+                              : inst.status === "pending"
+                              ? "#d97706"
+                              : inst.status === "deleted"
+                              ? "#b91c1c"
+                              : "#444",
+                        }}
+                      >
+                        {inst.status.charAt(0).toUpperCase() + inst.status.slice(1)}
+                      </td>
+                      <td style={{ padding: "12px 20px" }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: 12,
+                            flexWrap: "wrap",
+                            justifyContent: "flex-start",
+                            alignItems: "center",
+                          }}
+                        >
+                          <button
+                            onClick={() => handleViewSchedule(inst._id)}
+                            title="View Schedule"
+                            style={{
+                              padding: "8px 14px",
+                              backgroundColor: "#0f2c63",
+                              color: "white",
+                              border: "none",
+                              borderRadius: 6,
+                              cursor: "pointer",
+                              fontSize: 14,
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 6,
+                            }}
+                          >
+                            <FontAwesomeIcon icon={faEye} />
+                            View
+                          </button>
+
+                          <button
+                            onClick={() => openEditModal(inst)}
+                            title="Edit Instructor"
+                            style={{
+                              padding: "8px 14px",
+                              backgroundColor: "#2563eb",
+                              color: "white",
+                              border: "none",
+                              borderRadius: 6,
+                              cursor: "pointer",
+                              fontSize: 14,
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 6,
+                            }}
+                          >
+                            <FontAwesomeIcon icon={faEdit} />
+                            Edit
+                          </button>
+
+                          {activeTab === "pending" && (
+                            <>
+                              <button
+                                onClick={() => handleApprove(inst._id)}
+                                title="Approve Instructor"
+                                style={{
+                                  padding: "8px 14px",
+                                  backgroundColor: "#16a34a",
+                                  color: "white",
+                                  border: "none",
+                                  borderRadius: 6,
+                                  cursor: "pointer",
+                                  fontSize: 14,
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 6,
+                                }}
+                              >
+                                <FontAwesomeIcon icon={faCheck} />
+                                Approve
+                              </button>
+                              <button
+                                onClick={() => handleReject(inst._id)}
+                                title="Reject Instructor"
+                                style={{
+                                  padding: "8px 14px",
+                                  backgroundColor: "#dc2626",
+                                  color: "white",
+                                  border: "none",
+                                  borderRadius: 6,
+                                  cursor: "pointer",
+                                  fontSize: 14,
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 6,
+                                }}
+                              >
+                                <FontAwesomeIcon icon={faTimes} />
+                                Reject
+                              </button>
+                            </>
+                          )}
+                          {activeTab === "trash" && (
+                            <button
+                              onClick={() => handlePermanentDelete(inst._id)}
+                              title="Delete Permanently"
+                              style={{
+                                padding: "8px 14px",
+                                backgroundColor: "#b91c1c",
+                                color: "white",
+                                border: "none",
+                                borderRadius: 6,
+                                cursor: "pointer",
+                                fontSize: 14,
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 6,
+                              }}
+                            >
+                              <FontAwesomeIcon icon={faTrashAlt} />
+                              Delete Permanently
+                            </button>
+                          )}
+                          {activeTab === "active" && (
+                            <button
+                              onClick={() => handleDelete(inst._id)}
+                              title="Move to Trash"
+                              style={{
+                                padding: "8px 14px",
+                                backgroundColor: "#dc2626",
+                                color: "white",
+                                border: "none",
+                                borderRadius: 6,
+                                cursor: "pointer",
+                                fontSize: 14,
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 6,
+                              }}
+                            >
+                              <FontAwesomeIcon icon={faTrash} />
+                              Archive
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Add Instructor Modal */}
+          {showAddModal && (
+            <Modal
+              show={showAddModal}
+              onClose={closeAddModal}
+              title="Add Instructor"
+              actions={
+                <>
+                  <button onClick={closeAddModal}>Cancel</button>
+                  <button
+                    type="submit"
+                    form="addInstructorForm"
+                    style={{
+                      backgroundColor: "#2563eb",
+                      color: "white",
+                      border: "none",
+                      padding: "10px 20px",
+                      borderRadius: 6,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Add
+                  </button>
+                </>
+              }
+            >
+              <form
+                id="addInstructorForm"
+                onSubmit={handleAddInstructor}
+                style={{ display: "flex", flexDirection: "column", gap: 16 }}
+              >
+                <input
+                  type="text"
+                  value={newInstructorName}
+                  onChange={(e) => setNewInstructorName(e.target.value)}
+                  placeholder="Instructor Name"
+                  required
+                  style={{
+                    padding: 14,
+                    borderRadius: 10,
+                    border: "1.5px solid #ddd",
+                    fontSize: 18,
+                    outline: "none",
+                    boxShadow: "inset 1px 1px 6px #ccc",
+                    transition: "border-color 0.3s ease",
+                  }}
+                />
+                <input
+                  type="email"
+                  value={newInstructorEmail}
+                  onChange={(e) => setNewInstructorEmail(e.target.value)}
+                  placeholder="Instructor Email"
+                  required
+                  style={{
+                    padding: 14,
+                    borderRadius: 10,
+                    border: "1.5px solid #ddd",
+                    fontSize: 18,
+                    outline: "none",
+                    boxShadow: "inset 1px 1px 6px #ccc",
+                    transition: "border-color 0.3s ease",
+                  }}
+                />
+                <input
+                  type="tel"
+                  value={newInstructorContact}
+                  onChange={(e) => setNewInstructorContact(e.target.value)}
+                  placeholder="Contact Number"
+                  required
+                  style={{
+                    padding: 14,
+                    borderRadius: 10,
+                    border: "1.5px solid #ddd",
+                    fontSize: 18,
+                    outline: "none",
+                    boxShadow: "inset 1px 1px 6px #ccc",
+                    transition: "border-color 0.3s ease",
+                  }}
+                />
+                <input
+                  type="text"
+                  value={newInstructorDepartment}
+                  onChange={(e) => setNewInstructorDepartment(e.target.value)}
+                  placeholder="Department"
+                  required
+                  style={{
+                    padding: 14,
+                    borderRadius: 10,
+                    border: "1.5px solid #ddd",
+                    fontSize: 18,
+                    outline: "none",
+                    boxShadow: "inset 1px 1px 6px #ccc",
+                    transition: "border-color 0.3s ease",
+                  }}
+                />
+              </form>
+            </Modal>
+          )}
+
+          {/* Edit Instructor Modal */}
+          {showEditModal && (
+            <div
+              style={{
+                position: "fixed",
+                top: 0,
+                left: 0,
+                width: "100vw",
+                height: "100vh",
+                background: "rgba(0,0,0,0.5)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                zIndex: 999,
+              }}
+            >
+              <div
+                style={{
+                  background: "white",
+                  padding: "40px 48px",
+                  borderRadius: 16,
+                  minWidth: 400,
+                  maxWidth: "90vw",
+                  boxShadow: "0 10px 40px rgba(0,0,0,0.15)",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 24,
+                }}
+              >
+                <h3
+                  style={{
+                    margin: 0,
+                    fontWeight: "bold",
+                    fontSize: 24,
+                    color: "#0f2c63",
+                  }}
+                >
+                  Edit Instructor
+                </h3>
+
+                <input
+                  type="email"
+                  value={editEmail}
+                  onChange={(e) => setEditEmail(e.target.value)}
+                  placeholder="Instructor Email"
+                  required
+                  style={{
+                    padding: 14,
+                    borderRadius: 10,
+                    border: "1.5px solid #ddd",
+                    fontSize: 18,
+                    outline: "none",
+                    boxShadow: "inset 1px 1px 6px #ccc",
+                    transition: "border-color 0.3s ease",
+                  }}
+                />
+
+                <input
+                  type="tel"
+                  value={editContact}
+                  onChange={(e) => setEditContact(e.target.value)}
+                  placeholder="Contact Number"
+                  required
+                  style={{
+                    padding: 14,
+                    borderRadius: 10,
+                    border: "1.5px solid #ddd",
+                    fontSize: 18,
+                    outline: "none",
+                    boxShadow: "inset 1px 1px 6px #ccc",
+                    transition: "border-color 0.3s ease",
+                  }}
+                />
+
+                <div style={{ display: "flex", gap: 16, marginTop: 16 }}>
+                  <button
+                    onClick={handleEditSave}
+                    style={{
+                      flex: 1,
+                      padding: "14px 0",
+                      background: "#2563eb",
+                      color: "white",
+                      border: "none",
+                      borderRadius: 10,
+                      fontWeight: "700",
+                      fontSize: 18,
+                      cursor: "pointer",
+                      boxShadow: "0 6px 15px rgba(37, 99, 235, 0.5)",
+                      transition: "background-color 0.3s ease",
+                    }}
+                    onMouseEnter={(e) =>
+                      (e.currentTarget.style.background = "#1d4ed8")
+                    }
+                    onMouseLeave={(e) =>
+                      (e.currentTarget.style.background = "#2563eb")
+                    }
+                  >
+                    Save
+                  </button>
+
+                  <button
+                    onClick={() => setShowEditModal(false)}
+                    style={{
+                      flex: 1,
+                      padding: "14px 0",
+                      background: "#f3f4f6",
+                      color: "#374151",
+                      borderRadius: 10,
+                      fontWeight: "700",
+                      fontSize: 18,
+                      cursor: "pointer",
+                      border: "none",
+                    }}
+                    onMouseEnter={(e) =>
+                      (e.currentTarget.style.background = "#e5e7eb")
+                    }
+                    onMouseLeave={(e) =>
+                      (e.currentTarget.style.background = "#f3f4f6")
+                    }
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
+          )}
+
+          {/* Schedule Modal */}
+          {showScheduleModal && (
+            <Modal
+              show={showScheduleModal}
+              onClose={closeScheduleModal}
+              title={`Schedule for ${selectedInstructor?.name || ""}`}
+              actions={<button onClick={closeScheduleModal}>Close</button>}
+            >
+              <p>Schedule details will appear here.</p>
+            </Modal>
+          )}
+
+          {/* Confirm Modal */}
+          <Modal
+            show={confirmModal.show}
+            onClose={confirmModal.onCancel}
+            title={confirmModal.title}
+            actions={
+              <>
+                <button
+                  onClick={confirmModal.onCancel}
+                  style={{
+                    padding: "10px 20px",
+                    background: "#f3f4f6",
+                    borderRadius: 6,
+                    border: "none",
+                    cursor: "pointer",
+                  }}
+                >
+                  {confirmModal.cancelText}
+                </button>
+                <button
+                  onClick={confirmModal.onConfirm}
+                  style={{
+                    padding: "10px 20px",
+                    background: "#dc2626",
+                    color: "white",
+                    borderRadius: 6,
+                    border: "none",
+                    cursor: "pointer",
+                  }}
+                >
+                  {confirmModal.confirmText}
+                </button>
+              </>
+            }
+          >
+            {confirmModal.message}
+          </Modal>
+
+          {/* Alert Modal */}
+          <Modal
+            show={alertModal.show}
+            onClose={() => setAlertModal({ show: false, message: "" })}
+            title="Message"
+            actions={
+              <button
+                onClick={() => setAlertModal({ show: false, message: "" })}
+                style={{
+                  padding: "10px 20px",
+                  background: "#2563eb",
+                  color: "white",
+                  borderRadius: 6,
+                  border: "none",
+                  cursor: "pointer",
+                }}
+              >
+                OK
+              </button>
+            }
+          >
+            {alertModal.message}
+          </Modal>
         </div>
-      )}
+      </main>
     </div>
   );
 };

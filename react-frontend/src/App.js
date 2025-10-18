@@ -8,9 +8,12 @@ import ManageSchedule from './components/admin/ManageSchedule.jsx';
 import ScheduleCalendar from './components/admin/ScheduleCalendar.jsx';
 import FacultyManagement from './components/admin/FacultyManagement.jsx';
 import RoomManagement from './components/admin/RoomManagement.jsx';
+import RoomSchedule from './components/admin/RoomSchedule.jsx';
 import Reports from './components/admin/Reports.jsx';
 import Settings from './components/admin/Settings.jsx';
 import InstructorDashboard from './components/instructor/InstructorDashboard.jsx';
+import InstructorReports from './components/instructor/InstructorReports.jsx';
+import InstructorSettings from './components/instructor/InstructorSettings.jsx';
 import './styles/global.css';
 
 function App() {
@@ -28,9 +31,12 @@ function App() {
           <Route path="/admin/schedule/:course/:year" element={<ScheduleCalendar />} />
           <Route path="/admin/faculty-management" element={<FacultyManagement />} />
           <Route path="/admin/room-management" element={<RoomManagement />} />
+          <Route path="/admin/room-schedule/:roomId" element={<RoomSchedule />} />
           <Route path="/admin/reports" element={<Reports />} />
           <Route path="/admin/settings" element={<Settings />} />
           <Route path="/instructor/dashboard" element={<InstructorDashboard />} />
+          <Route path="/instructor/reports" element={<InstructorReports />} />
+          <Route path="/instructor/settings" element={<InstructorSettings />} />
         </Routes>
       </div>
     </Router>

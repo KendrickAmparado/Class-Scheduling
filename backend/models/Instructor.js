@@ -1,10 +1,14 @@
-const mongoose = require('mongoose');
+// models/Instructor.js
+import mongoose from 'mongoose';
 
-const InstructorSchema = new mongoose.Schema({
-  firstname: { type: String, required: true },
-  lastname: { type: String, required: true },
+const instructorSchema = new mongoose.Schema({
+  name: { type: String, required: true },
   email: { type: String, required: true, unique: true },
-  password: { type: String, required: true },
-}, { timestamps: true });
+  contact: { type: String },          // Added contact field
+  department: { type: String },       // Added department field
+  status: { type: String, default: 'pending' },
+  registrationDate: { type: Date, default: Date.now }
+});
 
-module.exports = mongoose.model('Instructor', InstructorSchema);
+const Instructor = mongoose.model('Instructor', instructorSchema);
+export default Instructor;

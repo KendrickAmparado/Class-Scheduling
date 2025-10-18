@@ -2,7 +2,7 @@
 
 /* Schedule Page */
 .schedule-page {
-  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+  background: linear-gradient(135deg, #0f2c63 0%, #f97316 100%);
   min-height: 100vh;
 }
 
@@ -130,10 +130,32 @@
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
 }
 
+/* Day Group Sections */
+.day-group-section {
+  margin-bottom: 30px;
+}
+
+.day-group-section:last-child {
+  margin-bottom: 0;
+}
+
+.day-group-header {
+  background: linear-gradient(135deg, #0f2c63 0%, #1e40af 100%);
+  color: white;
+  padding: 15px 20px;
+  margin: 0 0 10px 0;
+  border-radius: 10px;
+  font-size: 18px;
+  font-weight: 600;
+  text-align: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
 .schedule-table table {
   width: 100%;
   border-collapse: collapse;
   font-size: 14px;
+  margin-bottom: 20px;
 }
 
 .schedule-table th {

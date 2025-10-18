@@ -3,13 +3,14 @@ import { Link } from 'react-router-dom';
 import Sidebar from '../common/Sidebar.jsx';
 import Header from '../common/Header.jsx';
 import SchedulePopup from './SchedulePopup.jsx';
+import axios from 'axios';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faCalendarPlus,
   faUsers,
-  faDoorOpen,
   faExclamationTriangle,
-  faClipboardList
+  faClipboardList,
+  faDoorOpen
 } from '@fortawesome/free-solid-svg-icons';
 
 const AdminDashboard = () => {
@@ -57,25 +58,45 @@ const AdminDashboard = () => {
     { room: 'Computer Laboratory # 12', area: 'Finance Building - 3rd Floor', status: 'maintenance' }
   ];
 
-  const handleScheduleSubmit = (scheduleData) => {
-    setShowSchedulePopup(false);
-    alert('Schedule created successfully!');
+  // Save schedule to backend
+  const handleScheduleSubmit = async (scheduleData) => {
+    try {
+      const res = await axios.post("http://localhost:5000/api/schedule/create", scheduleData);
+      if (res.data.success) {
+        alert("✅ Schedule created successfully!");
+        setShowSchedulePopup(false);
+      } else {
+        alert("⚠️ Failed to create schedule: " + res.data.message);
+      }
+    } catch (err) {
+      console.error("Error saving schedule:", err);
+      alert("❌ Server error while saving schedule.");
+    }
   };
 
   return (
-    <div style={{display: 'flex', height: '100vh', overflow: 'hidden'}}>
+    <div className="dashboard-container">
       <Sidebar />
-      <main style={{flex: 1, background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)', overflowY: 'auto'}}>
+      <main className="main-content">
         <Header title="Admin Dashboard" />
+        <div className="dashboard-content">
 
-        <div style={{padding: '30px', background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)', minHeight: 'calc(100vh - 80px)', overflowY: 'auto'}}>
-          <div style={{background: '#dedede', padding: '30px', borderRadius: '15px', boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)', marginBottom: '30px', borderLeft: '5px solid #0f2c63'}}>
-            <h2 style={{color: '#1e293b', fontSize: '28px', fontWeight: '700', marginBottom: '8px'}}>Welcome to the Admin Dashboard</h2>
-            <p style={{color: '#64748b', fontSize: '16px', margin: '0'}}>Manage your class scheduling system efficiently</p>
+          {/* Welcome Card */}
+          <div className="welcome-section">
+            <h2>Welcome to the Admin Dashboard</h2>
+            <p>Manage your class scheduling system efficiently</p>
           </div>
 
-          <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '30px', marginBottom: '30px'}}>
-            {quickActions.map((action, index) => (
+          {/* Quick Actions */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+              gap: '28px',
+              marginBottom: '36px'
+            }}
+          >
+            {quickActions.map((action, index) =>
               action.link ? (
                 <Link
                   key={index}
@@ -84,104 +105,159 @@ const AdminDashboard = () => {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    gap: '15px',
-                    padding: '40px 35px',
+                    gap: '18px',
+                    padding: '42px 36px',
                     background: action.gradient,
                     color: 'white',
                     border: 'none',
-                    borderRadius: '18px',
+                    borderRadius: '20px',
                     cursor: 'pointer',
-                    fontSize: '18px',
-                    fontWeight: '600',
-                    transition: 'all 0.3s ease',
-                    boxShadow: '0 6px 20px rgba(15, 44, 99, 0.3)',
-                    minHeight: '120px',
-                    textDecoration: 'none'
+                    fontSize: '21px',
+                    fontWeight: '700',
+                    boxShadow: '0 8px 32px rgba(15,44,99,0.18)',
+                    minHeight: '130px',
+                    textDecoration: 'none',
+                    transition: 'transform 0.18s cubic-bezier(.32,2,.55,.27)'
                   }}
-                  onMouseOver={(e) => e.target.style.transform = 'translateY(-5px)'}
-                  onMouseOut={(e) => e.target.style.transform = 'translateY(0)'}
+                  onMouseOver={e => e.currentTarget.style.transform = 'translateY(-8px) scale(1.02)'}
+                  onMouseOut={e => e.currentTarget.style.transform = ''}
                 >
-                  <FontAwesomeIcon icon={action.icon} />
+                  <FontAwesomeIcon icon={action.icon} style={{fontSize: 32}}/>
                   <span>{action.title}</span>
                 </Link>
               ) : (
                 <button
                   key={index}
+                  onClick={action.action}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    gap: '15px',
-                    padding: '40px 35px',
+                    gap: '18px',
+                    padding: '42px 36px',
                     background: action.gradient,
                     color: 'white',
                     border: 'none',
-                    borderRadius: '18px',
+                    borderRadius: '20px',
                     cursor: 'pointer',
-                    fontSize: '18px',
-                    fontWeight: '600',
-                    transition: 'all 0.3s ease',
-                    boxShadow: '0 6px 20px rgba(15, 44, 99, 0.3)',
-                    minHeight: '120px',
-                    width: '100%'
+                    fontSize: '21px',
+                    fontWeight: '700',
+                    minHeight: '130px',
+                    width: '100%',
+                    boxShadow: '0 8px 32px rgba(15,44,99,0.18)',
+                    transition: 'transform 0.18s cubic-bezier(.32,2,.55,.27)'
                   }}
-                  onClick={action.action}
-                  onMouseOver={(e) => e.target.style.transform = 'translateY(-5px)'}
-                  onMouseOut={(e) => e.target.style.transform = 'translateY(0)'}
+                  onMouseOver={e => e.currentTarget.style.transform = 'translateY(-8px) scale(1.02)'}
+                  onMouseOut={e => e.currentTarget.style.transform = ''}
                 >
-                  <FontAwesomeIcon icon={action.icon} />
+                  <FontAwesomeIcon icon={action.icon} style={{fontSize: 32}} />
                   <span>{action.title}</span>
                 </button>
               )
-            ))}
+            )}
           </div>
 
-          <div style={{background: '#764F01', padding: '20px', borderRadius: '15px', boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)', marginBottom: '30px', borderLeft: '5px solid #ef4444'}}>
-            <h3 style={{color: '#FFAD0A', fontSize: '16px', fontWeight: '600', marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '10px'}}>
-              <FontAwesomeIcon icon={faExclamationTriangle} />
+          {/* Alerts */}
+          <div
+            style={{
+              background: 'linear-gradient(135deg, #f97316 20%, #f7a66bff 100%)',
+              padding: '28px 28px 24px 28px',
+              borderRadius: '18px',
+              boxShadow: '0 4px 20px rgba(245, 158, 11, 0.11)',
+              marginBottom: '36px',
+              border: '1.5px solid #f59e0b'
+            }}
+          >
+            <h3
+              style={{
+                color: '#90231a',
+                fontSize: '19px',
+                fontWeight: '700',
+                marginBottom: '20px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '14px'
+              }}
+            >
+              <FontAwesomeIcon icon={faExclamationTriangle} style={{ color: '#dc2626', fontSize: 20 }} />
               System Alerts
             </h3>
-            <div style={{display: 'flex', flexDirection: 'column', gap: '15px'}}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               {alerts.map((alert, index) => (
-                <div key={index} style={{display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '10px 15px', background: '#FFAD0A', borderRadius: '10px', borderLeft: '4px solid #ef4444', transition: 'all 0.3s ease'}}>
-                  <FontAwesomeIcon icon={faExclamationTriangle} style={{color: '#060400', fontSize: '14px', marginTop: '2px'}} />
-                  <span style={{color: '#7f1d1d', fontSize: '13px', lineHeight: '1.4'}}>{alert}</span>
+                <div
+                  key={index}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '12px',
+                    padding: '16px 22px',
+                    background: 'rgba(255,255,255,0.96)',
+                    borderRadius: '12px',
+                    borderLeft: '4px solid #dc2626',
+                    fontWeight: 500,
+                    boxShadow: '0 2px 10px rgba(0,0,0,0.03)',
+                    color: '#1f2937'
+                  }}
+                  onMouseOver={e => e.currentTarget.style.transform = 'translateX(2px)'}
+                  onMouseOut={e => e.currentTarget.style.transform = ''}
+                >
+                  <FontAwesomeIcon icon={faExclamationTriangle} style={{ color: '#dc2626', fontSize: '18px', marginTop: '2px' }} />
+                  <span style={{ fontSize: '15px', lineHeight: 1.7 }}>{alert}</span>
                 </div>
               ))}
             </div>
           </div>
 
-          <div style={{background: '#dedede', padding: '30px', borderRadius: '15px', boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)', borderLeft: '5px solid #f97316'}}>
-            <h3 style={{color: '#1e293b', fontSize: '20px', fontWeight: '600', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px'}}>
+          {/* Room Status Overview */}
+          <div style={{
+            background: '#fff',
+            padding: '30px',
+            borderRadius: '18px',
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)',
+            borderLeft: '5px solid #f97316'
+          }}>
+            <h3 style={{
+              color: '#1e293b',
+              fontSize: '22px',
+              fontWeight: '700',
+              marginBottom: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px'
+            }}>
               <FontAwesomeIcon icon={faDoorOpen} />
               Room Status Overview
             </h3>
-            <div style={{overflowX: 'auto', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0, 0, 0, 0.1)'}}>
-              <table style={{width: '100%', borderCollapse: 'collapse', background: '#dedede', fontSize: '14px'}}>
+            <div style={{
+              overflowX: 'auto',
+              borderRadius: '12px',
+              boxShadow: '0 2px 10px rgba(0, 0, 0, 0.09)'
+            }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', background: '#fff', fontSize: '15px', borderRadius: '12px', overflow: 'hidden' }}>
                 <thead>
-                  <tr style={{background: 'linear-gradient(135deg, #0f2c63 0%, #1e40af 100%)'}}>
-                    <th style={{padding: '15px 20px', textAlign: 'left', fontWeight: '600', color: '#dedede', fontSize: '14px', textTransform: 'uppercase', letterSpacing: '0.5px'}}>Room</th>
-                    <th style={{padding: '15px 20px', textAlign: 'left', fontWeight: '600', color: '#dedede', fontSize: '14px', textTransform: 'uppercase', letterSpacing: '0.5px'}}>Area/Location</th>
-                    <th style={{padding: '15px 20px', textAlign: 'left', fontWeight: '600', color: '#dedede', fontSize: '14px', textTransform: 'uppercase', letterSpacing: '0.5px'}}>Status</th>
+                  <tr style={{ background: 'linear-gradient(135deg, #0f2c63 0%, #1e40af 100%)' }}>
+                    <th style={{ padding: '15px 20px', textAlign: 'left', fontWeight: '700', color: '#efefef', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Room</th>
+                    <th style={{ padding: '15px 20px', textAlign: 'left', fontWeight: '700', color: '#efefef', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Area/Location</th>
+                    <th style={{ padding: '15px 20px', textAlign: 'left', fontWeight: '700', color: '#efefef', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Status</th>
                   </tr>
                 </thead>
                 <tbody>
                   {roomStatus.map((room, index) => (
-                    <tr key={index} style={{borderBottom: '1px solid #e2e8f0'}}>
-                      <td style={{padding: '15px 20px', color: '#374151'}}>{room.room}</td>
-                      <td style={{padding: '15px 20px', color: '#374151'}}>{room.area}</td>
-                      <td style={{padding: '15px 20px'}}>
+                    <tr key={index} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                      <td style={{ padding: '15px 20px', color: '#374151' }}>{room.room}</td>
+                      <td style={{ padding: '15px 20px', color: '#374151' }}>{room.area}</td>
+                      <td style={{ padding: '15px 20px' }}>
                         <span style={{
-                          padding: '6px 12px',
-                          borderRadius: '20px',
+                          padding: '6px 14px',
+                          borderRadius: '18px',
                           fontSize: '12px',
-                          fontWeight: '600',
+                          fontWeight: '700',
                           textTransform: 'uppercase',
-                          letterSpacing: '0.5px',
+                          letterSpacing: '0.7px',
                           backgroundColor: room.status === 'available' ? '#dcfce7' :
-                                          room.status === 'occupied' ? '#fee2e2' : '#fef3c7',
+                            room.status === 'occupied' ? '#fee2e2' : '#fef3c7',
                           color: room.status === 'available' ? '#16a34a' :
-                                 room.status === 'occupied' ? '#dc2626' : '#d97706'
+                            room.status === 'occupied' ? '#dc2626' : '#d97706'
                         }}>
                           {room.status.toUpperCase()}
                         </span>
@@ -194,6 +270,7 @@ const AdminDashboard = () => {
           </div>
         </div>
 
+        {/* Schedule Popup */}
         {showSchedulePopup && (
           <SchedulePopup
             onClose={() => setShowSchedulePopup(false)}
