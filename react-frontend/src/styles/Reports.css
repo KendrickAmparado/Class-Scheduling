@@ -2,7 +2,7 @@
 
 .reports-container {
   padding: 30px;
-  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+  background: linear-gradient(135deg, #0f2c63 0%, #f97316 100%);
   min-height: calc(100vh - 80px);
   overflow-y: auto;
 }
@@ -16,7 +16,7 @@
   background: white;
   border-radius: 15px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-  border-left: 5px solid #0f2c63;
+  border-left: 5px solid #f97316;
 }
 
 .reports-title {

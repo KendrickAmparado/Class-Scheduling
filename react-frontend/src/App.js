@@ -12,6 +12,8 @@ import RoomSchedule from './components/admin/RoomSchedule.jsx';
 import Reports from './components/admin/Reports.jsx';
 import Settings from './components/admin/Settings.jsx';
 import InstructorDashboard from './components/instructor/InstructorDashboard.jsx';
+import InstructorReports from './components/instructor/InstructorReports.jsx';
+import InstructorSettings from './components/instructor/InstructorSettings.jsx';
 import './styles/global.css';
 
 function App() {
@@ -33,6 +35,8 @@ function App() {
           <Route path="/admin/reports" element={<Reports />} />
           <Route path="/admin/settings" element={<Settings />} />
           <Route path="/instructor/dashboard" element={<InstructorDashboard />} />
+          <Route path="/instructor/reports" element={<InstructorReports />} />
+          <Route path="/instructor/settings" element={<InstructorSettings />} />
         </Routes>
       </div>
     </Router>

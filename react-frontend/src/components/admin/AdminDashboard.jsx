@@ -65,11 +65,11 @@ const AdminDashboard = () => {
   return (
     <div style={{display: 'flex', height: '100vh', overflow: 'hidden'}}>
       <Sidebar />
-      <main style={{flex: 1, background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)', overflowY: 'auto'}}>
+      <main style={{flex: 1, background: 'linear-gradient(135deg, #0f2c63 0%, #f97316 100%)', overflowY: 'auto'}}>
         <Header title="Admin Dashboard" />
 
-        <div style={{padding: '30px', background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)', minHeight: 'calc(100vh - 80px)', overflowY: 'auto'}}>
-          <div style={{background: '#ffffffff', padding: '30px', borderRadius: '15px', boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)', marginBottom: '30px', borderLeft: '5px solid #0f2c63'}}>
+        <div style={{padding: '30px', background: 'linear-gradient(135deg, #0f2c63 0%, #f97316 100%)', minHeight: 'calc(100vh - 80px)', overflowY: 'auto'}}>
+          <div style={{background: '#ffffffff', padding: '30px', borderRadius: '15px', boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)', marginBottom: '30px', borderLeft: '5px solid #f97316'}}>
             <h2 style={{color: '#1e293b', fontSize: '28px', fontWeight: '700', marginBottom: '8px'}}>Welcome to the Admin Dashboard</h2>
             <p style={{color: '#64748b', fontSize: '16px', margin: '0'}}>Manage your class scheduling system efficiently</p>
           </div>
@@ -136,16 +136,18 @@ const AdminDashboard = () => {
             ))}
           </div>
 
-          <div style={{background: '#764F01', padding: '20px', borderRadius: '15px', boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)', marginBottom: '30px', borderLeft: '5px solid #ef4444'}}>
-            <h3 style={{color: '#FFAD0A', fontSize: '16px', fontWeight: '600', marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '10px'}}>
-              <FontAwesomeIcon icon={faExclamationTriangle} />
+          <div style={{background: 'linear-gradient(135deg, #f97316 20%, #f7a66bff 100%)', padding: '25px', borderRadius: '15px', boxShadow: '0 4px 20px rgba(245, 158, 11, 0.15)', marginBottom: '30px', border: '1px solid #f59e0b'}}>
+            <h3 style={{color: '#3b0808ff', fontSize: '18px', fontWeight: '700', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '12px'}}>
+              <FontAwesomeIcon icon={faExclamationTriangle} style={{color: '#dc2626'}} />
               System Alerts
             </h3>
             <div style={{display: 'flex', flexDirection: 'column', gap: '15px'}}>
               {alerts.map((alert, index) => (
-                <div key={index} style={{display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '10px 15px', background: '#FFAD0A', borderRadius: '10px', borderLeft: '4px solid #ef4444', transition: 'all 0.3s ease'}}>
-                  <FontAwesomeIcon icon={faExclamationTriangle} style={{color: '#060400', fontSize: '14px', marginTop: '2px'}} />
-                  <span style={{color: '#7f1d1d', fontSize: '13px', lineHeight: '1.4'}}>{alert}</span>
+                <div key={index} style={{display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '15px 18px', background: 'rgba(255, 255, 255, 0.9)', borderRadius: '12px', borderLeft: '4px solid #dc2626', transition: 'all 0.3s ease', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)'}}
+                     onMouseOver={(e) => e.target.style.transform = 'translateX(3px)'}
+                     onMouseOut={(e) => e.target.style.transform = 'translateX(0)'}>
+                  <FontAwesomeIcon icon={faExclamationTriangle} style={{color: '#dc2626', fontSize: '16px', marginTop: '2px'}} />
+                  <span style={{color: '#1f2937', fontSize: '14px', lineHeight: '1.5', fontWeight: '500'}}>{alert}</span>
                 </div>
               ))}
             </div>

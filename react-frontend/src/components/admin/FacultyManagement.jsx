@@ -122,8 +122,8 @@ const FacultyManagement = () => {
       <main className="main-content">
         <Header title="Faculty Management" />
 
-        <div style={{padding: '30px', background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)', minHeight: 'calc(100vh - 80px)', overflowY: 'auto'}}>
-          <div style={{background: '#ffffffff', padding: '30px', borderRadius: '15px', boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)', marginBottom: '30px', borderLeft: '5px solid #0f2c63'}}>
+        <div style={{padding: '30px', background: 'linear-gradient(135deg, #0f2c63 0%, #f97316 100%)', minHeight: 'calc(100vh - 80px)', overflowY: 'auto'}}>
+          <div style={{background: '#ffffffff', padding: '30px', borderRadius: '15px', boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)', marginBottom: '30px', borderLeft: '5px solid #f97316'}}>
             <h2 style={{margin: '0 0 10px 0', color: '#1e293b', fontSize: '28px', fontWeight: '700'}}>
               <FontAwesomeIcon icon={faUserPlus} style={{marginRight: '15px', color: '#0f2c63'}} />
               Faculty Management

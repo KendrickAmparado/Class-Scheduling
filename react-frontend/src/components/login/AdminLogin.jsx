@@ -25,7 +25,7 @@ const AdminLogin = () => {
   return (
     <div style={{ 
       fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
-      background: "linear-gradient(135deg, #0f2c63 0%, #1e40af 100%)",
+      background: "linear-gradient(135deg, #0f2c63 30%, #f97316 100%)",
       minHeight: "100vh",
       display: "flex",
       flexDirection: "column"
@@ -33,7 +33,7 @@ const AdminLogin = () => {
       <div className="header1" style={{
         width: "100%",
         height: "80px",
-        background: "linear-gradient(135deg, #f97316 0%, #ea580c 100%)",
+        background: "linear-gradient(135deg, #0f2c63 30%, #f97316 100%)",
         boxShadow: "0 4px 15px rgba(0, 0, 0, 0.2)",
         display: "flex",
         alignItems: "center",

@@ -46,7 +46,7 @@ const Header = ({ title }) => {
 
   return (
     <header className="top-header" style={{
-      background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
+      background: 'linear-gradient(135deg, #0f2c63 0%, #f97316 100%)',
       padding: '15px 25px',
       display: 'flex',
       justifyContent: 'space-between',
