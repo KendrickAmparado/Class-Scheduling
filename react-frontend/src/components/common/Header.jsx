@@ -1,11 +1,52 @@
+import React, { useState } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faSearch, faBell } from '@fortawesome/free-solid-svg-icons';
 
 const Header = ({ title }) => {
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [notifications, setNotifications] = useState([
+    {
+      id: 1,
+      title: 'Schedule Conflict',
+      message: 'BSIT-1A has a scheduling conflict in ComLab 1',
+      time: '2 minutes ago',
+      read: false
+    },
+    {
+      id: 2,
+      title: 'Room Maintenance',
+      message: 'ComLab 3 will be under maintenance tomorrow',
+      time: '1 hour ago',
+      read: false
+    },
+    {
+      id: 3,
+      title: 'New Instructor Added',
+      message: 'Dr. Smith has been added to the instructor database',
+      time: '3 hours ago',
+      read: true
+    }
+  ]);
+
+  const toggleNotifications = () => {
+    setShowNotifications(!showNotifications);
+  };
+
+  const markAsRead = (id) => {
+    setNotifications(notifications.map(notif =>
+      notif.id === id ? { ...notif, read: true } : notif
+    ));
+  };
+
+  const markAllAsRead = () => {
+    setNotifications(notifications.map(notif => ({ ...notif, read: true })));
+  };
+
+  const unreadCount = notifications.filter(notif => !notif.read).length;
 
   return (
     <header className="top-header" style={{
-      background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
+      background: 'linear-gradient(135deg, #0f2c63 0%, #f97316 100%)',
       padding: '15px 25px',
       display: 'flex',
       justifyContent: 'space-between',
@@ -72,6 +113,7 @@ const Header = ({ title }) => {
       }}>
         <div 
           className="notification-icon"
+          onClick={toggleNotifications}
           style={{
             position: 'relative',
             cursor: 'pointer',
@@ -93,24 +135,148 @@ const Header = ({ title }) => {
               color: '#ffffff'
             }}
           />
-          <span 
-            className="notification-badge"
+          {unreadCount > 0 && (
+            <span 
+              className="notification-badge"
+              style={{
+                position: 'absolute',
+                top: '2px',
+                right: '2px',
+                background: '#ef4444',
+                color: 'white',
+                fontSize: '12px',
+                padding: '2px 6px',
+                borderRadius: '10px',
+                minWidth: '18px',
+                textAlign: 'center'
+              }}
+            >
+              {unreadCount}
+            </span>
+          )}
+        </div>
+
+        {/* Notification Dropdown */}
+        {showNotifications && (
+          <div 
+            className="notification-dropdown"
             style={{
               position: 'absolute',
-              top: '2px',
-              right: '2px',
-              background: '#ef4444',
-              color: 'white',
-              fontSize: '12px',
-              padding: '2px 6px',
-              borderRadius: '10px',
-              minWidth: '18px',
-              textAlign: 'center'
+              top: '70px',
+              right: '20px',
+              width: '350px',
+              background: 'white',
+              borderRadius: '12px',
+              boxShadow: '0 10px 30px rgba(0, 0, 0, 0.2)',
+              zIndex: 1000,
+              maxHeight: '400px',
+              overflow: 'hidden'
             }}
           >
-            3
-          </span>
-        </div>
+            <div 
+              className="notification-header"
+              style={{
+                padding: '15px 20px',
+                borderBottom: '1px solid #e5e7eb',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
+              }}
+            >
+              <h4 style={{ margin: 0, color: '#1f2937', fontSize: '16px' }}>
+                Notifications
+              </h4>
+              {unreadCount > 0 && (
+                <button
+                  onClick={markAllAsRead}
+                  style={{
+                    background: '#0f2c63',
+                    color: 'white',
+                    border: 'none',
+                    padding: '4px 8px',
+                    borderRadius: '6px',
+                    fontSize: '12px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Mark all read
+                </button>
+              )}
+            </div>
+            
+            <div 
+              className="notification-list"
+              style={{
+                maxHeight: '300px',
+                overflowY: 'auto'
+              }}
+            >
+              {notifications.length === 0 ? (
+                <div style={{ padding: '20px', textAlign: 'center', color: '#6b7280' }}>
+                  No notifications
+                </div>
+              ) : (
+                notifications.map(notification => (
+                  <div
+                    key={notification.id}
+                    className={`notification-item ${!notification.read ? 'unread' : ''}`}
+                    onClick={() => markAsRead(notification.id)}
+                    style={{
+                      padding: '15px 20px',
+                      borderBottom: '1px solid #f3f4f6',
+                      cursor: 'pointer',
+                      background: notification.read ? 'white' : '#f0f9ff',
+                      transition: 'background 0.2s ease'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.target.style.background = '#f9fafb';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.target.style.background = notification.read ? 'white' : '#f0f9ff';
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div style={{ flex: 1 }}>
+                        <h5 style={{ 
+                          margin: '0 0 5px 0', 
+                          color: '#1f2937', 
+                          fontSize: '14px',
+                          fontWeight: notification.read ? 'normal' : '600'
+                        }}>
+                          {notification.title}
+                        </h5>
+                        <p style={{ 
+                          margin: '0 0 5px 0', 
+                          color: '#6b7280', 
+                          fontSize: '13px',
+                          lineHeight: '1.4'
+                        }}>
+                          {notification.message}
+                        </p>
+                        <span style={{ 
+                          color: '#9ca3af', 
+                          fontSize: '12px' 
+                        }}>
+                          {notification.time}
+                        </span>
+                      </div>
+                      {!notification.read && (
+                        <div style={{
+                          width: '8px',
+                          height: '8px',
+                          background: '#0f2c63',
+                          borderRadius: '50%',
+                          flexShrink: 0,
+                          marginLeft: '10px'
+                        }}></div>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
         
         <div className="header-logos" style={{
           display: 'flex',

@@ -15,16 +15,6 @@ const Settings = () => {
             <p>Configure system preferences and settings</p>
           </div>
           
-          <div style={{ padding: '20px', background: 'white', borderRadius: '10px', marginTop: '20px' }}>
-            <p>Settings features will be implemented here:</p>
-            <ul style={{ marginTop: '10px', paddingLeft: '20px' }}>
-              <li>System configuration</li>
-              <li>User management</li>
-              <li>Academic year settings</li>
-              <li>Time slot configuration</li>
-              <li>Backup and restore</li>
-            </ul>
-          </div>
         </div>
       </main>
     </div>

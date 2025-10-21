@@ -33,7 +33,7 @@ const Sidebar = () => {
   return (
     <aside className="sidebar" style={{
       width: '280px',
-      background: 'linear-gradient(135deg, #0f2c63 0%, #1e40af 100%)',
+      background: 'linear-gradient(135deg, #0f2c63 50%, #ea580c 100%)',
       color: 'white',
       display: 'flex',
       flexDirection: 'column',
@@ -142,8 +142,8 @@ const Sidebar = () => {
             alignItems: 'center',
             gap: '12px',
             padding: '15px 20px',
-            background: 'rgba(239, 68, 68, 0.2)',
-            color: '#fca5a5',
+            background: 'rgba(249, 4, 4, 0.2)',
+            color: '#fe9d9dff',
             textDecoration: 'none',
             borderRadius: '10px',
             transition: 'all 0.3s ease',

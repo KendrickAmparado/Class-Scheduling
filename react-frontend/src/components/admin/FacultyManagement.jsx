@@ -18,7 +18,6 @@ const Modal = ({ show, onClose, title, children, actions }) => {
   if (!show) return null;
   return (
     <>
-      {/* Overlay */}
       <div
         style={{
           position: "fixed",
@@ -34,7 +33,6 @@ const Modal = ({ show, onClose, title, children, actions }) => {
         }}
         onClick={onClose}
       >
-        {/* Modal content */}
         <div
           style={{
             position: "relative",
@@ -58,18 +56,9 @@ const Modal = ({ show, onClose, title, children, actions }) => {
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>{actions}</div>
         </div>
       </div>
-      <style>
-        {`
-        @keyframes fadeInScale {
-          0% { opacity: 0; transform: scale(0.75);}
-          100% { opacity: 1; transform: scale(1);}
-        }
-        `}
-      </style>
     </>
   );
 };
-
 
 const FacultyManagement = () => {
   const [activeTab, setActiveTab] = useState("active");
@@ -124,7 +113,6 @@ const FacultyManagement = () => {
     return true;
   });
 
-  // Modal Controls
   const openAddModal = () => setShowAddModal(true);
   const closeAddModal = () => setShowAddModal(false);
 
@@ -142,7 +130,6 @@ const FacultyManagement = () => {
   };
   const closeScheduleModal = () => setShowScheduleModal(false);
 
-  // Confirmation and alert helpers
   const showConfirmDialog = (title, message, onConfirm) => {
     setConfirmModal({
       show: true,
@@ -150,9 +137,9 @@ const FacultyManagement = () => {
       message,
       onConfirm: () => {
         onConfirm();
-        setConfirmModal({ ...confirmModal, show: false });
+        setConfirmModal((s) => ({ ...s, show: false }));
       },
-      onCancel: () => setConfirmModal({ ...confirmModal, show: false }),
+      onCancel: () => setConfirmModal((s) => ({ ...s, show: false })),
       confirmText: "Yes",
       cancelText: "No",
     });
@@ -160,7 +147,6 @@ const FacultyManagement = () => {
 
   const showAlert = (message) => setAlertModal({ show: true, message });
 
-  // Handler implementations
   const handleAddInstructor = (e) => {
     e.preventDefault();
     const payload = {
@@ -213,12 +199,6 @@ const FacultyManagement = () => {
       });
   };
 
-  const handleViewSchedule = (instructorId) => {
-    const instructor = instructors.find((i) => i._id === instructorId);
-    setSelectedInstructor(instructor);
-    setShowScheduleModal(true);
-  };
-
   const handleApprove = (id) =>
     showConfirmDialog("Approve Instructor", "Approve this instructor?", () => {
       setInstructors((prev) =>
@@ -246,6 +226,13 @@ const FacultyManagement = () => {
       );
       showAlert("Instructor moved to trash.");
     });
+
+    const handleViewSchedule = (instructorId) => {
+      const instructor = instructors.find((inst) => inst._id === instructorId);
+      setSelectedInstructor(instructor);
+      setShowScheduleModal(true);
+    };
+    
 
   const handlePermanentDelete = (id) =>
     showConfirmDialog("Delete Permanently", "Permanently delete this instructor?", () => {
@@ -293,7 +280,7 @@ const FacultyManagement = () => {
         <div
           style={{
             padding: 30,
-            background: "linear-gradient(135deg, #f97316 0%, #ea580c 100%)",
+            background: "linear-gradient(135deg, #0f2c63 0%, #f97316 100%)",
             minHeight: "calc(100vh - 80px)",
             overflowY: "auto",
           }}

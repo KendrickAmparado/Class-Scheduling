@@ -1,15 +1,13 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faUser, faLock, faEnvelope, faCalendarAlt, faUserPlus } from '@fortawesome/free-solid-svg-icons';
+import { faUser, faEnvelope, faCalendarAlt, faUserPlus } from '@fortawesome/free-solid-svg-icons';
 
 const InstructorSignup = () => {
   const [formData, setFormData] = useState({
     firstname: '',
     lastname: '',
-    email: '',
-    password: '',
-    confirm_password: ''
+    email: ''
   });
   const navigate = useNavigate();
 
@@ -23,11 +21,6 @@ const InstructorSignup = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (formData.password !== formData.confirm_password) {
-      alert('Passwords do not match!');
-      return;
-    }
-
     try {
       const res = await fetch('http://localhost:5000/api/instructors/signup', {
         method: 'POST',
@@ -35,8 +28,7 @@ const InstructorSignup = () => {
         body: JSON.stringify({
           firstname: formData.firstname,
           lastname: formData.lastname,
-          email: formData.email,
-          password: formData.password
+          email: formData.email
         })
       });
 
@@ -55,7 +47,7 @@ const InstructorSignup = () => {
   return (
     <div style={{ 
       fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
-      background: "linear-gradient(135deg, #0f2c63 0%, #1e40af 100%)",
+      background: "linear-gradient(135deg, #0f2c63 30%, #f97316 100%)",
       minHeight: "100vh",
       display: "flex",
       flexDirection: "column"
@@ -63,7 +55,7 @@ const InstructorSignup = () => {
       <div className="header2" style={{
         width: "100%",
         height: "80px",
-        background: "linear-gradient(135deg, #f97316 0%, #ea580c 100%)",
+        background: "linear-gradient(135deg, #0f2c63 30%, #f97316 100%)",
         boxShadow: "0 4px 15px rgba(0, 0, 0, 0.2)",
         display: "flex",
         alignItems: "center",
@@ -256,88 +248,6 @@ const InstructorSignup = () => {
                   name="email"
                   placeholder="Email"
                   value={formData.email}
-                  onChange={handleChange}
-                  required
-                  style={{
-                    flex: 1,
-                    border: "none",
-                    outline: "none",
-                    padding: "18px 15px 18px 0",
-                    fontSize: "16px",
-                    background: "transparent",
-                    color: "#333"
-                  }}
-                />
-              </div>
-
-              <div className="input-field2" style={{
-                position: "relative",
-                display: "flex",
-                alignItems: "center",
-                background: "white",
-                border: "2px solid #ddd",
-                borderRadius: "12px",
-                padding: 0,
-                transition: "all 0.3s ease",
-                boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)"
-              }}>
-                <FontAwesomeIcon 
-                  icon={faLock} 
-                  style={{
-                    padding: "0 15px",
-                    color: "#666",
-                    fontSize: "16px",
-                    minWidth: "50px",
-                    display: "flex",
-                    justifyContent: "center"
-                  }}
-                />
-                <input
-                  type="password"
-                  name="password"
-                  placeholder="Password"
-                  value={formData.password}
-                  onChange={handleChange}
-                  required
-                  style={{
-                    flex: 1,
-                    border: "none",
-                    outline: "none",
-                    padding: "18px 15px 18px 0",
-                    fontSize: "16px",
-                    background: "transparent",
-                    color: "#333"
-                  }}
-                />
-              </div>
-
-              <div className="input-field2" style={{
-                position: "relative",
-                display: "flex",
-                alignItems: "center",
-                background: "white",
-                border: "2px solid #ddd",
-                borderRadius: "12px",
-                padding: 0,
-                transition: "all 0.3s ease",
-                boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)"
-              }}>
-                <FontAwesomeIcon 
-                  icon={faLock} 
-                  style={{
-                    padding: "0 15px",
-                    color: "#666",
-                    fontSize: "16px",
-                    minWidth: "50px",
-                    display: "flex",
-                    justifyContent: "center"
-                  }}
-                />
-                <input
-                  type="password"
-                  name="confirm_password"
-                  placeholder="Confirm Password"
-                  value={formData.confirm_password}
                   onChange={handleChange}
                   required
                   style={{
