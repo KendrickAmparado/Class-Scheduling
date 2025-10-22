@@ -58,7 +58,7 @@ const AdminDashboard = () => {
       gradient: 'linear-gradient(135deg, #0f2c63 0%, #1e40af 100%)',
     },
     {
-      title: 'Room Request',
+      title: 'Room Management',
       icon: faClipboardList,
       link: '/admin/room-management',
       gradient: 'linear-gradient(135deg, #0f2c63 0%, #1e40af 100%)',

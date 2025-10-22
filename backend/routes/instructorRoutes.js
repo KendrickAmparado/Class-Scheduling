@@ -4,7 +4,9 @@ import Counter from "../models/Counter.js"; // Import counter model
 
 const router = express.Router();
 
-// GET all instructors
+/**
+ * GET all instructors
+ */
 router.get("/", async (req, res) => {
   try {
     const instructors = await Instructor.find();
@@ -14,7 +16,9 @@ router.get("/", async (req, res) => {
   }
 });
 
-// Helper to get next sequence number for auto-increment instructorId
+/**
+ * Helper to get next sequence number for auto-increment instructorId
+ */
 async function getNextSequence(name) {
   const counter = await Counter.findByIdAndUpdate(
     name,
@@ -24,12 +28,14 @@ async function getNextSequence(name) {
   return counter.seq;
 }
 
-// ADD new instructor with auto-increment instructorId
+/**
+ * ADD new instructor with auto-increment instructorId
+ */
 router.post("/", async (req, res) => {
   try {
     const { name, email, contact, department } = req.body;
 
-    // Check if email already exists
+    // Check for duplicate email
     const exists = await Instructor.findOne({ email });
     if (exists) {
       return res.status(400).json({ error: "Email already registered" });
@@ -38,6 +44,7 @@ router.post("/", async (req, res) => {
     // Get next unique instructorId
     const instructorId = await getNextSequence("instructorId");
 
+    // Create new record
     const newInstructor = new Instructor({
       instructorId,
       name,
@@ -55,7 +62,9 @@ router.post("/", async (req, res) => {
   }
 });
 
-// EDIT email and contact for instructor by id
+/**
+ * EDIT email and contact for instructor by ID
+ */
 router.put("/:id", async (req, res) => {
   try {
     const { email, contact } = req.body;
@@ -70,53 +79,67 @@ router.put("/:id", async (req, res) => {
   }
 });
 
-// APPROVE instructor
-router.put("/:id/approve", async (req, res) => {
+/**
+ * ARCHIVE instructor (moves to archived status)
+ */
+router.put("/:id/archive", async (req, res) => {
   try {
     const instructor = await Instructor.findByIdAndUpdate(
       req.params.id,
-      { status: "active" },
+      { status: "archived", archivedDate: new Date() },
       { new: true }
     );
-    res.json(instructor);
+    if (!instructor)
+      return res.status(404).json({ error: "Instructor not found" });
+    res.json({ success: true, message: "Instructor archived", instructor });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// REJECT instructor
-router.put("/:id/reject", async (req, res) => {
+/**
+ * RESTORE instructor (moves from archived to active)
+ */
+router.put("/:id/restore", async (req, res) => {
   try {
     const instructor = await Instructor.findByIdAndUpdate(
       req.params.id,
-      { status: "deleted" },
+      { status: "active", archivedDate: null },
       { new: true }
     );
-    res.json(instructor);
+    if (!instructor)
+      return res.status(404).json({ error: "Instructor not found" });
+    res.json({ success: true, message: "Instructor restored", instructor });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// MOVE to trash
+/**
+ * MOVE to trash (soft delete, sets status = deleted)
+ */
 router.delete("/:id", async (req, res) => {
   try {
     const instructor = await Instructor.findByIdAndUpdate(
       req.params.id,
-      { status: "deleted" },
+      { status: "deleted", deletedDate: new Date() },
       { new: true }
     );
-    res.json(instructor);
+    if (!instructor)
+      return res.status(404).json({ error: "Instructor not found" });
+    res.json({ success: true, message: "Instructor moved to trash", instructor });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// PERMANENT DELETE
+/**
+ * PERMANENT DELETE instructor (removes from DB)
+ */
 router.delete("/:id/permanent", async (req, res) => {
   try {
     await Instructor.findByIdAndDelete(req.params.id);
-    res.json({ message: "Instructor permanently deleted" });
+    res.json({ success: true, message: "Instructor permanently deleted" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

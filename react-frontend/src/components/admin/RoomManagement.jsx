@@ -15,14 +15,26 @@ const RoomManagement = () => {
   const [roomError, setRoomError] = useState(null);
   const [popup, setPopup] = useState({ show: false, message: '', type: '' });
 
+  // Add Room form state
+  const [newRoom, setNewRoom] = useState({ room: '', area: '', status: 'available' });
+  const [addLoading, setAddLoading] = useState(false);
+
+  // Edit room modal and states
+  const [selectedRoom, setSelectedRoom] = useState(null);
+  const [showEditRoomPopup, setShowEditRoomPopup] = useState(false);
+  const [editLoading, setEditLoading] = useState(false);
+
+  // Delete room popup state
+  const [showDeleteRoomPopup, setShowDeleteRoomPopup] = useState(false);
+  const [roomToDelete, setRoomToDelete] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
   // Fetch rooms from backend
   const fetchRooms = async () => {
     try {
       setLoadingRooms(true);
       const res = await axios.get('http://localhost:5000/api/rooms');
       if (Array.isArray(res.data.rooms)) {
-        setRooms(res.data.rooms);
-      } else if (res.data.rooms && Array.isArray(res.data.rooms)) {
         setRooms(res.data.rooms);
       } else {
         setRooms([]);
@@ -41,21 +53,20 @@ const RoomManagement = () => {
     fetchRooms();
   }, []);
 
-  const navigateToRoomDetails = (roomId) => {
-    navigate(`/admin/room-schedule/${roomId}`);
+  // Add Room handlers
+  const addRoom = () => setShowAddRoomPopup(true);
+  const updateNewRoomField = (field, value) => {
+    setNewRoom((prev) => ({ ...prev, [field]: value }));
   };
-
-  const addRoom = () => {
-    setShowAddRoomPopup(true);
-  };
-
-  // Handle add room form submit
-  const handleAddRoomSubmit = async (roomData) => {
+  const handleAddRoomSubmit = async (e) => {
+    e.preventDefault();
+    setAddLoading(true);
     try {
-      const res = await axios.post('http://localhost:5000/api/rooms', roomData);
+      const res = await axios.post('http://localhost:5000/api/rooms', newRoom);
       if (res.data.success) {
         setPopup({ show: true, message: 'Room added successfully!', type: 'success' });
         setShowAddRoomPopup(false);
+        setNewRoom({ room: '', area: '', status: 'available' });
         fetchRooms();
       } else {
         setPopup({ show: true, message: res.data.message || 'Failed to add room', type: 'error' });
@@ -64,11 +75,65 @@ const RoomManagement = () => {
       console.error('Add room failed:', err);
       setPopup({ show: true, message: 'Server error while adding room.', type: 'error' });
     }
+    setAddLoading(false);
     setTimeout(() => setPopup({ show: false, message: '', type: '' }), 3000);
   };
 
-  const deleteRoom = () => {
-    alert('Delete Room functionality would allow selecting and removing a room from the system.');
+  // Edit Room handlers
+  const navigateToRoomDetails = (room) => {
+    setSelectedRoom(room);
+    setShowEditRoomPopup(true);
+  };
+  const updateSelectedRoomField = (field, value) => {
+    setSelectedRoom((prev) => ({ ...prev, [field]: value }));
+  };
+  const handleEditRoomSubmit = async (e) => {
+    e.preventDefault();
+    setEditLoading(true);
+    try {
+      const res = await axios.put(`http://localhost:5000/api/rooms/${selectedRoom._id}`, selectedRoom);
+      if (res.data.success) {
+        setPopup({ show: true, message: 'Room updated successfully!', type: 'success' });
+        setShowEditRoomPopup(false);
+        fetchRooms();
+      } else {
+        setPopup({ show: true, message: res.data.message || 'Failed to update room', type: 'error' });
+      }
+    } catch (err) {
+      console.error('Update room failed:', err);
+      setPopup({ show: true, message: 'Server error while updating room.', type: 'error' });
+    }
+    setEditLoading(false);
+    setTimeout(() => setPopup({ show: false, message: '', type: '' }), 3000);
+  };
+
+  // Delete Room handlers
+  const openDeleteRoomPopup = () => {
+    setRoomToDelete(null);
+    setShowDeleteRoomPopup(true);
+  };
+  const handleDeleteRoom = async () => {
+    if (!roomToDelete) {
+      setPopup({ show: true, message: 'Please select a room to delete.', type: 'error' });
+      setTimeout(() => setPopup({ show: false, message: '', type: '' }), 3000);
+      return;
+    }
+    setDeleteLoading(true);
+    try {
+      const res = await axios.delete(`http://localhost:5000/api/rooms/${roomToDelete._id}`);
+      if (res.data.success) {
+        setPopup({ show: true, message: 'Room deleted successfully!', type: 'success' });
+        setShowDeleteRoomPopup(false);
+        fetchRooms();
+      } else {
+        setPopup({ show: true, message: res.data.message || 'Failed to delete room', type: 'error' });
+      }
+    } catch (err) {
+      console.error('Delete room failed:', err);
+      setPopup({ show: true, message: 'Server error while deleting room.', type: 'error' });
+    }
+    setDeleteLoading(false);
+    setTimeout(() => setPopup({ show: false, message: '', type: '' }), 3000);
   };
 
   return (
@@ -167,7 +232,7 @@ const RoomManagement = () => {
                   transition: 'all 0.3s ease',
                   boxShadow: '0 4px 15px rgba(239, 68, 68, 0.3)',
                 }}
-                onClick={deleteRoom}
+                onClick={openDeleteRoomPopup}
                 onMouseOver={(e) => (e.target.style.transform = 'translateY(-2px)')}
                 onMouseOut={(e) => (e.target.style.transform = 'translateY(0)')}
               >
@@ -179,89 +244,88 @@ const RoomManagement = () => {
             {loadingRooms && <p>Loading rooms...</p>}
             {roomError && <p style={{ color: 'red' }}>{roomError}</p>}
 
-            <div className="dashboard-content">
-              <div
-                className="rooms-grid"
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-                  gap: '24px',
-                  padding: '10px',
-                }}
-              >
-                {rooms.length === 0 ? (
-                  <p style={{ color: '#64748b', fontSize: '16px', margin: '20px' }}>No rooms available.</p>
-                ) : (
-                  rooms.map((room) => (
+            <div
+              className="dashboard-content"
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+                gap: '24px',
+                padding: '10px',
+              }}
+            >
+              {rooms.length === 0 ? (
+                <p style={{ color: '#64748b', fontSize: '16px', margin: '20px' }}>No rooms available.</p>
+              ) : (
+                rooms.map((room) => (
+                  <div
+                    key={room._id}
+                    className="room-card"
+                    onClick={() => navigateToRoomDetails(room)}
+                    style={{
+                      background: 'linear-gradient(135deg, #0f2c63 0%, #1e40af 100%)',
+                      cursor: 'pointer',
+                      borderRadius: '15px',
+                      color: 'white',
+                      padding: '20px',
+                      boxShadow: '0 8px 24px rgba(15, 44, 99, 0.4)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      transition: 'transform 0.2s ease',
+                      userSelect: 'none',
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.05)')}
+                    onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+                  >
+                    <FontAwesomeIcon icon={faDesktop} size="3x" style={{ marginBottom: '15px' }} />
                     <div
-                      key={room._id}
-                      className="room-card"
-                      onClick={() => navigateToRoomDetails(room._id)}
-                      style={{
-                        background: 'linear-gradient(135deg, #0f2c63 0%, #1e40af 100%)',
-                        cursor: 'pointer',
-                        borderRadius: '15px',
-                        color: 'white',
-                        padding: '20px',
-                        boxShadow: '0 8px 24px rgba(15, 44, 99, 0.4)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        transition: 'transform 0.2s ease',
-                        userSelect: 'none',
-                      }}
-                      onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.05)')}
-                      onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+                      className="room-title"
+                      style={{ fontSize: '22px', fontWeight: '700', marginBottom: '6px', textAlign: 'center' }}
+                      title={room.room}
                     >
-                      <FontAwesomeIcon icon={faDesktop} size="3x" style={{ marginBottom: '15px' }} />
-                      <div
-                        className="room-title"
-                        style={{ fontSize: '22px', fontWeight: '700', marginBottom: '6px', textAlign: 'center' }}
-                        title={room.room}
-                      >
-                        {room.room}
-                      </div>
-                      <div
-                        className="room-subtitle"
-                        style={{ fontSize: '14px', fontWeight: '500', color: 'rgba(255,255,255,0.8)', marginBottom: '14px', textAlign: 'center' }}
-                        title={room.area}
-                      >
-                        {room.area}
-                      </div>
-                      <div
-                        className="room-status"
-                        style={{
-                          padding: '6px 16px',
-                          borderRadius: '20px',
-                          fontWeight: '700',
-                          fontSize: '13px',
-                          letterSpacing: '0.85px',
-                          textTransform: 'uppercase',
-                          width: 'fit-content',
-                          backgroundColor:
-                            room.status === 'available'
-                              ? 'rgba(52, 211, 153, 0.85)'
-                              : room.status === 'occupied'
-                              ? 'rgba(239, 68, 68, 0.85)'
-                              : 'rgba(245, 158, 11, 0.85)',
-                          color: 'white',
-                          userSelect: 'none',
-                          marginTop: 'auto',
-                          boxShadow: '0 2px 5px rgba(0,0,0,0.15)',
-                        }}
-                        title={`Status: ${room.status}`}
-                      >
-                        {room.status}
-                      </div>
+                      {room.room}
                     </div>
-                  ))
-                )}
-              </div>
+                    <div
+                      className="room-subtitle"
+                      style={{ fontSize: '14px', fontWeight: '500', color: 'rgba(255,255,255,0.8)', marginBottom: '14px', textAlign: 'center' }}
+                      title={room.area}
+                    >
+                      {room.area}
+                    </div>
+                    <div
+                      className="room-status"
+                      style={{
+                        padding: '6px 16px',
+                        borderRadius: '20px',
+                        fontWeight: '700',
+                        fontSize: '13px',
+                        letterSpacing: '0.85px',
+                        textTransform: 'uppercase',
+                        width: 'fit-content',
+                        backgroundColor:
+                          room.status === 'available'
+                            ? 'rgba(52, 211, 153, 0.85)'
+                            : room.status === 'occupied'
+                            ? 'rgba(239, 68, 68, 0.85)'
+                            : 'rgba(245, 158, 11, 0.85)',
+                        color: 'white',
+                        userSelect: 'none',
+                        marginTop: 'auto',
+                        boxShadow: '0 2px 5px rgba(0,0,0,0.15)',
+                      }}
+                      title={`Status: ${room.status}`}
+                    >
+                      {room.status}
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </main>
       </div>
 
+      {/* Add Room Popup Modal */}
       {showAddRoomPopup && (
         <div
           style={{
@@ -270,202 +334,236 @@ const RoomManagement = () => {
             left: 0,
             right: 0,
             bottom: 0,
-            background: 'rgba(0, 0, 0, 0.5)',
+            background: 'rgba(0,0,0,0.5)',
             display: 'flex',
-            alignItems: 'center',
             justifyContent: 'center',
+            alignItems: 'center',
             zIndex: 1000,
           }}
+          onClick={() => setShowAddRoomPopup(false)}
         >
           <div
             style={{
               background: 'white',
-              borderRadius: '15px',
-              padding: '30px',
-              width: '600px',
-              maxWidth: '95vw',
-              boxShadow: '0 10px 40px rgba(0, 0, 0, 0.3)',
-              position: 'relative',
+              padding: 30,
+              borderRadius: 15,
+              width: '400px',
+              boxShadow: '0 10px 40px rgba(0,0,0,0.15)',
             }}
+            onClick={(e) => e.stopPropagation()}
           >
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: '25px',
-                borderBottom: '2px solid #f1f5f9',
-                paddingBottom: '15px',
-              }}
-            >
-              <h3
-                style={{
-                  margin: 0,
-                  color: '#1e293b',
-                  fontSize: '20px',
-                  fontWeight: '700',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px',
-                }}
-              >
-                <FontAwesomeIcon icon={faPlus} style={{ color: '#0f2c63' }} />
-                Add New Room
-              </h3>
-              <button
-                onClick={() => setShowAddRoomPopup(false)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  fontSize: '20px',
-                  cursor: 'pointer',
-                  color: '#64748b',
-                  padding: '5px',
-                  borderRadius: '50%',
-                  width: '35px',
-                  height: '35px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  transition: 'all 0.3s ease',
-                }}
-                onMouseOver={(e) => {
-                  e.target.style.background = '#f1f5f9';
-                  e.target.style.color = '#374151';
-                }}
-                onMouseOut={(e) => {
-                  e.target.style.background = 'none';
-                  e.target.style.color = '#64748b';
-                }}
-              >
-                <FontAwesomeIcon icon={faTimes} />
-              </button>
-            </div>
+            <h3>Add New Room</h3>
+            <form onSubmit={handleAddRoomSubmit}>
+              <label style={{ display: 'block', marginBottom: 8 }}>
+                Room Name
+                <input
+                  type="text"
+                  value={newRoom.room}
+                  onChange={(e) => updateNewRoomField('room', e.target.value)}
+                  required
+                  style={{ width: '100%', marginBottom: 12, padding: 8 }}
+                />
+              </label>
 
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                const formData = new FormData(e.target);
-                handleAddRoomSubmit({
-                  room: formData.get('name'),
-                  area: formData.get('area'),
-                  status: 'available',
-                });
-              }}
-            >
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                <div>
-                  <label
-                    style={{
-                      display: 'block',
-                      marginBottom: '8px',
-                      fontWeight: '600',
-                      color: '#374151',
-                    }}
-                  >
-                    Room Name
-                  </label>
-                  <input
-                    type="text"
-                    name="name"
-                    required
-                    style={{
-                      width: '100%',
-                      padding: '12px',
-                      border: '1px solid #d1d5db',
-                      borderRadius: '8px',
-                      fontSize: '14px',
-                      outline: 'none',
-                      transition: 'border-color 0.3s ease',
-                    }}
-                    onFocus={(e) => (e.target.style.borderColor = '#0f2c63')}
-                    onBlur={(e) => (e.target.style.borderColor = '#d1d5db')}
-                  />
-                </div>
-                <div>
-                  <label
-                    style={{
-                      display: 'block',
-                      marginBottom: '8px',
-                      fontWeight: '600',
-                      color: '#374151',
-                    }}
-                  >
-                    Area/Location
-                  </label>
-                  <input
-                    type="text"
-                    name="area"
-                    required
-                    style={{
-                      width: '100%',
-                      padding: '12px',
-                      border: '1px solid #d1d5db',
-                      borderRadius: '8px',
-                      fontSize: '14px',
-                      outline: 'none',
-                      transition: 'border-color 0.3s ease',
-                    }}
-                    onFocus={(e) => (e.target.style.borderColor = '#0f2c63')}
-                    onBlur={(e) => (e.target.style.borderColor = '#d1d5db')}
-                  />
-                </div>
-              </div>
+              <label style={{ display: 'block', marginBottom: 8 }}>
+                Area/Location
+                <input
+                  type="text"
+                  value={newRoom.area}
+                  onChange={(e) => updateNewRoomField('area', e.target.value)}
+                  required
+                  style={{ width: '100%', marginBottom: 12, padding: 8 }}
+                />
+              </label>
 
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'flex-end',
-                  gap: '12px',
-                  marginTop: '30px',
-                  paddingTop: '20px',
-                  borderTop: '1px solid #e5e7eb',
-                }}
-              >
+              <label style={{ display: 'block', marginBottom: 12 }}>
+                Status
+                <select
+                  value={newRoom.status}
+                  onChange={(e) => updateNewRoomField('status', e.target.value)}
+                  style={{ width: '100%', padding: 8 }}
+                  required
+                >
+                  <option value="available">Available</option>
+                  <option value="occupied">Occupied</option>
+                  <option value="maintenance">Under Maintenance</option>
+                </select>
+              </label>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
                 <button
                   type="button"
                   onClick={() => setShowAddRoomPopup(false)}
-                  style={{
-                    padding: '10px 20px',
-                    background: '#f3f4f6',
-                    color: '#374151',
-                    border: '1px solid #d1d5db',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '14px',
-                    fontWeight: '500',
-                    transition: 'all 0.3s ease',
-                  }}
-                  onMouseOver={(e) => {
-                    e.target.style.background = '#e5e7eb';
-                  }}
-                  onMouseOut={(e) => {
-                    e.target.style.background = '#f3f4f6';
-                  }}
+                  style={{ padding: '8px 16px', cursor: 'pointer' }}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  style={{
-                    padding: '10px 20px',
-                    background: 'linear-gradient(135deg, #0f2c63 0%, #1e40af 100%)',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '14px',
-                    fontWeight: '500',
-                    transition: 'all 0.3s ease',
-                    boxShadow: '0 2px 10px rgba(15, 44, 99, 0.3)',
-                  }}
-                  onMouseOver={(e) => (e.target.style.transform = 'translateY(-1px)')}
-                  onMouseOut={(e) => (e.target.style.transform = 'translateY(0)')}
+                  disabled={addLoading}
+                  style={{ padding: '8px 16px', cursor: addLoading ? 'not-allowed' : 'pointer' }}
                 >
-                  Add Room
+                  {addLoading ? 'Adding...' : 'Add Room'}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Room Popup Modal */}
+      {showEditRoomPopup && selectedRoom && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 1000,
+          }}
+          onClick={() => setShowEditRoomPopup(false)}
+        >
+          <div
+            style={{
+              background: 'white',
+              padding: 30,
+              borderRadius: 15,
+              width: '400px',
+              boxShadow: '0 10px 40px rgba(0,0,0,0.15)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3>Edit Room Details</h3>
+            <form onSubmit={handleEditRoomSubmit}>
+              <label style={{ display: 'block', marginBottom: 8 }}>
+                Room Name
+                <input
+                  type="text"
+                  value={selectedRoom.room}
+                  onChange={(e) => updateSelectedRoomField('room', e.target.value)}
+                  required
+                  style={{ width: '100%', marginBottom: 12, padding: 8 }}
+                />
+              </label>
+
+              <label style={{ display: 'block', marginBottom: 8 }}>
+                Area/Location
+                <input
+                  type="text"
+                  value={selectedRoom.area}
+                  onChange={(e) => updateSelectedRoomField('area', e.target.value)}
+                  required
+                  style={{ width: '100%', marginBottom: 12, padding: 8 }}
+                />
+              </label>
+
+              <label style={{ display: 'block', marginBottom: 12 }}>
+                Status
+                <select
+                  value={selectedRoom.status}
+                  onChange={(e) => updateSelectedRoomField('status', e.target.value)}
+                  style={{ width: '100%', padding: 8 }}
+                  required
+                >
+                  <option value="available">Available</option>
+                  <option value="occupied">Occupied</option>
+                  <option value="maintenance">Under Maintenance</option>
+                </select>
+              </label>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+                <button
+                  type="button"
+                  onClick={() => setShowEditRoomPopup(false)}
+                  style={{ padding: '8px 16px', cursor: 'pointer' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={editLoading}
+                  style={{ padding: '8px 16px', cursor: editLoading ? 'not-allowed' : 'pointer' }}
+                >
+                  {editLoading ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Room Popup Modal */}
+      {showDeleteRoomPopup && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 1000,
+          }}
+          onClick={() => setShowDeleteRoomPopup(false)}
+        >
+          <div
+            style={{
+              background: 'white',
+              padding: 30,
+              borderRadius: 15,
+              width: '400px',
+              boxShadow: '0 10px 40px rgba(0,0,0,0.15)',
+              maxHeight: '80vh',
+              overflowY: 'auto',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3>Delete Room</h3>
+            <p>Please select a room to delete:</p>
+            <select
+              value={roomToDelete ? roomToDelete._id : ''}
+              onChange={(e) => {
+                const selectedId = e.target.value;
+                const selected = rooms.find((r) => r._id === selectedId);
+                setRoomToDelete(selected || null);
+              }}
+              style={{ width: '100%', padding: 8, marginBottom: 20 }}
+            >
+              <option value="" disabled>
+                -- Select a room --
+              </option>
+              {rooms.map((room) => (
+                <option key={room._id} value={room._id}>
+                  {room.room} ({room.area})
+                </option>
+              ))}
+            </select>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+              <button
+                type="button"
+                onClick={() => setShowDeleteRoomPopup(false)}
+                style={{ padding: '8px 16px', cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteRoom}
+                disabled={deleteLoading || !roomToDelete}
+                style={{ padding: '8px 16px', cursor: deleteLoading || !roomToDelete ? 'not-allowed' : 'pointer' }}
+              >
+                {deleteLoading ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
           </div>
         </div>
       )}

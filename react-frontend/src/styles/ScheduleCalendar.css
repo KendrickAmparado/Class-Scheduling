@@ -131,7 +131,7 @@
   background: #f8fafc;
 }
 
-/* Scrollable Table Container with hidden scrollbar */
+/* Auto-adjusting Table Container */
 .schedule-table-container {
   max-height: 430px;
   overflow-y: auto;
@@ -139,6 +139,9 @@
   background: white;
   border-radius: 15px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  width: auto;
+  max-width: 100%;
+  display: inline-block;
 
   /* Hide scrollbar but keep scroll */
   scrollbar-width: none; /* Firefox */
@@ -179,11 +182,17 @@
 }
 
 .schedule-table table {
-  width: 100%;
-  border-collapse: collapse;
+  width: auto;
+  min-width: auto;
+  max-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
   font-size: 14px;
   margin-bottom: 20px;
-  min-width: 1200px;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  table-layout: auto;
 }
 
 .schedule-table th {
@@ -196,15 +205,66 @@
   position: sticky;
   top: 0;
   z-index: 10;
+  border-right: 1px solid rgba(255, 255, 255, 0.2);
+  width: auto;
+  min-width: 120px;
+  white-space: nowrap;
+}
+
+.schedule-table th:last-child {
+  border-right: none;
+  width: auto;
+  max-width: none;
 }
 
 .schedule-table td {
-  padding: 12px 8px;
+  padding: 8px;
   border-bottom: 1px solid #e5e7eb;
+  border-right: 1px solid #f1f5f9;
   text-align: center;
+  width: auto;
   min-width: 120px;
+  max-width: none;
   position: relative;
   vertical-align: top;
+  background: #ffffff;
+  transition: background-color 0.2s ease;
+}
+
+.schedule-table td:last-child {
+  border-right: none;
+  width: auto;
+  max-width: none;
+}
+
+.schedule-table tr:hover td {
+  background: #f8fafc;
+}
+
+.schedule-table tr:hover .subject-cell {
+  background: linear-gradient(135deg, #bfdbfe 0%, #93c5fd 100%);
+}
+
+/* Empty cell styling */
+.schedule-table td:empty {
+  background: #ffffff;
+  border: 1px solid #f1f5f9;
+  min-height: 60px;
+}
+
+/* Ensure clean empty cells */
+.schedule-table td:not(.subject-cell):not(.day-column):not(.time-column) {
+  background: #ffffff;
+  border: 1px solid #f1f5f9;
+  min-height: 60px;
+  vertical-align: top;
+}
+
+/* Auto-adjusting table container */
+.schedule-table {
+  width: auto;
+  max-width: 100%;
+  display: inline-block;
 }
 
 .day-column {
@@ -232,27 +292,71 @@
   border-left: 4px solid #3b82f6;
   cursor: pointer;
   transition: all 0.3s ease;
+  position: relative;
+  min-height: 60px;
+  vertical-align: top;
+  border-radius: 4px;
+  margin: 2px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .subject-cell:hover {
   background: linear-gradient(135deg, #bfdbfe 0%, #93c5fd 100%);
   transform: scale(1.02);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
 }
 
 .subject-cell div {
   text-align: left;
-  padding: 5px;
+  padding: 8px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 }
 
 .subject-cell strong {
   display: block;
   margin-bottom: 4px;
   font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
 }
 
 .subject-cell small {
   color: #1e40af;
   font-size: 12px;
+  font-style: italic;
+}
+
+/* Enhanced highlighting for scheduled time slots */
+.subject-cell.scheduled {
+  background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+  border-left: 4px solid #22c55e;
+  color: #166534;
+}
+
+.subject-cell.scheduled:hover {
+  background: linear-gradient(135deg, #bbf7d0 0%, #86efac 100%);
+}
+
+/* Delete mode styling */
+.subject-cell.delete-mode {
+  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%) !important;
+  border-left: 4px solid #ef4444 !important;
+  color: #dc2626 !important;
+  cursor: pointer !important;
+  animation: pulse-red 1s infinite;
+}
+
+.subject-cell.delete-mode:hover {
+  background: linear-gradient(135deg, #fecaca 0%, #fca5a5 100%) !important;
+  transform: scale(1.05);
+}
+
+@keyframes pulse-red {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.8; }
 }
 
 .hidden-row {
@@ -409,6 +513,15 @@
 @media (max-width: 1024px) {
   .schedule-table-container {
     max-height: 350px;
+    width: 100%;
+  }
+  
+  .schedule-table {
+    width: 100%;
+  }
+  
+  .schedule-table table {
+    width: 100%;
   }
 }
 
@@ -425,5 +538,21 @@
 
   .schedule-table-container {
     max-height: 300px;
+    width: 100%;
+  }
+  
+  .schedule-table {
+    width: 100%;
+  }
+  
+  .schedule-table table {
+    width: 100%;
+  }
+  
+  .schedule-table th,
+  .schedule-table td {
+    min-width: 80px;
+    padding: 6px;
+    font-size: 12px;
   }
 }

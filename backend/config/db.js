@@ -1,14 +1,18 @@
-// backend/config/db.js
-const mongoose = require("mongoose");
+// db.js
+const mongoose = require('mongoose');
+require('dotenv').config(); // to load ENV variables from .env file
 
-const connectDB = async () => {
-  try {
-    await mongoose.connect("mongodb://127.0.0.1:27017/class_scheduling");
-    console.log("✅ MongoDB Connected Successfully");
-  } catch (error) {
-    console.error("❌ MongoDB Connection Failed:", error.message);
-    process.exit(1);
-  }
+const url = process.env.MONGO_URI;
+
+const connectionParams = {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
 };
 
-module.exports = connectDB;
+mongoose.connect(url, connectionParams)
+  .then(() => {
+    console.log('Connected to the database');
+  })
+  .catch((err) => {
+    console.error(`Error connecting to the database: ${err}`);
+  });

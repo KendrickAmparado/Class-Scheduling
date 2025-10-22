@@ -1,14 +1,20 @@
-// models/Instructor.js
-import mongoose from 'mongoose';
+import mongoose from "mongoose";
 
 const instructorSchema = new mongoose.Schema({
-  name: { type: String, required: true },
-  email: { type: String, required: true, unique: true },
-  contact: { type: String },          // Added contact field
-  department: { type: String },       // Added department field
-  status: { type: String, default: 'pending' },
-  registrationDate: { type: Date, default: Date.now }
+  instructorId: Number,
+  name: String,
+  email: String,
+  contact: String,
+  department: String,
+  status: {
+    type: String,
+    enum: ["active", "archived", "deleted", "invited"],
+    default: "active",
+  },
+  
+  archivedDate: { type: Date, default: null },
+  deletedDate: { type: Date, default: null },
 });
 
-const Instructor = mongoose.model('Instructor', instructorSchema);
+const Instructor = mongoose.model("Instructor", instructorSchema);
 export default Instructor;

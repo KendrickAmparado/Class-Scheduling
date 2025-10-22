@@ -7,8 +7,8 @@ const roomSchema = new mongoose.Schema({
     type: String,
     enum: ['available', 'occupied', 'maintenance'],
     required: true,
-    default: 'available'
-  }
+    default: 'available',
+  },
 });
 
 const Room = mongoose.model('Room', roomSchema);
