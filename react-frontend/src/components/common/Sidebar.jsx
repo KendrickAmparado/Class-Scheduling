@@ -3,7 +3,8 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
   faHome, 
-  faCalendarAlt, 
+  faCalendarAlt,
+  faCalendarPlus,
   faUsers, 
   faDoorOpen, 
   faChartBar, 
@@ -18,7 +19,8 @@ const Sidebar = () => {
 
   const menuItems = [
     { path: '/admin/dashboard', icon: faHome, label: 'Dashboard' },
-    { path: '/admin/manage-schedule', icon: faCalendarAlt, label: 'Manage Schedule' },
+    { path: '/admin/schedule-management', icon: faCalendarPlus, label: 'Schedule Management' }, // NEW
+    { path: '/admin/manage-schedule', icon: faCalendarAlt, label: 'Section Management' },
     { path: '/admin/faculty-management', icon: faUsers, label: 'Faculty Management' },
     { path: '/admin/room-management', icon: faDoorOpen, label: 'Room Management' },
     { path: '/admin/reports', icon: faChartBar, label: 'Reports' },

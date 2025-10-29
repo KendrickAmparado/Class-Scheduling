@@ -1,20 +1,33 @@
-import mongoose from "mongoose";
+import mongoose from 'mongoose';
 
 const instructorSchema = new mongoose.Schema({
-  instructorId: Number,
-  name: String,
-  email: String,
-  contact: String,
-  department: String,
-  status: {
+  instructorId: { 
     type: String,
-    enum: ["active", "archived", "deleted", "invited"],
-    default: "active",
+    unique: true,
+    sparse: true
   },
-  
-  archivedDate: { type: Date, default: null },
-  deletedDate: { type: Date, default: null },
+  firstname: { type: String },
+  lastname: { type: String },
+  email: { 
+    type: String, 
+    required: true, 
+    lowercase: true,
+    trim: true
+  },
+  password: { type: String },
+  contact: { type: String },
+  department: { type: String },
+  image: { type: String, default: '' },
+  status: { 
+    type: String, 
+    enum: ['pending', 'active', 'archived'], 
+    default: 'pending' 
+  }
+}, { 
+  timestamps: true 
 });
 
-const Instructor = mongoose.model("Instructor", instructorSchema);
-export default Instructor;
+// Use correct schema variable name here
+instructorSchema.index({ email: 1 }, { unique: true });
+
+export default mongoose.model('Instructor', instructorSchema);

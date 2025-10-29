@@ -154,38 +154,52 @@ const ScheduleDisplay = ({
 
   // Table display (for reports)
   const renderTable = () => (
-    <div className={`schedule-table-container ${className}`}>
-      <table className="schedule-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+    <div className={`schedule-table-container ${className}`} style={{ overflowX: 'auto' }}>
+      <table
+        className="schedule-table"
+        style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}
+      >
+        <colgroup>
+          <col style={{ width: '140px' }} />
+          <col />
+          {showInstructor && <col style={{ width: '220px' }} />}
+          {showRoom && <col style={{ width: '140px' }} />}
+          {showSection && <col style={{ width: '160px' }} />}
+        </colgroup>
         <thead>
           <tr style={{ background: 'linear-gradient(135deg, #0f2c63 0%, #1e40af 100%)' }}>
-            <th style={{ padding: '12px', color: 'white', textAlign: 'left' }}>Time</th>
+            <th style={{ padding: '12px', color: 'white', textAlign: 'left', whiteSpace: 'nowrap' }}>Time</th>
             <th style={{ padding: '12px', color: 'white', textAlign: 'left' }}>Subject</th>
-            {showInstructor && <th style={{ padding: '12px', color: 'white', textAlign: 'left' }}>Instructor</th>}
+            {showInstructor && (
+              <th style={{ padding: '12px', color: 'white', textAlign: 'left' }}>Instructor</th>
+            )}
             {showRoom && <th style={{ padding: '12px', color: 'white', textAlign: 'left' }}>Room</th>}
-            {showSection && <th style={{ padding: '12px', color: 'white', textAlign: 'left' }}>Section</th>}
+            {showSection && (
+              <th style={{ padding: '12px', color: 'white', textAlign: 'left' }}>Section</th>
+            )}
           </tr>
         </thead>
         <tbody>
           {standardizedSchedules.map((schedule) => (
             <tr key={schedule.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
-              <td style={{ padding: '12px', fontWeight: '600', color: '#1e40af' }}>
+              <td style={{ padding: '12px', fontWeight: '600', color: '#1e40af', whiteSpace: 'nowrap' }}>
                 {formatTime(schedule.time)}
               </td>
-              <td style={{ padding: '12px', fontWeight: '500' }}>
+              <td style={{ padding: '12px', fontWeight: '500', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {schedule.subject}
               </td>
               {showInstructor && (
-                <td style={{ padding: '12px', color: '#64748b' }}>
+                <td style={{ padding: '12px', color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {schedule.instructor}
                 </td>
               )}
               {showRoom && (
-                <td style={{ padding: '12px', color: '#64748b' }}>
+                <td style={{ padding: '12px', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {schedule.room}
                 </td>
               )}
               {showSection && (
-                <td style={{ padding: '12px', color: '#64748b' }}>
+                <td style={{ padding: '12px', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {schedule.section}
                 </td>
               )}

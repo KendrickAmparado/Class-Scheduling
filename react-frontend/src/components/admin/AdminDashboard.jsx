@@ -1,22 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import Sidebar from '../common/Sidebar.jsx';
 import Header from '../common/Header.jsx';
-import SchedulePopup from './SchedulePopup.jsx';
 import axios from 'axios';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
-  faCalendarPlus,
-  faUsers,
-  faExclamationTriangle,
   faClipboardList,
   faDoorOpen,
   faCheckCircle,
   faTimesCircle,
+  faExclamationTriangle,
+  faArrowRight,
 } from '@fortawesome/free-solid-svg-icons';
 
 const AdminDashboard = () => {
-  const [showSchedulePopup, setShowSchedulePopup] = useState(false);
+  const navigate = useNavigate();
   const [alerts, setAlerts] = useState([]);
   const [roomStatus, setRoomStatus] = useState([]);
 
@@ -24,15 +22,13 @@ const AdminDashboard = () => {
     const fetchAlerts = async () => {
       try {
         const res = await axios.get('http://localhost:5000/api/admin/alerts');
-        setAlerts(res.data.alerts);
+        // Limit to the 3 most recent alerts
+        setAlerts(res.data.alerts.slice(0, 3));
       } catch (err) {
         console.error('Failed to load alerts', err);
       }
     };
-    fetchAlerts();
-  }, []);
 
-  useEffect(() => {
     const fetchRoomStatus = async () => {
       try {
         const res = await axios.get('http://localhost:5000/api/rooms');
@@ -41,44 +37,20 @@ const AdminDashboard = () => {
         console.error('Failed to load room status', err);
       }
     };
+
+    // Initial fetch
+    fetchAlerts();
     fetchRoomStatus();
+
+    // Auto-refresh every 30 seconds
+    const alertsInterval = setInterval(fetchAlerts, 30000);
+    const roomsInterval = setInterval(fetchRoomStatus, 30000);
+
+    return () => {
+      clearInterval(alertsInterval);
+      clearInterval(roomsInterval);
+    };
   }, []);
-
-  const quickActions = [
-    {
-      title: 'Create Schedule',
-      icon: faCalendarPlus,
-      action: () => setShowSchedulePopup(true),
-      gradient: 'linear-gradient(135deg, #0f2c63 0%, #1e40af 100%)',
-    },
-    {
-      title: 'Manage Faculty',
-      icon: faUsers,
-      link: '/admin/faculty-management',
-      gradient: 'linear-gradient(135deg, #0f2c63 0%, #1e40af 100%)',
-    },
-    {
-      title: 'Room Management',
-      icon: faClipboardList,
-      link: '/admin/room-management',
-      gradient: 'linear-gradient(135deg, #0f2c63 0%, #1e40af 100%)',
-    },
-  ];
-
-  const handleScheduleSubmit = async (scheduleData) => {
-    try {
-      const res = await axios.post('http://localhost:5000/api/schedule/create', scheduleData);
-      if (res.data.success) {
-        alert('✅ Schedule created successfully!');
-        setShowSchedulePopup(false);
-      } else {
-        alert('⚠️ Failed to create schedule: ' + res.data.message);
-      }
-    } catch (err) {
-      console.error('Error saving schedule:', err);
-      alert('❌ Server error while saving schedule.');
-    }
-  };
 
   const renderAlertIcon = (type) => {
     switch (type) {
@@ -93,6 +65,23 @@ const AdminDashboard = () => {
     }
   };
 
+  const formatTimestamp = (timestamp) => {
+    if (!timestamp) return '';
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
   return (
     <div className="dashboard-container" style={{ display: 'flex' }}>
       <Sidebar />
@@ -104,130 +93,109 @@ const AdminDashboard = () => {
             <p>Manage your class scheduling system efficiently</p>
           </div>
 
+          {/* Activity Log Section - Clickable */}
           <div
+            onClick={() => navigate('/admin/activity-logs')}
             style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-              gap: '28px',
-              marginBottom: '36px',
-            }}
-          >
-            {quickActions.map((action, index) =>
-              action.link ? (
-                <Link
-                  key={index}
-                  to={action.link}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '18px',
-                    padding: '42px 36px',
-                    background: action.gradient,
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '20px',
-                    cursor: 'pointer',
-                    fontSize: '21px',
-                    fontWeight: '700',
-                    boxShadow: '0 8px 32px rgba(15,44,99,0.18)',
-                    minHeight: '130px',
-                    textDecoration: 'none',
-                    transition: 'transform 0.18s cubic-bezier(.32,2,.55,.27)',
-                  }}
-                  onMouseOver={(e) => (e.currentTarget.style.transform = 'translateY(-8px) scale(1.02)')}
-                  onMouseOut={(e) => (e.currentTarget.style.transform = '')}
-                >
-                  <FontAwesomeIcon icon={action.icon} style={{ fontSize: 32 }} />
-                  <span>{action.title}</span>
-                </Link>
-              ) : (
-                <button
-                  key={index}
-                  onClick={action.action}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '18px',
-                    padding: '42px 36px',
-                    background: action.gradient,
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '20px',
-                    cursor: 'pointer',
-                    fontSize: '21px',
-                    fontWeight: '700',
-                    minHeight: '130px',
-                    width: '100%',
-                    boxShadow: '0 8px 32px rgba(15,44,99,0.18)',
-                    transition: 'transform 0.18s cubic-bezier(.32,2,.55,.27)',
-                  }}
-                  onMouseOver={(e) => (e.currentTarget.style.transform = 'translateY(-8px) scale(1.02)')}
-                  onMouseOut={(e) => (e.currentTarget.style.transform = '')}
-                >
-                  <FontAwesomeIcon icon={action.icon} style={{ fontSize: 32 }} />
-                  <span>{action.title}</span>
-                </button>
-              )
-            )}
-          </div>
-
-          <div
-            style={{
-              background: 'linear-gradient(135deg, #f97316 20%, #f7a66bff 100%)',
+              background: 'linear-gradient(135deg, #0f2c63 0%, #1e40af 100%)',
               padding: '28px 28px 24px 28px',
               borderRadius: '18px',
-              boxShadow: '0 4px 20px rgba(245, 158, 11, 0.11)',
+              boxShadow: '0 4px 20px rgba(15, 44, 99, 0.15)',
               marginBottom: '36px',
-              border: '1.5px solid #f59e0b',
+              border: '2px solid #1e40af',
+              cursor: 'pointer',
+              transition: 'all 0.3s ease',
+              position: 'relative',
+            }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.transform = 'translateY(-4px)';
+              e.currentTarget.style.boxShadow = '0 8px 32px rgba(15, 44, 99, 0.25)';
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.transform = '';
+              e.currentTarget.style.boxShadow = '0 4px 20px rgba(15, 44, 99, 0.15)';
             }}
           >
-            <h3
+            <div
               style={{
-                color: '#90231a',
-                fontSize: '19px',
-                fontWeight: '700',
-                marginBottom: '20px',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '14px',
+                justifyContent: 'space-between',
+                marginBottom: '20px',
               }}
             >
-              <FontAwesomeIcon icon={faExclamationTriangle} style={{ color: '#dc2626', fontSize: 20 }} />
-              System Alerts
-            </h3>
+              <h3
+                style={{
+                  color: '#ffffff',
+                  fontSize: '19px',
+                  fontWeight: '700',
+                  margin: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '14px',
+                }}
+              >
+                <FontAwesomeIcon icon={faClipboardList} style={{ fontSize: 20 }} />
+                Activity Log (Recent Activity)
+              </h3>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  color: '#ffffff',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                }}
+              >
+                <span>View All</span>
+                <FontAwesomeIcon icon={faArrowRight} />
+              </div>
+            </div>
+            
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              {alerts.length === 0 && <p style={{ color: '#374151' }}>No alerts at this time.</p>}
+              {alerts.length === 0 && (
+                <p style={{ color: '#e0e7ff', margin: 0 }}>No recent activity.</p>
+              )}
               {alerts.map((alert) => (
-                <Link
-                  to={alert.link || '#'}
+                <div
                   key={alert.id}
                   style={{
                     display: 'flex',
                     alignItems: 'flex-start',
+                    justifyContent: 'space-between',
                     gap: '12px',
                     padding: '16px 22px',
-                    background: 'rgba(255,255,255,0.96)',
+                    background: 'rgba(255,255,255,0.95)',
                     borderRadius: '12px',
-                    borderLeft: '4px solid #dc2626',
+                    borderLeft: '4px solid #3b82f6',
                     fontWeight: 500,
-                    boxShadow: '0 2px 10px rgba(0,0,0,0.03)',
+                    boxShadow: '0 2px 10px rgba(0,0,0,0.05)',
                     color: '#1f2937',
-                    textDecoration: 'none',
-                    cursor: alert.link ? 'pointer' : 'default',
-                    transition: 'transform 0.15s ease-in-out',
                   }}
-                  onMouseOver={(e) => (e.currentTarget.style.transform = 'translateX(2px)')}
-                  onMouseOut={(e) => (e.currentTarget.style.transform = '')}
                 >
-                  {renderAlertIcon(alert.type)}
-                  <span style={{ fontSize: '15px', lineHeight: 1.7 }}>{alert.message}</span>
-                </Link>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', flex: 1 }}>
+                    {renderAlertIcon(alert.type)}
+                    <span style={{ fontSize: '15px', lineHeight: 1.7 }}>{alert.message}</span>
+                  </div>
+                  {alert.timestamp && (
+                    <span
+                      style={{
+                        fontSize: '12px',
+                        color: '#6b7280',
+                        fontWeight: '600',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {formatTimestamp(alert.timestamp)}
+                    </span>
+                  )}
+                </div>
               ))}
             </div>
           </div>
 
+          {/* Room Status Overview */}
           <div
             style={{
               background: '#fff',
@@ -349,10 +317,6 @@ const AdminDashboard = () => {
             </div>
           </div>
         </div>
-
-        {showSchedulePopup && (
-          <SchedulePopup onClose={() => setShowSchedulePopup(false)} onSubmit={handleScheduleSubmit} />
-        )}
       </main>
     </div>
   );

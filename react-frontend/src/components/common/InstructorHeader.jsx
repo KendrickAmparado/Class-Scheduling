@@ -1,38 +1,76 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState, useContext } from 'react';
+import { AuthContext } from '../../context/AuthContext';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faBell, faSearch } from '@fortawesome/free-solid-svg-icons';
 
 const InstructorHeader = () => {
   const [showNotifications, setShowNotifications] = useState(false);
-  const [notifications, setNotifications] = useState([
-    {
-      id: 1,
-      title: 'Schedule Update',
-      message: 'Your BSIT 101 class has been moved to ComLab 2',
-      time: '2 hours ago',
-      read: false
-    },
-    {
-      id: 2,
-      title: 'Room Maintenance',
-      message: 'ComLab 1 will be under maintenance tomorrow',
-      time: '5 hours ago',
-      read: false
+  const [notifications, setNotifications] = useState([]);
+  const { userEmail } = useContext(AuthContext);
+
+  const apiBase = process.env.REACT_APP_API_BASE || 'http://localhost:5000';
+
+  const fetchNotifications = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${apiBase}/api/instructor/notifications`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success) {
+        // normalize to component shape
+        const mapped = data.notifications.map((n) => ({
+          id: n._id,
+          title: n.title,
+          message: n.message,
+          time: new Date(n.createdAt).toLocaleString(),
+          read: n.read,
+        }));
+        setNotifications(mapped);
+      }
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('Failed to fetch notifications', e);
     }
-  ]);
+  };
+
+  useEffect(() => {
+    if (userEmail) {
+      fetchNotifications();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userEmail]);
 
   const toggleNotifications = () => {
     setShowNotifications(!showNotifications);
   };
 
-  const markAsRead = (id) => {
-    setNotifications(notifications.map(notif =>
-      notif.id === id ? { ...notif, read: true } : notif
-    ));
+  const markAsRead = async (id) => {
+    try {
+      const token = localStorage.getItem('token');
+      await fetch(`${apiBase}/api/instructor/notifications/${id}/read`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      });
+      setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('Failed to mark as read', e);
+    }
   };
 
-  const markAllAsRead = () => {
-    setNotifications(notifications.map(notif => ({ ...notif, read: true })));
+  const markAllAsRead = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      await fetch(`${apiBase}/api/instructor/notifications/read-all`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      });
+      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('Failed to mark all as read', e);
+    }
   };
 
   const unreadCount = notifications.filter(notification => !notification.read).length;

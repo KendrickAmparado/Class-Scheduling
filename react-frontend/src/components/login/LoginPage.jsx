@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faUserShield, faChalkboardTeacher, faCalendarAlt } from '@fortawesome/free-solid-svg-icons';
 
+
 const LoginPage = () => {
   return (
     <div style={{ 
@@ -14,7 +15,7 @@ const LoginPage = () => {
       <div className="header" style={{
         width: "100%",
         height: "80px",
-        background: "linear-gradient(135deg, #0f2c63 30%, #ea580c 100%)",
+        background: "linear-gradient(135deg, #0f2c63 30%, #f97316 100%)",
         boxShadow: "0 4px 15px rgba(0, 0, 0, 0.2)",
         display: "flex",
         alignItems: "center",
@@ -32,6 +33,7 @@ const LoginPage = () => {
           Class Scheduling System
         </h1>
       </div>
+
 
       <div className="main-container" style={{
         flex: 1,
@@ -61,6 +63,7 @@ const LoginPage = () => {
             height: "5px",
             background: "linear-gradient(90deg, #f97316, #ea580c)"
           }}></div>
+
 
           <img 
             src="/images/buksuu.png" 
@@ -130,6 +133,7 @@ const LoginPage = () => {
               <span>Administrator</span>
             </Link>
 
+
             <Link 
               to="/instructor/login" 
               className="login-btn instructor-btn"
@@ -171,5 +175,6 @@ const LoginPage = () => {
     </div>
   );
 };
+
 
 export default LoginPage;

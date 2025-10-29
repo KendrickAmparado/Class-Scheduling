@@ -1,5 +1,8 @@
 // backend/controllers/scheduleController.js
 const Schedule = require("../models/Schedule");
+// After performing action
+req.io.emit('new-notification', notificationObject);
+
 
 exports.createSchedule = async (req, res) => {
   try {

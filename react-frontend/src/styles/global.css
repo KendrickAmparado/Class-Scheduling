@@ -7,9 +7,33 @@
 
 body {
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background: linear-gradient(135deg, #0f2c63 0%, #f97316 100%);
+  background: linear-gradient(135deg, #0f2c63 0%, #f97316 100%) fixed;
   min-height: 100vh;
   color: #334155;
+}
+
+/* Make sure html and #root also have the gradient or are transparent */
+html {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #0f2c63 0%, #f97316 100%) fixed;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* Admin Layout Structure - FIXED: Remove gray background */
+.admin-layout {
+  display: flex;
+  min-height: 100vh;
+  background: transparent; /* Changed from #f3f4f6 */
+}
+
+/* Main Container for Admin Pages - FIXED: Remove gray background */
+.main-container {
+  flex: 1;
+  overflow-y: auto;
+  background: transparent; /* Changed from #f9fafb */
 }
 
 /* Dashboard Container */
@@ -93,6 +117,11 @@ body {
 
   .welcome-section {
     padding: 20px;
+  }
+  
+  /* Admin Layout Responsive - NEW */
+  .admin-layout {
+    flex-direction: column;
   }
 }
 

@@ -1,13 +1,18 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faUser, faLock, faCalendarAlt, faRightToBracket } from '@fortawesome/free-solid-svg-icons';
+import { faEnvelope, faLock, faCalendarAlt, faRightToBracket, faCheckCircle, faTimes } from '@fortawesome/free-solid-svg-icons';
+import axios from 'axios';
 
 const InstructorLogin = () => {
   const [formData, setFormData] = useState({
-    num1: '',
+    email: '',
     password: ''
   });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [instructorName, setInstructorName] = useState('');
   const navigate = useNavigate();
 
   const handleChange = (e) => {
@@ -15,11 +20,56 @@ const InstructorLogin = () => {
       ...formData,
       [e.target.name]: e.target.value
     });
+    // Clear error when user starts typing
+    if (error) setError('');
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // Add authentication logic here
+    setLoading(true);
+    setError('');
+
+    try {
+      const res = await axios.post('http://localhost:5000/api/instructors/login', {
+        email: formData.email,
+        password: formData.password
+      });
+
+      if (res.data.success) {
+        // Store JWT for authenticated requests (must be under 'token' for the app)
+        if (!res.data.token) {
+          throw new Error('Login did not return a token');
+        }
+        localStorage.setItem('token', res.data.token);
+        // Backward compatibility
+        localStorage.setItem('instructorToken', res.data.token);
+        localStorage.setItem('instructorData', JSON.stringify(res.data.instructor));
+        
+        // Set instructor name for success modal
+        setInstructorName(`${res.data.instructor.firstname} ${res.data.instructor.lastname}`);
+        
+        // Show success modal
+        setShowSuccessModal(true);
+        
+        // Auto redirect after 2 seconds
+        setTimeout(() => {
+          navigate('/instructor/dashboard');
+        }, 2000);
+      }
+    } catch (err) {
+      console.error('Login error:', err);
+      if (err.response && err.response.data && err.response.data.message) {
+        setError(err.response.data.message);
+      } else {
+        setError('Login failed. Please try again.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleModalClose = () => {
+    setShowSuccessModal(false);
     navigate('/instructor/dashboard');
   };
 
@@ -110,6 +160,22 @@ const InstructorLogin = () => {
             fontSize: "14px",
             lineHeight: "1.5"
           }}>Please enter your credentials to access the system</p>
+
+          {/* Error Message */}
+          {error && (
+            <div style={{
+              background: "#fee2e2",
+              color: "#dc2626",
+              padding: "12px 16px",
+              borderRadius: "10px",
+              marginBottom: "20px",
+              fontSize: "14px",
+              fontWeight: "500",
+              border: "1px solid #fecaca"
+            }}>
+              {error}
+            </div>
+          )}
           
           <form className="login-form2" onSubmit={handleSubmit} style={{ marginBottom: "30px" }}>
             <div className="input-group2" style={{
@@ -130,7 +196,7 @@ const InstructorLogin = () => {
                 boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)"
               }}>
                 <FontAwesomeIcon 
-                  icon={faUser} 
+                  icon={faEnvelope} 
                   style={{
                     padding: "0 15px",
                     color: "#666",
@@ -141,13 +207,14 @@ const InstructorLogin = () => {
                   }}
                 />
                 <input
-                  type="number"
-                  id="num1"
-                  name="num1"
-                  placeholder="User ID"
-                  value={formData.num1}
+                  type="email"
+                  id="email"
+                  name="email"
+                  placeholder="Email Address"
+                  value={formData.email}
                   onChange={handleChange}
                   required
+                  disabled={loading}
                   style={{
                     flex: 1,
                     border: "none",
@@ -190,6 +257,7 @@ const InstructorLogin = () => {
                   value={formData.password}
                   onChange={handleChange}
                   required
+                  disabled={loading}
                   style={{
                     flex: 1,
                     border: "none",
@@ -205,6 +273,7 @@ const InstructorLogin = () => {
 
             <button 
               type="submit" 
+              disabled={loading}
               className="login-btn2 instructor-btn2"
               style={{
                 display: "flex",
@@ -217,27 +286,32 @@ const InstructorLogin = () => {
                 borderRadius: "15px",
                 fontSize: "18px",
                 fontWeight: "600",
-                cursor: "pointer",
+                cursor: loading ? "not-allowed" : "pointer",
                 transition: "all 0.3s ease",
                 textDecoration: "none",
                 position: "relative",
                 overflow: "hidden",
-                background: "linear-gradient(135deg, #0f2c63 0%, #1e40af 100%)",
+                background: loading ? "#9ca3af" : "linear-gradient(135deg, #0f2c63 0%, #1e40af 100%)",
                 color: "white",
                 boxShadow: "0 8px 20px rgba(15, 44, 99, 0.3)",
-                marginBottom: "10px"
+                marginBottom: "10px",
+                opacity: loading ? 0.7 : 1
               }}
               onMouseEnter={(e) => {
-                e.target.style.transform = "translateY(-3px)";
-                e.target.style.boxShadow = "0 12px 25px rgba(15, 44, 99, 0.4)";
+                if (!loading) {
+                  e.target.style.transform = "translateY(-3px)";
+                  e.target.style.boxShadow = "0 12px 25px rgba(15, 44, 99, 0.4)";
+                }
               }}
               onMouseLeave={(e) => {
-                e.target.style.transform = "translateY(0)";
-                e.target.style.boxShadow = "0 8px 20px rgba(15, 44, 99, 0.3)";
+                if (!loading) {
+                  e.target.style.transform = "translateY(0)";
+                  e.target.style.boxShadow = "0 8px 20px rgba(15, 44, 99, 0.3)";
+                }
               }}
             >
               <FontAwesomeIcon icon={faRightToBracket} />
-              <span>Login</span>
+              <span>{loading ? 'Logging in...' : 'Login'}</span>
             </button>
             
             <br />
@@ -287,6 +361,165 @@ const InstructorLogin = () => {
           </p>
         </div>
       </div>
+
+      {/* Success Modal */}
+      {showSuccessModal && (
+        <div style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: "rgba(0, 0, 0, 0.7)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 9999,
+          animation: "fadeIn 0.3s ease"
+        }}>
+          <div style={{
+            background: "white",
+            borderRadius: "20px",
+            padding: "40px",
+            maxWidth: "500px",
+            width: "90%",
+            textAlign: "center",
+            position: "relative",
+            boxShadow: "0 20px 60px rgba(0, 0, 0, 0.3)",
+            animation: "slideUp 0.4s ease"
+          }}>
+            <button
+              onClick={handleModalClose}
+              style={{
+                position: "absolute",
+                top: "15px",
+                right: "15px",
+                background: "transparent",
+                border: "none",
+                fontSize: "24px",
+                color: "#999",
+                cursor: "pointer",
+                transition: "color 0.2s"
+              }}
+              onMouseEnter={(e) => e.target.style.color = "#333"}
+              onMouseLeave={(e) => e.target.style.color = "#999"}
+            >
+              <FontAwesomeIcon icon={faTimes} />
+            </button>
+
+            <div style={{
+              width: "80px",
+              height: "80px",
+              background: "linear-gradient(135deg, #10b981, #059669)",
+              borderRadius: "50%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              margin: "0 auto 30px",
+              animation: "scaleIn 0.5s ease"
+            }}>
+              <FontAwesomeIcon 
+                icon={faCheckCircle} 
+                style={{ fontSize: "50px", color: "white" }}
+              />
+            </div>
+
+            <h2 style={{
+              fontSize: "28px",
+              fontWeight: "700",
+              color: "#1e293b",
+              marginBottom: "15px"
+            }}>
+              Login Successful!
+            </h2>
+
+            <p style={{
+              fontSize: "16px",
+              color: "#64748b",
+              lineHeight: "1.6",
+              marginBottom: "10px"
+            }}>
+              Welcome back, <strong>{instructorName}</strong>!
+            </p>
+
+            <p style={{
+              fontSize: "14px",
+              color: "#94a3b8",
+              marginBottom: "30px"
+            }}>
+              Redirecting to your dashboard...
+            </p>
+
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "8px",
+              marginTop: "20px"
+            }}>
+              <div style={{
+                width: "10px",
+                height: "10px",
+                borderRadius: "50%",
+                background: "#0f2c63",
+                animation: "bounce 1s infinite"
+              }}></div>
+              <div style={{
+                width: "10px",
+                height: "10px",
+                borderRadius: "50%",
+                background: "#0f2c63",
+                animation: "bounce 1s infinite 0.2s"
+              }}></div>
+              <div style={{
+                width: "10px",
+                height: "10px",
+                borderRadius: "50%",
+                background: "#0f2c63",
+                animation: "bounce 1s infinite 0.4s"
+              }}></div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style>{`
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+
+        @keyframes slideUp {
+          from { 
+            transform: translateY(50px);
+            opacity: 0;
+          }
+          to { 
+            transform: translateY(0);
+            opacity: 1;
+          }
+        }
+
+        @keyframes scaleIn {
+          from { 
+            transform: scale(0);
+            opacity: 0;
+          }
+          to { 
+            transform: scale(1);
+            opacity: 1;
+          }
+        }
+
+        @keyframes bounce {
+          0%, 80%, 100% { 
+            transform: translateY(0);
+          }
+          40% { 
+            transform: translateY(-10px);
+          }
+        }
+      `}</style>
     </div>
   );
 };

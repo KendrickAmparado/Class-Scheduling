@@ -3,16 +3,21 @@
 // Convert time string to minutes for calculations
 export const timeStringToMinutes = (timeStr) => {
   if (!timeStr) return -1;
-  
-  // Handle format like "8:00 AM - 8:30 AM" by taking the first part
-  const cleanTime = timeStr.trim().split(' - ')[0];
-  let [time, modifier] = cleanTime.split(' ');
-  if (!modifier) return -1;
-  
-  let [h, m] = time.split(':').map(Number);
-  if (modifier.toLowerCase() === 'pm' && h !== 12) h += 12;
-  if (modifier.toLowerCase() === 'am' && h === 12) h = 0;
-  return h * 60 + (m || 0);
+  const raw = String(timeStr).trim();
+  // Allow inputs like:
+  // "7:30 AM", "7:30 am", "7:30AM", "07:30", "7:30 am - 10:00 am" (we'll take first part)
+  const firstPart = raw.split(/\s*-\s*/)[0];
+  const match = firstPart.match(/^(\d{1,2})\s*:\s*(\d{2})\s*(am|pm)?$/i);
+  if (!match) return -1;
+  let hours = parseInt(match[1], 10);
+  const minutes = parseInt(match[2], 10) || 0;
+  const meridiem = (match[3] || '').toLowerCase();
+  if (meridiem) {
+    if (meridiem === 'pm' && hours !== 12) hours += 12;
+    if (meridiem === 'am' && hours === 12) hours = 0;
+  }
+  // If no meridiem, treat as 24-hour time
+  return hours * 60 + minutes;
 };
 
 // Convert minutes back to time string
