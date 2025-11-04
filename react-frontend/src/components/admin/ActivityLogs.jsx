@@ -11,7 +11,13 @@ import {
   faTimesCircle,
   faExclamationTriangle,
   faSearch,
+  faFilter,
+  faCalendarAlt,
+  faDownload,
 } from '@fortawesome/free-solid-svg-icons';
+import TableSortHeader from '../common/TableSortHeader.jsx';
+import jsPDF from 'jspdf';
+import XLSX from 'xlsx-js-style';
 
 const ActivityLogs = () => {
   const navigate = useNavigate();
@@ -19,30 +25,49 @@ const ActivityLogs = () => {
   const [filteredAlerts, setFilteredAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 50,
+    total: 0,
+    totalPages: 1,
+    hasNext: false,
+    hasPrev: false
+  });
+  const [sortConfig, setSortConfig] = useState({ key: 'createdAt', direction: 'desc' });
+  const [showFilters, setShowFilters] = useState(false);
+  const [filters, setFilters] = useState({
+    type: 'all',
+    source: 'all',
+    dateFrom: '',
+    dateTo: ''
+  });
 
   useEffect(() => {
-    fetchActivityLogs();
+    fetchActivityLogs(pagination.page);
 
     // Auto-refresh every 30 seconds
-    const autoRefreshInterval = setInterval(fetchActivityLogs, 30000);
+    const autoRefreshInterval = setInterval(() => fetchActivityLogs(pagination.page), 30000);
 
     return () => {
       clearInterval(autoRefreshInterval);
     };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pagination.page]);
 
   useEffect(() => {
     filterLogs();
-  }, [alerts, searchQuery]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [alerts, searchQuery, filters, sortConfig]);
 
-  const fetchActivityLogs = async () => {
+  const fetchActivityLogs = async (page = 1) => {
     setLoading(true);
     try {
-      // Unified activity endpoint (admin alerts + instructor notifications)
-      const res = await axios.get('http://localhost:5000/api/admin/activity');
+      // Unified activity endpoint with pagination
+      const res = await axios.get(`http://localhost:5000/api/admin/activity?page=${page}&limit=50`);
       let activities = Array.isArray(res.data.activities) ? res.data.activities : [];
+      
       // Fallback: legacy alerts endpoint if unified returns empty
-      if (activities.length === 0) {
+      if (activities.length === 0 && !res.data.pagination) {
         const legacy = await axios.get('http://localhost:5000/api/admin/alerts');
         const legacyAlerts = Array.isArray(legacy.data.alerts) ? legacy.data.alerts : [];
         activities = legacyAlerts.map((a) => ({
@@ -54,12 +79,22 @@ const ActivityLogs = () => {
           createdAt: a.createdAt || a.updatedAt || a.timestamp,
         }));
       }
+      
       setAlerts(activities);
+      
+      // Update pagination if available
+      if (res.data.pagination) {
+        setPagination(res.data.pagination);
+      }
     } catch (err) {
       console.error('Failed to load activity logs', err);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSort = (key, direction) => {
+    setSortConfig({ key, direction });
   };
 
   const filterLogs = () => {
@@ -74,6 +109,65 @@ const ActivityLogs = () => {
         String(log.source || '').toLowerCase().includes(q)
       );
     }
+
+    // Filter by type
+    if (filters.type !== 'all') {
+      logs = logs.filter(log => log.type === filters.type);
+    }
+
+    // Filter by source
+    if (filters.source !== 'all') {
+      logs = logs.filter(log => log.source === filters.source);
+    }
+
+    // Filter by date range
+    if (filters.dateFrom) {
+      const fromDate = new Date(filters.dateFrom);
+      if (!isNaN(fromDate.getTime())) {
+        fromDate.setHours(0, 0, 0, 0);
+        logs = logs.filter(log => {
+          const logDate = new Date(log.createdAt || log.timestamp);
+          return !isNaN(logDate.getTime()) && logDate >= fromDate;
+        });
+      }
+    }
+
+    if (filters.dateTo) {
+      const toDate = new Date(filters.dateTo);
+      if (!isNaN(toDate.getTime())) {
+        toDate.setHours(23, 59, 59, 999);
+        logs = logs.filter(log => {
+          const logDate = new Date(log.createdAt || log.timestamp);
+          return !isNaN(logDate.getTime()) && logDate <= toDate;
+        });
+      }
+    }
+
+    // Sort logs
+    logs.sort((a, b) => {
+      let aValue = a[sortConfig.key];
+      let bValue = b[sortConfig.key];
+
+      // Handle date sorting
+      if (sortConfig.key === 'createdAt' || sortConfig.key === 'timestamp') {
+        aValue = new Date(a.createdAt || a.timestamp || 0);
+        bValue = new Date(b.createdAt || b.timestamp || 0);
+      }
+
+      // Handle string sorting
+      if (typeof aValue === 'string') {
+        aValue = aValue.toLowerCase();
+        bValue = (bValue || '').toLowerCase();
+      }
+
+      if (aValue < bValue) {
+        return sortConfig.direction === 'asc' ? -1 : 1;
+      }
+      if (aValue > bValue) {
+        return sortConfig.direction === 'asc' ? 1 : -1;
+      }
+      return 0;
+    });
 
     setFilteredAlerts(logs);
   };
@@ -129,6 +223,111 @@ const ActivityLogs = () => {
     return type.replace(/-/g, ' ').toUpperCase();
   };
 
+  const exportActivityLogsToPDF = () => {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 20;
+    let yPos = margin;
+
+    // Header
+    doc.setFillColor(15, 44, 99);
+    doc.rect(0, 0, pageWidth, 30, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(18);
+    doc.text('Activity Logs Report', margin, 20);
+    doc.setFontSize(10);
+    doc.text(`Generated: ${new Date().toLocaleString()}`, pageWidth - margin - 60, 20);
+
+    yPos = 40;
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(10);
+
+    // Table headers
+    const headers = ['Type', 'Activity', 'Date & Time'];
+    const colWidths = [30, 110, 40];
+    let xPos = margin;
+
+    doc.setFillColor(248, 250, 252);
+    doc.rect(xPos, yPos, pageWidth - 2 * margin, 10, 'F');
+    doc.setFontSize(10);
+    doc.setFont(undefined, 'bold');
+    headers.forEach((header, i) => {
+      doc.text(header, xPos + 2, yPos + 7);
+      xPos += colWidths[i];
+    });
+
+    yPos += 12;
+    doc.setFont(undefined, 'normal');
+
+    // Table rows
+    filteredAlerts.forEach((alert, index) => {
+      if (yPos > 270) {
+        doc.addPage();
+        yPos = margin + 10;
+        // Repeat header
+        xPos = margin;
+        doc.setFillColor(248, 250, 252);
+        doc.rect(xPos, yPos - 10, pageWidth - 2 * margin, 10, 'F');
+        doc.setFont(undefined, 'bold');
+        headers.forEach((header, i) => {
+          doc.text(header, xPos + 2, yPos - 3);
+          xPos += colWidths[i];
+        });
+        doc.setFont(undefined, 'normal');
+        yPos += 2;
+      }
+
+      xPos = margin;
+      const badgeColor = getAlertBadgeColor(alert.type, alert.source);
+      const typeText = formatAlertType(alert.type || alert.source || 'activity').split(' ')[0];
+      const message = doc.splitTextToSize(alert.message || '', colWidths[1] - 4);
+      const timeText = formatTimestamp(alert.createdAt || alert.timestamp);
+
+      doc.text(typeText, xPos + 2, yPos + 5);
+      xPos += colWidths[0];
+      doc.text(message, xPos + 2, yPos + 5);
+      yPos += Math.max(8, message.length * 4);
+      doc.text(timeText, xPos + colWidths[1] + 2, yPos - Math.max(8, message.length * 4) + 5);
+      yPos += 4;
+    });
+
+    doc.save(`activity-logs-${new Date().toISOString().split('T')[0]}.pdf`);
+  };
+
+  const exportActivityLogsToExcel = () => {
+    const wb = XLSX.utils.book_new();
+    
+    const data = [
+      ['Type', 'Source', 'Activity', 'Date & Time'],
+      ...filteredAlerts.map(alert => [
+        formatAlertType(alert.type || alert.source || 'activity'),
+        alert.source || 'N/A',
+        alert.message || '',
+        formatTimestamp(alert.createdAt || alert.timestamp)
+      ])
+    ];
+
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    
+    // Style header row
+    ws['!cols'] = [{ wch: 25 }, { wch: 15 }, { wch: 60 }, { wch: 25 }];
+    
+    // Header row styling
+    const headerRange = XLSX.utils.decode_range(ws['!ref']);
+    for (let col = headerRange.s.c; col <= headerRange.e.c; col++) {
+      const cellAddress = XLSX.utils.encode_cell({ r: 0, c: col });
+      if (!ws[cellAddress]) continue;
+      ws[cellAddress].s = {
+        fill: { fgColor: { rgb: "0f2c63" } },
+        font: { bold: true, color: { rgb: "FFFFFF" } },
+        alignment: { horizontal: "center", vertical: "center" }
+      };
+    }
+
+    XLSX.utils.book_append_sheet(wb, ws, 'Activity Logs');
+    XLSX.writeFile(wb, `activity-logs-${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
   return (
     <div className="dashboard-container" style={{ display: 'flex', height: '100vh' }}>
       <Sidebar />
@@ -174,12 +373,74 @@ const ActivityLogs = () => {
                 Activity Logs
               </h2>
             </div>
-            <p style={{ margin: 0, color: '#ffffff', fontSize: '14px' }}>
-              View all system activities and changes
-            </p>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '15px' }}>
+              <p style={{ margin: 0, color: '#ffffff', fontSize: '14px' }}>
+                View all system activities and changes
+              </p>
+              {filteredAlerts.length > 0 && (
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button
+                    onClick={() => exportActivityLogsToPDF()}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '10px 16px',
+                      background: 'rgba(255, 255, 255, 0.2)',
+                      color: '#fff',
+                      border: '2px solid rgba(255, 255, 255, 0.3)',
+                      borderRadius: '8px',
+                      fontSize: '14px',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.3)';
+                      e.currentTarget.style.transform = 'translateY(-2px)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
+                      e.currentTarget.style.transform = '';
+                    }}
+                  >
+                    <FontAwesomeIcon icon={faDownload} />
+                    Export PDF
+                  </button>
+                  <button
+                    onClick={() => exportActivityLogsToExcel()}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '10px 16px',
+                      background: 'rgba(255, 255, 255, 0.2)',
+                      color: '#fff',
+                      border: '2px solid rgba(255, 255, 255, 0.3)',
+                      borderRadius: '8px',
+                      fontSize: '14px',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.3)';
+                      e.currentTarget.style.transform = 'translateY(-2px)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
+                      e.currentTarget.style.transform = '';
+                    }}
+                  >
+                    <FontAwesomeIcon icon={faDownload} />
+                    Export Excel
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* Search */}
+          {/* Search and Filters */}
           <div
             style={{
               background: '#fff',
@@ -189,33 +450,174 @@ const ActivityLogs = () => {
               marginBottom: '20px',
             }}
           >
-            <div style={{ position: 'relative' }}>
-              <FontAwesomeIcon
-                icon={faSearch}
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: showFilters ? '16px' : 0 }}>
+              <div style={{ position: 'relative', flex: 1 }}>
+                <FontAwesomeIcon
+                  icon={faSearch}
+                  style={{
+                    position: 'absolute',
+                    left: '12px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    color: '#9ca3af',
+                    fontSize: '13px',
+                  }}
+                />
+                <input
+                  type="text"
+                  placeholder="Search activities..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 10px 10px 36px',
+                    border: '2px solid #e5e7eb',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    outline: 'none',
+                  }}
+                />
+              </div>
+              <button
+                onClick={() => setShowFilters(!showFilters)}
                 style={{
-                  position: 'absolute',
-                  left: '12px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  color: '#9ca3af',
-                  fontSize: '13px',
-                }}
-              />
-              <input
-                type="text"
-                placeholder="Search activities..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '10px 10px 10px 36px',
-                  border: '2px solid #e5e7eb',
+                  padding: '10px 16px',
                   borderRadius: '8px',
+                  border: '2px solid #e5e7eb',
+                  background: showFilters ? '#0f2c63' : '#fff',
+                  color: showFilters ? '#fff' : '#374151',
+                  cursor: 'pointer',
                   fontSize: '14px',
-                  outline: 'none',
+                  fontWeight: '600',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  transition: 'all 0.2s ease'
                 }}
-              />
+              >
+                <FontAwesomeIcon icon={faFilter} />
+                Filters
+              </button>
             </div>
+
+            {/* Advanced Filters */}
+            {showFilters && (
+              <div style={{
+                padding: '16px',
+                background: '#f9fafb',
+                borderRadius: '8px',
+                border: '1px solid #e5e7eb',
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                gap: '12px'
+              }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#374151', marginBottom: '6px' }}>
+                    Type
+                  </label>
+                  <select
+                    value={filters.type}
+                    onChange={(e) => setFilters({ ...filters, type: e.target.value })}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      border: '2px solid #e5e7eb',
+                      borderRadius: '6px',
+                      fontSize: '14px',
+                      background: '#fff'
+                    }}
+                  >
+                    <option value="all">All Types</option>
+                    <option value="schedule-created">Schedule Created</option>
+                    <option value="schedule-deleted">Schedule Deleted</option>
+                    <option value="instructor-added">Instructor Added</option>
+                    <option value="instructor-notification">Instructor Notification</option>
+                    <option value="room-conflict">Room Conflict</option>
+                    <option value="availability-update">Availability Update</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#374151', marginBottom: '6px' }}>
+                    Source
+                  </label>
+                  <select
+                    value={filters.source}
+                    onChange={(e) => setFilters({ ...filters, source: e.target.value })}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      border: '2px solid #e5e7eb',
+                      borderRadius: '6px',
+                      fontSize: '14px',
+                      background: '#fff'
+                    }}
+                  >
+                    <option value="all">All Sources</option>
+                    <option value="admin">Admin</option>
+                    <option value="instructor">Instructor</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#374151', marginBottom: '6px' }}>
+                    <FontAwesomeIcon icon={faCalendarAlt} style={{ marginRight: '4px' }} />
+                    Date From
+                  </label>
+                  <input
+                    type="date"
+                    value={filters.dateFrom}
+                    onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      border: '2px solid #e5e7eb',
+                      borderRadius: '6px',
+                      fontSize: '14px',
+                      background: '#fff'
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#374151', marginBottom: '6px' }}>
+                    <FontAwesomeIcon icon={faCalendarAlt} style={{ marginRight: '4px' }} />
+                    Date To
+                  </label>
+                  <input
+                    type="date"
+                    value={filters.dateTo}
+                    onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      border: '2px solid #e5e7eb',
+                      borderRadius: '6px',
+                      fontSize: '14px',
+                      background: '#fff'
+                    }}
+                  />
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+                  <button
+                    onClick={() => setFilters({ type: 'all', source: 'all', dateFrom: '', dateTo: '' })}
+                    style={{
+                      padding: '8px 16px',
+                      borderRadius: '6px',
+                      border: '2px solid #e5e7eb',
+                      background: '#fff',
+                      color: '#374151',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      fontWeight: '600'
+                    }}
+                  >
+                    Clear Filters
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Activity Logs Table */}
@@ -287,10 +689,12 @@ const ActivityLogs = () => {
                 >
                   <thead style={{ position: 'sticky', top: 0, background: '#f9fafb', zIndex: 1 }}>
                     <tr>
-                      <th
+                      <TableSortHeader
+                        sortKey="type"
+                        currentSort={sortConfig}
+                        onSort={handleSort}
                         style={{
                           padding: '12px 20px',
-                          textAlign: 'left',
                           fontWeight: '700',
                           color: '#374151',
                           fontSize: '13px',
@@ -298,28 +702,34 @@ const ActivityLogs = () => {
                           letterSpacing: '0.5px',
                           borderBottom: '2px solid #e5e7eb',
                           width: '100px',
+                          background: sortConfig.key === 'type' ? '#e5e7eb' : '#f9fafb'
                         }}
                       >
                         Type
-                      </th>
-                      <th
+                      </TableSortHeader>
+                      <TableSortHeader
+                        sortKey="message"
+                        currentSort={sortConfig}
+                        onSort={handleSort}
                         style={{
                           padding: '12px 20px',
-                          textAlign: 'left',
                           fontWeight: '700',
                           color: '#374151',
                           fontSize: '13px',
                           textTransform: 'uppercase',
                           letterSpacing: '0.5px',
                           borderBottom: '2px solid #e5e7eb',
+                          background: sortConfig.key === 'message' ? '#e5e7eb' : '#f9fafb'
                         }}
                       >
                         Activity
-                      </th>
-                      <th
+                      </TableSortHeader>
+                      <TableSortHeader
+                        sortKey="createdAt"
+                        currentSort={sortConfig}
+                        onSort={handleSort}
                         style={{
                           padding: '12px 20px',
-                          textAlign: 'left',
                           fontWeight: '700',
                           color: '#374151',
                           fontSize: '13px',
@@ -327,10 +737,11 @@ const ActivityLogs = () => {
                           letterSpacing: '0.5px',
                           borderBottom: '2px solid #e5e7eb',
                           width: '180px',
+                          background: sortConfig.key === 'createdAt' ? '#e5e7eb' : '#f9fafb'
                         }}
                       >
                         Date & Time
-                      </th>
+                      </TableSortHeader>
                     </tr>
                   </thead>
                   <tbody>
@@ -405,6 +816,63 @@ const ActivityLogs = () => {
                 </table>
               )}
             </div>
+            
+            {/* Pagination */}
+            {pagination.totalPages > 1 && (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '10px',
+                padding: '20px',
+                borderTop: '2px solid #f1f5f9',
+                background: '#fafafa'
+              }}>
+                <button
+                  onClick={() => fetchActivityLogs(pagination.page - 1)}
+                  disabled={!pagination.hasPrev}
+                  style={{
+                    padding: '10px 20px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: pagination.hasPrev 
+                      ? 'linear-gradient(135deg, #0f2c63 0%, #1e40af 100%)'
+                      : '#e5e7eb',
+                    color: pagination.hasPrev ? 'white' : '#9ca3af',
+                    fontWeight: '600',
+                    cursor: pagination.hasPrev ? 'pointer' : 'not-allowed',
+                    fontSize: '14px',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  Previous
+                </button>
+                
+                <span style={{ color: '#64748b', fontSize: '14px', fontWeight: '600' }}>
+                  Page {pagination.page} of {pagination.totalPages} ({pagination.total} total)
+                </span>
+                
+                <button
+                  onClick={() => fetchActivityLogs(pagination.page + 1)}
+                  disabled={!pagination.hasNext}
+                  style={{
+                    padding: '10px 20px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: pagination.hasNext 
+                      ? 'linear-gradient(135deg, #0f2c63 0%, #f97316 100%)'
+                      : '#e5e7eb',
+                    color: pagination.hasNext ? 'white' : '#9ca3af',
+                    fontWeight: '600',
+                    cursor: pagination.hasNext ? 'pointer' : 'not-allowed',
+                    fontSize: '14px',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  Next
+                </button>
+              </div>
+            )}
           </div>
         </div>
 

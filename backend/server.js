@@ -16,6 +16,8 @@ import registrationRoutes from './routes/registrationRoutes.js';
 import sectionRoutes from './routes/sectionRoutes.js';
 import alertsRoutes from './routes/alertsRoutes.js';
 import instructorNotificationRoutes from './routes/instructorNotificationRoutes.js';
+import scheduleTemplateRoutes from './routes/scheduleTemplateRoutes.js';
+import passwordResetRoutes from './routes/passwordResetRoutes.js';
 import Instructor from './models/Instructor.js'; // Import the model for index management
 
 dotenv.config();
@@ -93,6 +95,8 @@ mongoose
     app.use('/api/year-levels', yearLevelRoutes);
     app.use('/api/registration', registrationRoutes);
     app.use('/api/sections', sectionRoutes);
+    app.use('/api/schedule-templates', scheduleTemplateRoutes);
+    app.use('/api/password-reset', passwordResetRoutes);
     app.use("/uploads", express.static("uploads"));
 
     // Existing health check, error handlers, socket handlers, etc.

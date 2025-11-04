@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faLock, faCalendarAlt, faRightToBracket } from '@fortawesome/free-solid-svg-icons';
+import { faLock, faCalendarAlt, faRightToBracket, faCheckCircle } from '@fortawesome/free-solid-svg-icons';
 import axios from "axios";
+import ReCAPTCHA from 'react-google-recaptcha';
 
+const RECAPTCHA_SITE_KEY = '6LcxZ_wrAAAAADV8aWfxkks2Weu6DuHNYnGw7jnT';
 
 const AdminLogin = () => {
   const [formData, setFormData] = useState({
@@ -11,6 +13,9 @@ const AdminLogin = () => {
   });
   const [popup, setPopup] = useState({ show: false, message: '', type: '' });
   const navigate = useNavigate();
+  const [recaptchaToken, setRecaptchaToken] = useState('');
+  const [recaptchaError, setRecaptchaError] = useState('');
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   const handleChange = (e) => {
     setFormData({
@@ -19,8 +24,17 @@ const AdminLogin = () => {
     });
   };
 
+  const handleRecaptcha = (token) => {
+    setRecaptchaToken(token);
+    setRecaptchaError('');
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!recaptchaToken) {
+      setRecaptchaError('Please complete the reCAPTCHA.');
+      return;
+    }
 
     try {
       const res = await axios.post("http://localhost:5000/api/admin/login", {
@@ -28,10 +42,9 @@ const AdminLogin = () => {
       });
 
       if (res.data.success) {
-        // ✅ Show success popup
-        setPopup({ show: true, message: "Welcome, Admin!", type: "success" });
+        setShowSuccessModal(true);
         setTimeout(() => {
-          setPopup({ show: false, message: "", type: "" });
+          setShowSuccessModal(false);
           navigate("/admin/dashboard");
         }, 2000);
       }
@@ -75,6 +88,42 @@ const AdminLogin = () => {
           }}
         >
           {popup.message}
+        </div>
+      )}
+
+      {showSuccessModal && (
+        <div style={{
+          position: "fixed",
+          top: 0, left: 0, right: 0, bottom: 0,
+          background: "rgba(0, 0, 0, 0.7)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          zIndex: 9999, animation: "fadeIn 0.3s ease"
+        }}>
+          <div style={{
+            background: "white",
+            borderRadius: "20px",
+            padding: "40px",
+            maxWidth: "500px", width: "90%", textAlign: "center",
+            position: "relative", boxShadow: "0 20px 60px rgba(0, 0, 0, 0.3)",
+            animation: "slideUp 0.4s ease"
+          }}>
+            <div style={{
+              width: "80px",
+              height: "80px",
+              background: "linear-gradient(135deg, #10b981, #059669)",
+              borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 30px", animation: "scaleIn 0.5s ease"
+            }}>
+              <FontAwesomeIcon icon={faCheckCircle} style={{ fontSize: "50px", color: "white" }} />
+            </div>
+            <h2 style={{ fontSize: "28px", fontWeight: "700", color: "#1e293b", marginBottom: "15px" }}>Login Successful!</h2>
+            <p style={{ fontSize: "16px", color: "#64748b", lineHeight: "1.6", marginBottom: "10px" }}>Welcome back, <strong>Admin</strong>!</p>
+            <p style={{ fontSize: "14px", color: "#94a3b8", marginBottom: "30px" }}>Redirecting to your dashboard...</p>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", marginTop: "20px" }}>
+              <div style={{ width: "10px", height: "10px", borderRadius: "50%", background: "#0f2c63", animation: "bounce 1s infinite" }}></div>
+              <div style={{ width: "10px", height: "10px", borderRadius: "50%", background: "#0f2c63", animation: "bounce 1s infinite 0.2s" }}></div>
+              <div style={{ width: "10px", height: "10px", borderRadius: "50%", background: "#0f2c63", animation: "bounce 1s infinite 0.4s" }}></div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -208,6 +257,13 @@ const AdminLogin = () => {
               </div>
             </div>
 
+            <ReCAPTCHA
+              sitekey={RECAPTCHA_SITE_KEY}
+              onChange={handleRecaptcha}
+              style={{ margin: '20px 0', alignSelf: 'center' }}
+            />
+            {recaptchaError && <div style={{ color:'#ef4444', marginBottom:10 }}>{recaptchaError}</div>}
+
             <button 
               type="submit" 
               className="login-btn1 admin-btn1"
@@ -282,8 +338,37 @@ const AdminLogin = () => {
               <span>Back to User Selection</span>
             </Link>
           </form>
+          
+          <Link 
+            to="/forgot-password?type=admin"
+            style={{
+              color: "#0f2c63",
+              textDecoration: "none",
+              fontSize: "14px",
+              fontWeight: "600",
+              transition: "all 0.2s ease",
+              display: "inline-block",
+              marginTop: "15px"
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.color = "#f97316";
+              e.target.style.textDecoration = "underline";
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.color = "#0f2c63";
+              e.target.style.textDecoration = "none";
+            }}
+          >
+            Forgot Password?
+          </Link>
         </div>
       </div>
+      <style>{`
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideUp { from { transform: translateY(50px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+@keyframes scaleIn { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes bounce { 0%, 80%, 100% { transform: translateY(0); } 40% { transform: translateY(-10px); } }
+`}</style>
     </div>
   );
 };

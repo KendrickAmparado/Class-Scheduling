@@ -2,6 +2,15 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import Instructor from '../models/Instructor.js';
 import Alert from '../models/Alert.js'; // Add this line
+import axios from 'axios';
+import validator from 'validator';
+import rateLimit from 'express-rate-limit';
+
+const loginLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 10,
+  message: "Too many login attempts. Please wait."
+});
 
 const router = express.Router();
 
@@ -129,16 +138,34 @@ router.post('/signup', async (req, res) => {
 });
 
 // Instructor Login
-router.post('/login', async (req, res) => {
-  const { email, password } = req.body;
+router.post('/login', loginLimiter, async (req, res) => {
+  let { email, password, recaptchaToken } = req.body;
+  // Validate input
+  email = typeof email === 'string' ? email.trim().toLowerCase() : '';
+  password = typeof password === 'string' ? password : '';
+  if (!email || !password) {
+    return res.status(400).json({ message: 'Email and password are required' });
+  }
+  if (!validator.isEmail(email)) {
+    return res.status(400).json({ message: 'Invalid email format' });
+  }
+  // Check reCAPTCHA
+  if (!recaptchaToken) {
+    return res.status(400).json({ message: 'Please complete the reCAPTCHA' });
+  }
+  try {
+    const secretKey = process.env.RECAPTCHA_SECRET_KEY || 'YOUR_SECRET_KEY_HERE';
+    const verify = await axios.post('https://www.google.com/recaptcha/api/siteverify', null, {
+      params: { secret: secretKey, response: recaptchaToken },
+    });
+    if (!verify.data.success) {
+      return res.status(400).json({ message: 'reCAPTCHA verification failed' });
+    }
+  } catch (err) {
+    return res.status(500).json({ message: 'Error during reCAPTCHA validation' });
+  }
 
   console.log('🔐 Login attempt for:', email);
-
-  if (!email || !password) {
-    return res.status(400).json({ 
-      message: 'Email and password are required' 
-    });
-  }
 
   try {
     // Find instructor by email

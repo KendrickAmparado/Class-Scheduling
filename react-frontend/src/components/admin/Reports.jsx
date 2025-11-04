@@ -1,27 +1,24 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
 import Sidebar from '../common/Sidebar.jsx';
 import Header from '../common/Header.jsx';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faChartBar,
   faDownload,
-  faUsers,
   faDoorOpen,
   faGraduationCap,
   faCode,
   faFilter,
   faUser,
+  faPrint,
 } from '@fortawesome/free-solid-svg-icons';
 import axios from 'axios';
 import { generateTimeSlots, TIME_SLOT_CONFIGS } from '../../utils/timeUtils.js';
 
 import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import XLSX from 'xlsx-js-style';
 
 const Reports = () => {
-  const navigate = useNavigate();
   const [schedules, setSchedules] = useState([]);
   const [sections, setSections] = useState([]);
   const [selectedCourse, setSelectedCourse] = useState('bsit');
@@ -70,24 +67,7 @@ const Reports = () => {
     { id: '4th year', label: '4th Year' },
   ];
 
-  useEffect(() => {
-    fetchData();
-
-    // Auto-refresh every 30 seconds
-    const autoRefreshInterval = setInterval(fetchData, 30000);
-
-    return () => {
-      clearInterval(autoRefreshInterval);
-    };
-  }, [selectedCourse, selectedYear]);
-
-  useEffect(() => {
-    if (sections.length > 0 && !selectedSection) {
-      setSelectedSection(sections[0]);
-    }
-  }, [sections]);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const [sectionsRes, schedulesRes] = await Promise.all([
@@ -104,7 +84,21 @@ const Reports = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedCourse, selectedYear]);
+
+  useEffect(() => {
+    fetchData();
+    const autoRefreshInterval = setInterval(fetchData, 30000);
+    return () => clearInterval(autoRefreshInterval);
+  }, [fetchData]);
+
+  useEffect(() => {
+    if (sections.length > 0 && !selectedSection) {
+      setSelectedSection(sections[0]);
+    }
+  }, [sections, selectedSection]);
+
+  
 
   const timeStringToMinutes = (timeStr) => {
     if (!timeStr) return -1;
@@ -227,7 +221,7 @@ const Reports = () => {
         .filter((s) => s.section === selectedSection.name)
         .filter((s) => {
           const schedDayStrs = String(s.day || '').toLowerCase().replace(/\s/g, '').split('/');
-          const daySet = new Set(dayGroup.days.map((d) => d.toLowerCase()));
+          const daySet = new Set([dayGroup.day]);
           return schedDayStrs.some((d) => daySet.has(d));
         })
         .map((s) => {
@@ -368,11 +362,7 @@ const Reports = () => {
     border: { bottom: { style: 'thick', color: { rgb: 'F97316' } } },
     alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
   };
-  const excelRowStyle = (even) => ({
-    fill: { fgColor: { rgb: even ? 'EFF6FF' : 'FFFFFF' } },
-    font: { color: { rgb: '1E40AF' }, sz: 12 },
-    alignment: { horizontal: 'left', vertical: 'center', wrapText: true },
-  });
+  // removed unused excelRowStyle
 
   const exportToExcel = () => {
     if (!selectedSection) return;
@@ -399,7 +389,7 @@ const Reports = () => {
         .filter((s) => s.section === selectedSection.name)
         .filter((s) => {
           const schedDayStrs = String(s.day || '').toLowerCase().replace(/\s/g, '').split('/');
-          const daySet = new Set(dayGroup.days.map((d) => d.toLowerCase()));
+          const daySet = new Set([dayGroup.day]);
           return schedDayStrs.some((d) => daySet.has(d));
         })
         .map((s) => ({
@@ -520,6 +510,83 @@ const Reports = () => {
     XLSX.utils.book_append_sheet(wb, wsAll, 'All Days');
 
     XLSX.writeFile(wb, `Schedule_Report_${selectedSection.name}.xlsx`);
+  };
+
+  const downloadCSVReport = () => {
+    if (!selectedSection) return;
+    const reportData = getSectionSchedules(selectedSection.name).map(s => [
+      (s.day||'').replace(/\//g, ', '),
+      s.time,
+      s.subject,
+      s.instructor,
+      s.room
+    ]);
+    const csvContent = [
+      ["Day","Time","Subject","Instructor","Room"],
+      ...reportData
+    ].map(e => e.join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8" });
+    const link = document.createElement("a");
+    link.setAttribute("href", URL.createObjectURL(blob));
+    link.setAttribute("download", `${selectedCourse}_${selectedYear}_${selectedSection.name}_ScheduleReport.csv`);
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const printReport = () => {
+    if (!selectedSection) return;
+    const schedules = getSectionSchedules(selectedSection.name);
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head><title>Schedule Report - ${selectedCourse.toUpperCase()} - ${selectedYear.toUpperCase()} - Section ${selectedSection.name}</title>
+      <style>
+        body { font-family: Arial, sans-serif; margin: 30px; }
+        h1 { color: #0f2c63; text-align: center; }
+        h2 { color: #64748b; text-align: center; margin-bottom: 30px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 22px; }
+        th, td { padding: 14px; text-align: left; border: 1px solid #ddd; }
+        th { background: linear-gradient(135deg,#0f2c63 0%,#f97316 100%); color: #fff; }
+        tr:nth-child(even) { background-color: #f8fafc; }
+        .summary { margin-top: 26px; text-align: center; }
+        .meta { background: #f9fafc; border-radius: 10px; padding: 11px; margin-bottom: 17px; text-align: center; font-size: 16px; color: #374151; font-weight: 500; }
+      </style>
+      </head>
+      <body>
+        <h1>Schedule Report</h1>
+        <div class="meta">Course: <b>${selectedCourse.toUpperCase()}</b> &nbsp; Year: <b>${selectedYear.toUpperCase()}</b> &nbsp; Section: <b>${selectedSection.name}</b></div>
+        <table>
+          <thead><tr>
+            <th>Day</th><th>Time</th><th>Subject</th><th>Instructor</th><th>Room</th>
+          </tr></thead>
+          <tbody>
+            ${schedules.map(s => `
+              <tr>
+                <td>${(s.day||'').replace(/\//g, ', ')}</td>
+                <td>${s.time||''}</td>
+                <td>${s.subject||''}</td>
+                <td>${s.instructor||''}</td>
+                <td>${s.room||''}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        <div class="summary">
+          <p>Total Classes: ${schedules.length}</p>
+          <p>Unique Subjects: ${new Set(schedules.map(s=>s.subject)).size}</p>
+          <p>Unique Instructors: ${new Set(schedules.map(s=>s.instructor)).size}</p>
+          <p>Rooms Used: ${new Set(schedules.map(s=>s.room)).size}</p>
+          <p>Generated on: ${new Date().toLocaleDateString()}</p>
+        </div>
+      </body>
+      </html>
+    `;
+    const printWindow = window.open("", "_blank");
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+    printWindow.print();
   };
 
   const currentCourse = courses.find((c) => c.id === selectedCourse);
@@ -643,7 +710,7 @@ const Reports = () => {
           ) : (
             <>
              {/* Sections Container */}
-             <div
+              <div
                 style={{
                   background: '#fff',
                   padding: '24px',
@@ -762,25 +829,6 @@ const Reports = () => {
                     {/* Download Buttons */}
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button
-                        onClick={exportToPDFTimeline}
-                        style={{
-                          padding: '14px 20px',
-                          background: 'linear-gradient(135deg, #4f46e5 0%, #4338ca 100%)',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '10px',
-                          fontWeight: '600',
-                          cursor: 'pointer',
-                          fontSize: '16px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '10px',
-                        }}
-                      >
-                        <FontAwesomeIcon icon={faDownload} />
-                        Download PDF (Timeline)
-                      </button>
-                      <button
                         onClick={exportToExcel}
                         style={{
                           padding: '14px 20px',
@@ -799,6 +847,48 @@ const Reports = () => {
                         <FontAwesomeIcon icon={faDownload} />
                         Excel
                       </button>
+                      <button onClick={exportToPDFTimeline} style={{
+                        padding: '14px 20px',
+                        background: 'linear-gradient(135deg, #1e40af 0%, #3b82f6 100%)',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '10px',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        fontSize: '16px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                        boxShadow: '0 2px 10px #1e40af33',
+                      }}><FontAwesomeIcon icon={faDownload}/> Timeline PDF</button>
+                      <button onClick={printReport} style={{
+                        padding: '14px 20px',
+                        background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '10px',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        fontSize: '16px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                        boxShadow: '0 2px 10px #22c55e30',
+                      }}><FontAwesomeIcon icon={faPrint}/> Print Report</button>
+                      <button onClick={downloadCSVReport} style={{
+                        padding: '14px 20px',
+                        background: 'linear-gradient(135deg, #0f2c63 0%, #1e40af 100%)',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '10px',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        fontSize: '16px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                        boxShadow: '0 2px 10px #1e40af33',
+                      }}><FontAwesomeIcon icon={faDownload}/> CSV</button>
                     </div>
                   </div>
 

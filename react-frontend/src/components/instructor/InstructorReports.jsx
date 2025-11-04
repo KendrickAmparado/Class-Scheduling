@@ -4,7 +4,7 @@ import InstructorHeader from "../common/InstructorHeader.jsx";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faDownload, faFileAlt, faCalendarAlt, faClock, faUser,
-  faSearch, faPrint, faFilter, faDoorOpen, faGraduationCap,
+  faSearch, faPrint, faDoorOpen, faGraduationCap, faTable,
 } from "@fortawesome/free-solid-svg-icons";
 import { AuthContext } from "../../context/AuthContext.jsx";
 import {
@@ -25,7 +25,7 @@ const InstructorReports = () => {
   const [error, setError] = useState(null);
 
   const [searchTerm, setSearchTerm] = useState("");
-  const [sortConfig, setSortConfig] = useState({ key: "day", direction: "asc" });
+  const [sortConfig] = useState({ key: "day", direction: "asc" });
   const [filterDay, setFilterDay] = useState("All Days");
   const [filteredSchedule, setFilteredSchedule] = useState([]);
   const [viewMode, setViewMode] = useState("grid"); // grid or table
@@ -38,6 +38,12 @@ const InstructorReports = () => {
   ), []);
 
   // Days of the week for the grid
+  // Initialize search from URL query (?q=)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const q = params.get('q');
+    if (q) setSearchTerm(q);
+  }, []);
   const weekDays = [
     { key: "Monday", label: "Monday", short: "Mon" },
     { key: "Tuesday", label: "Tuesday", short: "Tue" },
@@ -403,577 +409,222 @@ const InstructorReports = () => {
     printWindow.print();
   };
 
+  const displayedWeekdays = filterDay !== "All Days"
+    ? weekDays.filter(day => day.key === filterDay)
+    : weekDays;
+
+  const skipSlots = {};
+  displayedWeekdays.forEach(day => { skipSlots[day.key] = {}; });
+
   return (
-    <div style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
+    <div style={{ display: "flex", minHeight: "100vh", background: "linear-gradient(135deg, #0f2c63 0%, #f97316 100%)" }}>
       <InstructorSidebar />
-      <main style={{ flex: 1, background: "linear-gradient(to right, #0f2c63 0%, #f97316 100%)", overflowY: "auto" }}>
+      <main style={{ flex: 1, background: "#f9fafc", overflowY: "auto", padding: 0, minHeight: "100vh" }}>
         <InstructorHeader />
-        <div style={{ padding: 30, background: "#ffffffcc", borderRadius: 15, boxShadow: "0 4px 20px rgba(0, 0, 0, 0.08)", marginBottom: 30, borderLeft: "5px solid #f97316" }}>
-          <h2 style={{ color: "#1e293b", fontSize: 28, fontWeight: 700, marginBottom: 8 }}>Reports</h2>
-          <p style={{ color: "#64748b", fontSize: 16, margin: 0 }}>View and generate reports for your classes.</p>
-          <div style={{ marginTop: 15, padding: 15, background: "#f8fafc", borderRadius: 8, border: "1px solid #e2e8f0" }}>
-            <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 8 }}>
-              <FontAwesomeIcon icon={faUser} style={{ color: "#f97316", fontSize: 16 }} />
-              <span style={{ fontWeight: 600, color: "#1e293b" }}>{instructorData.firstname} {instructorData.lastname}</span>
-              {instructorData.instructorId && (
-                <span style={{
-                  background: "linear-gradient(135deg, #0f2c63 0%, #f97316 100%)",
-                  color: "white", padding: "2px 8px", borderRadius: 4,
-                  fontSize: 12, fontWeight: 600,
-                }}>ID-{instructorData.instructorId}</span>
-              )}
+
+        {/* === 2. Heading and Profile Section === */}
+        <div style={{ maxWidth: 1160, margin: "40px auto 0 auto", padding: 0, borderRadius: 26, background: "#fff", boxShadow: "0 4px 40px rgba(15,44,99,0.04)", border: "2px solid #e2e8f0" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 24, borderBottom: "1.5px solid #e2e8f0", padding: "32px 40px 20px 40px", flexWrap: "wrap" }}>
+            <div style={{ background: "#f3f4f6", borderRadius: 16, width: 64, height: 64, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <FontAwesomeIcon icon={faFileAlt} style={{ fontSize: 40, color: "#f97316" }} />
+            </div>
+            <div>
+              <h2 style={{ color: "#1e293b", fontSize: 32, fontWeight: 800, margin: 0 }}>Class Reports</h2>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 15, color: "#64748b" }}>
+                <span>Teaching Reports & Schedules</span>
+              </div>
+            </div>
+            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '7px 22px', background: 'linear-gradient(90deg,#0f2c63 40%,#f97316 100%)', borderRadius: 14, color: "#fff", fontWeight: 600, fontSize: 15, boxShadow: "0 2px 10px #f9731633"
+              }}>
+                <FontAwesomeIcon icon={faUser} />
+                {instructorData.firstname} {instructorData.lastname}
             </div>
             {instructorData.department && (
-              <div style={{ color: "#64748b", fontSize: 14 }}>Department: {instructorData.department}</div>
+                <div style={{ padding: '7px 14px', background: '#f3f4f6', borderRadius: 12, color: '#854d0e', fontWeight: 700, fontSize: 13, border: '1.5px solid #f97316' }}>{instructorData.department}</div>
+              )}
+              {instructorData.instructorId && (
+                <span style={{ padding: "7px 13px", background: "#0f2c63", color: "#fff", borderRadius: 12, fontSize: 13, fontWeight: 700 }}> ID-{instructorData.instructorId}</span>
             )}
           </div>
         </div>
 
-        {/* View Mode Toggle and Buttons */}
-        <div style={{ marginBottom: 25, display: "flex", gap: 15, alignItems: "center" }}>
-          <button
-            onClick={() => setViewMode("grid")}
-            style={{
-              padding: "8px 16px",
-              background: viewMode === "grid" ? "linear-gradient(135deg, #0f2c63 0%, #1e40af 100%)" : "transparent",
-              color: viewMode === "grid" ? "white" : "#64748b",
-              border: "none",
-              borderRadius: 6,
-              fontSize: 12,
-              fontWeight: 600,
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              transition: "all 0.2s ease",
-            }}
-          >
-            <FontAwesomeIcon icon={faCalendarAlt} />
-            Grid View
+          {/* === 3. Action/Search Bar === */}
+          <div style={{ display: 'flex', gap: 18, alignItems: 'center', background: '#f9fafc', boxShadow: '0 6px 24px rgba(237,137,54,0.060)', borderRadius: 16, padding: '20px 40px 18px 40px', position: 'relative', top: -24, marginBottom: 5, flexWrap: 'wrap' }}>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={() => setViewMode("cards")} style={{ padding: '10px 20px', borderRadius: 10, fontWeight: 700, border: 'none', background: viewMode==="cards" ? 'linear-gradient(100deg,#0f2c63,#f97316)' : '#e5e7eb', color: viewMode==="cards" ? 'white' : '#64748b', cursor: 'pointer', boxShadow: '0 2px 8px #0f2c6321', fontSize: 14, display: 'flex', gap: 6, alignItems: 'center' }}>
+                <FontAwesomeIcon icon={faCalendarAlt}/> Card View
           </button>
-          {/* Table View merged into Grid View */}
-
-          <button
-            onClick={() => setViewMode("cards")}
-            style={{
-              padding: "8px 16px",
-              background: viewMode === "cards" ? "linear-gradient(135deg, #0f2c63 0%, #1e40af 100%)" : "transparent",
-              color: viewMode === "cards" ? "white" : "#64748b",
-              border: "none",
-              borderRadius: 6,
-              fontSize: 12,
-              fontWeight: 600,
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              transition: "all 0.2s ease",
-            }}
-          >
-            <FontAwesomeIcon icon={faCalendarAlt} />
-            Cards
+              <button onClick={() => setViewMode("grid")} style={{ padding: '10px 20px', borderRadius: 10, fontWeight: 700, border: 'none', background: viewMode==="grid" ? 'linear-gradient(100deg,#0f2c63,#f97316)' : '#e5e7eb', color: viewMode==="grid" ? 'white' : '#64748b', cursor: 'pointer', fontSize: 14, display: 'flex', gap: 6, alignItems: 'center', boxShadow: '0 2px 8px #0f2c6321' }}>
+                <FontAwesomeIcon icon={faTable}/>
+                Table View
           </button>
-
-          <button
-            onClick={printReport}
-            style={{
-              display: "flex", alignItems: "center", gap: 8,
-              padding: "12px 20px",
-              background: "linear-gradient(135deg, #059669 0%, #10b981 100%)",
-              color: "white",
-              border: "none",
-              borderRadius: 8,
-              cursor: "pointer",
-              fontSize: 14,
-              fontWeight: 600,
-              transition: "all 0.3s ease",
-              boxShadow: "0 4px 15px rgba(5, 150, 105, 0.3)",
-            }}
-          >
-            <FontAwesomeIcon icon={faPrint} />
-            Print Report
+            </div>
+            <button onClick={printReport} style={{ padding: '10px 17px', borderRadius: 10, fontWeight: 700, border: 'none', background: 'linear-gradient(100deg,#059669,#10b981)', color: 'white', cursor: 'pointer', fontSize: 14, display: 'flex', gap: 8, alignItems: 'center', boxShadow: '0 2px 10px #22c55e30' }}>
+              <FontAwesomeIcon icon={faPrint}/>
+              Print
           </button>
-
-          <button
-            onClick={downloadReport}
-            style={{
-              display: "flex", alignItems: "center", gap: 8,
-              padding: "12px 20px",
-              background: "linear-gradient(135deg, #0f2c63 0%, #1e40af 100%)",
-              color: "white",
-              border: "none",
-              borderRadius: 8,
-              cursor: "pointer",
-              fontSize: 14,
-              fontWeight: 600,
-              transition: "all 0.3s ease",
-              boxShadow: "0 4px 15px rgba(15, 44, 99, 0.3)",
-            }}
-          >
-            <FontAwesomeIcon icon={faDownload} />
+            <button onClick={downloadReport} style={{ padding: '10px 19px', borderRadius: 10, fontWeight: 700, border: 'none', background: 'linear-gradient(100deg,#0f2c63,#1e40af)', color: 'white', cursor: 'pointer', fontSize: 14, display: 'flex', gap: 8, alignItems: 'center', boxShadow: '0 2px 10px #1e40af33' }}>
+              <FontAwesomeIcon icon={faDownload}/>
             Download CSV
           </button>
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: 12, flex: 1 }}>
+              <div style={{ flex: 1, minWidth: 200, position: 'relative' }}>
+                <FontAwesomeIcon icon={faSearch} style={{ position: "absolute", left: 13, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', fontSize: 16 }} />
+                <input type="text" placeholder="Search subject, course, room, section..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} style={{ width: '100%', padding: '12px 12px 12px 38px', border: '2px solid #e2e8f0', borderRadius: 8, fontSize: 14, background: 'white', transition: 'all 0.2s ease', outline: 'none', boxShadow: 'none', fontWeight: 600, color: '#24292f' }} />
         </div>
-
-        {/* Search and Filter Controls */}
-        <div style={{ display: "flex", gap: 15, marginBottom: 25, padding: 20, background: "#f8fafc", borderRadius: 12, border: "1px solid #e2e8f0", flexWrap: "wrap", alignItems: "center" }}>
-          <div style={{ flex: 1, minWidth: 250, position: "relative" }}>
-            <FontAwesomeIcon icon={faSearch} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#64748b", fontSize: 14 }} />
-            <input
-              type="text"
-              placeholder="Search by subject, course, room, or section..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              style={{
-                width: "100%",
-                padding: "12px 12px 12px 40px",
-                border: "2px solid #e2e8f0",
-                borderRadius: 8,
-                fontSize: 14,
-                background: "white",
-                transition: "all 0.2s ease",
-                outline: "none",
-              }}
-              onFocus={(e) => e.target.style.borderColor = "#f97316"}
-              onBlur={(e) => e.target.style.borderColor = "#e2e8f0"}
-            />
-          </div>
-          <div style={{ minWidth: 180, position: "relative" }}>
-            <FontAwesomeIcon icon={faFilter} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#64748b", fontSize: 14 }} />
-            <select
-              value={filterDay}
-              onChange={(e) => setFilterDay(e.target.value)}
-              style={{
-                width: "100%",
-                padding: "12px 12px 12px 40px",
-                border: "2px solid #e2e8f0",
-                borderRadius: 8,
-                fontSize: 14,
-                background: "white",
-                cursor: "pointer",
-                outline: "none",
-              }}
-            >
-              <option value="All Days">All Days</option>
-              {weekDays.map((day) => (
+              <select value={filterDay} onChange={e => setFilterDay(e.target.value)} style={{ minWidth: 120, padding: '12px 12px 12px 20px', border: '2px solid #f97316', background: 'white', color: '#f97316', fontWeight: 700, borderRadius: 8, outline: 'none', fontSize: 14 }}>
+                <option value="All Days">Filter: All Days</option>
+                {weekDays.map(day => (
                 <option key={day.key} value={day.key}>{day.label}</option>
               ))}
             </select>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, color: "#64748b", fontSize: 14, fontWeight: 500 }}>
-            <span>Showing</span>
-            <span style={{
-              background: "linear-gradient(135deg, #0f2c63 0%, #f97316 100%)",
-              color: "white", padding: "4px 8px", borderRadius: 4, fontWeight: 600,
-            }}>{filteredSchedule.length}</span>
-            <span>of</span>
-            <span>{instructorSchedule.length}</span>
           </div>
+
+          {/* === 4. Views Section === */}
+          {loading ? (
+            <div style={{ width: '100%', textAlign: 'center', padding: 60 }}>
+              <FontAwesomeIcon icon={faClock} style={{ fontSize: 48, color: '#e5e7eb', marginBottom: 18 }} />
+              <p style={{ fontWeight: 700, color: '#64748b', fontSize: 20 }}>Loading schedule data...</p>
         </div>
-
-        {/* Loading, Error, or No Data */}
-        {loading && (
-          <div style={{ textAlign: "center", padding: 40, color: "#64748b" }}>
-            <FontAwesomeIcon icon={faCalendarAlt} style={{ fontSize: 48, opacity: 0.5, marginBottom: 15 }} />
-            <p style={{ fontSize: 18, margin: 0 }}>Loading schedule data...</p>
+          ) : error ? (
+            <div style={{ width: '100%', textAlign: 'center', padding: 50 }}>
+              <FontAwesomeIcon icon={faCalendarAlt} style={{ fontSize: 48, opacity: 0.5, marginBottom: 10, color: '#ef4444' }} />
+              <p style={{ fontSize: 20, color: '#ef4444', fontWeight: 700 }}>Error loading schedule: {error}</p>
           </div>
-        )}
-
-        {viewMode === "cards" && (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16 }}>
-            {(() => {
-              const properLabel = {
-                monday: "Monday",
-                tuesday: "Tuesday",
-                wednesday: "Wednesday",
-                thursday: "Thursday",
-                friday: "Friday",
-                saturday: "Saturday",
-              };
-              // Expand multi-day schedules into separate entries per day
-              const expanded = [];
-              filteredSchedule.forEach((s) => {
-                const days = normalizeDayTokens(s.day);
-                if (days.length === 0) return;
-                days.forEach((d) => expanded.push({ ...s, dayKey: d, dayLabel: properLabel[d] || s.day }));
-              });
-              // Group by day and sort by start time
-              const groups = expanded.reduce((acc, s) => {
-                const key = s.dayKey;
-                if (!acc[key]) acc[key] = [];
-                acc[key].push(s);
-                return acc;
-              }, {});
-              const dayOrder = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
-              const sortedDayKeys = Object.keys(groups).sort((a, b) => dayOrder.indexOf(a) - dayOrder.indexOf(b));
-              const selectedDayKey = filterDay !== "All Days" ? filterDay.toLowerCase() : null;
-              const dayKeysToRender = selectedDayKey ? sortedDayKeys.filter((k) => k === selectedDayKey) : sortedDayKeys;
-
-              return dayKeysToRender.map((dayKey) => {
-                const items = groups[dayKey]
-                  .slice()
-                  .sort((a, b) => (a.startMinutes || 0) - (b.startMinutes || 0));
-                const dayLabel = properLabel[dayKey] || dayKey;
+          ) : (
+            <>
+              {viewMode === "cards" ? (
+                <div style={{ display: 'flex', gap: 22, margin: '38px 0', padding: '0 36px 14px 36px', flexWrap: 'wrap' }}>
+                  {weekDays.map(day => {
+                    // expand day's classes:
+                    const dayToken = day.key.toLowerCase();
+                    const items = filteredSchedule.filter(s => normalizeDayTokens(s.day).includes(dayToken));
                 return (
-                  <div key={dayKey} style={{ background: "#fff", border: "2px solid #e5e7f0", borderRadius: 12, overflow: "hidden", boxShadow: "0 4px 12px rgba(0,0,0,0.06)" }}>
-                    <div style={{ background: "linear-gradient(135deg, #0f2c63 0%, #1e40af 100%)", color: "#fff", padding: "10px 14px", fontWeight: 700 }}>{dayLabel}</div>
-                    <div style={{ padding: 12, display: "grid", gap: 10 }}>
-                      {items.map((s, idx) => (
-                        <div key={idx} style={{
-                          background: "linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%)",
-                          borderLeft: "5px solid #3b82f6",
-                          borderRadius: 10,
-                          padding: 14,
-                          color: "#1e40af",
-                          display: "grid",
+                      <div key={day.key} style={{ background: '#fff', borderRadius: 18, boxShadow: '0 4px 18px #0f2c6334', flex: '1 1 280px', minWidth: 270, maxWidth: 320, minHeight: 236, display: 'flex', flexDirection: 'column', marginBottom: 8, border: `3px solid ${items.length ? '#f97316' : '#e5e7eb'}` }}>
+                        <div style={{ background: 'linear-gradient(120deg, #0f2c63 40%, #f97316 100%)', color: '#fff', fontWeight: 800, fontSize: 18, padding: '14px 0 14px 0', textAlign: 'center', borderTopLeftRadius: 14, borderTopRightRadius: 14, letterSpacing: '.7px' }}>{day.label}</div>
+                        <div style={{ padding: '22px 18px 10px 18px', display: 'flex', flexDirection: 'column', gap: 18, flex: 1, justifyContent: items.length ? 'flex-start' : 'center', alignItems:'stretch' }}>
+                          {items.length === 0 ? (<div style={{ textAlign: 'center', fontSize: 15, color: '#cbd5e1', paddingTop: 32 }}>No classes</div>) : (
+                            items.map((s, idx) => (
+                              <div key={idx} style={{ background: 'linear-gradient(120deg,#f9fafc 80%,#fff0)', borderRadius: 14, boxShadow: '0 1px 5px #ecf0f311', padding: '17px 11px 12px 14px', display: 'flex', flexDirection: 'column', gap: 7, borderLeft: '5px solid #f97316', position:'relative' }}>
+                                <div style={{ fontWeight: 800, fontSize: 17, color: '#1e40af', marginBottom: 2 }}>{s.subject}</div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                                  <span style={{
+                                    background: 'linear-gradient(90deg, #0f2c63 0%, #f97316 100%)',
+                                    color: 'white',
+                                    fontWeight: 900,
+                                    fontSize: 15,
+                                    borderRadius: 18,
+                                    padding: '4px 14px',
+                                    boxShadow: '0 2px 6px #f973162a',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
                           gap: 6,
                         }}>
-                          <div style={{ fontWeight: 800, fontSize: 16 }}>{s.subject}</div>
-                          <div style={{ fontSize: 13 }}>{s.timeDisplay || s.time}</div>
-                          <div style={{ fontSize: 13, fontWeight: 600 }}>{`${(s.course || "").toUpperCase()} ${s.year} - ${s.section}`}</div>
-                          <div style={{ fontSize: 13, fontStyle: "italic" }}>Room: {s.room}</div>
+                                    <FontAwesomeIcon icon={faClock} style={{ fontSize: 13, color: '#fff8' }} /> {s.timeDisplay || s.time}
+                                  </span>
                         </div>
-                      ))}
-                      {items.length === 0 && (
-                        <div style={{ color: "#64748b", fontSize: 13 }}>No classes</div>
-                      )}
+                                <div style={{ fontSize: 14, color: '#64748b', display: 'flex', gap: 7, alignItems: 'center' }}>
+                                  <FontAwesomeIcon icon={faGraduationCap} style={{ fontSize: 12, color: '#fb923c' }} /> {`${(s.course || '').toUpperCase()} ${s.year}`} <span>‣</span> {s.section}
+                                  <span style={{ margin: '0 2px', color: '#eab308' }}>&bull;</span>
+                                  <FontAwesomeIcon icon={faDoorOpen} style={{ fontSize: 12, color: '#0f2c63' }} /> {s.room}
                     </div>
                   </div>
-                );
-              });
-            })()}
-          </div>
-        )}
-        {error && (
-          <div style={{ textAlign: "center", padding: 40, color: "#dc2626" }}>
-            <FontAwesomeIcon icon={faCalendarAlt} style={{ fontSize: 48, opacity: 0.5, marginBottom: 15 }} />
-            <p style={{ fontSize: 18, margin: 0 }}>Error loading schedule: {error}</p>
-          </div>
-        )}
-        {!loading && !error && instructorSchedule.length === 0 && (
-          <div style={{ textAlign: "center", padding: 40, color: "#64748b" }}>
-            <FontAwesomeIcon icon={faCalendarAlt} style={{ fontSize: 48, opacity: 0.5, marginBottom: 15 }} />
-            <p style={{ fontSize: 18, margin: 0 }}>No schedule data found</p>
-            <p style={{ fontSize: 14, margin: "5px 0 0 0" }}>Please contact the administrator to assign classes.</p>
-          </div>
-        )}
-
-        {/* Schedule View */}
-        {viewMode === "grid" && (
-          <div style={{ overflowX: "auto", overflowY: "hidden" }}>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "120px repeat(5, 1fr)",
-                minWidth: 900,
-                background: "white",
-                borderRadius: 12,
-                overflow: "hidden",
-                boxShadow: "0 4px 20px rgba(0, 0, 0, 0.08)",
-                border: "2px solid #e2e8f0",
-              }}
-            >
-              {/* Header Row */}
-              <div
-                style={{
-                  background: "linear-gradient(135deg, #0f2c63 0%, #1e40af 100%)",
-                  color: "white",
-                  padding: 15,
-                  textAlign: "center",
-                  fontWeight: 700,
-                  fontSize: 14,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <FontAwesomeIcon icon={faClock} style={{ marginRight: 8 }} />
-                TIME
-              </div>
-              {weekDays.map((day) => (
-                <div
-                  key={day.key}
-                  style={{
-                    background: "linear-gradient(135deg, #0f2c63 0%, #1e40af 100%)",
-                    color: "white",
-                    padding: 15,
-                    textAlign: "center",
-                    fontWeight: 700,
-                    fontSize: 14,
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    position: "relative",
-                  }}
-                >
-                  <div>{day.short}</div>
-                  <div style={{ fontSize: 11, opacity: 0.8, marginTop: 2 }}>{day.label}</div>
-                </div>
-              ))}
-
-              {/* Time Slot Rows */}
-              {/* Coverage map to avoid overlapping blocks per day */}
-              {(() => { const dayCovered = {}; return timeSlots.map((timeSlot, slotIndex) => {
-                return (
-                  <React.Fragment key={timeSlot}>
-                    {/* Time label cell */}
-                    <div
-                      style={{
-                        padding: 8,
-                        backgroundColor: slotIndex % 2 === 0 ? "#f8fafc" : "#ffffff",
-                        borderRight: "2px solid #e2e8f0",
-                        borderBottom: "1px solid #e2e8f0",
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color: "#64748b",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        textAlign: "center",
-                      }}
-                    >
-                      {timeSlot}
-                    </div>
-
-                    {/* Day columns for each time slot */}
-                    {weekDays.map((day) => {
-                      const dayKey = day.key;
-                      const covered = dayCovered[dayKey] || (dayCovered[dayKey] = new Set());
-                      if (covered.has(slotIndex)) {
-                        return (
-                          <div
-                            key={`${day.key}-${timeSlot}`}
-                            style={{
-                              backgroundColor: slotIndex % 2 === 0 ? "#f8fafc" : "#ffffff",
-                              borderBottom: "1px solid #f1f5f9",
-                              borderRight: "1px solid #f1f5f9",
-                              minHeight: 40,
-                            }}
-                          />
-                        );
-                      }
-                      // Only render a block at the schedule's START slot to avoid duplicates
-                      const dayToken = day.key.toLowerCase();
-                      const candidates = filteredSchedule.filter((s) =>
-                        normalizeDayTokens(s.day).includes(dayToken)
-                      );
-                      const schedule = candidates.find((s) => {
-                        const slotStartMin = timeStringToMinutes(timeSlot);
-                        const step = TIME_SLOT_CONFIGS.DETAILED.duration || 30;
-                        const startMin = typeof s.startMinutes === 'number' ? s.startMinutes : timeStringToMinutes(String(s.time || '').split('-')[0] || '');
-                        const startRounded = Math.floor(startMin / step) * step;
-                        return slotStartMin === startRounded;
-                      });
-
-                      if (schedule) {
-                        // compute row span to cover the whole duration across slots
-                        let rowSpan = 1;
-                        const step = TIME_SLOT_CONFIGS.DETAILED.duration || 30;
-                        const schedStartMin = typeof schedule.startMinutes === 'number' ? schedule.startMinutes : timeStringToMinutes(String(schedule.time || '').split('-')[0] || '');
-                        const schedEndMin = typeof schedule.endMinutes === 'number' ? schedule.endMinutes : timeStringToMinutes(String(schedule.time || '').split('-')[1] || '');
-                        const startRounded = Math.floor(schedStartMin / step) * step;
-                        const endRounded = Math.ceil(schedEndMin / step) * step;
-                        const durationSteps = Math.max(1, Math.ceil((endRounded - startRounded) / step));
-                        rowSpan = durationSteps;
-                        // mark covered slots so we don't render cells under the spanning block
-                        for (let i = slotIndex + 1; i < slotIndex + rowSpan; i++) {
-                          covered.add(i);
-                        }
-
-                        return (
-                          <div
-                            key={`${day.key}-${timeSlot}`}
-                            style={{
-                              gridRowEnd: `span ${rowSpan}`,
-                              background: "linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%)",
-                              border: "3px solid #3b82f6",
-                              borderRadius: 8,
-                              padding: 12,
-                              margin: 4,
-                              position: "relative",
-                              minHeight: 60,
-                              display: "flex",
-                              flexDirection: "column",
-                              justifyContent: "center",
-                              textAlign: "center",
-                            }}
-                          >
-                            <div style={{ fontWeight: 700, fontSize: 14, color: "#1e40af", marginBottom: 4 }}>
-                              {schedule.subject}
-                            </div>
-                            <div style={{ fontSize: 11, color: "#3730a3", marginBottom: 6, display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
-                              <FontAwesomeIcon icon={faGraduationCap} style={{ fontSize: 10 }} />
-                              {`${schedule.course?.toUpperCase() || ""} ${schedule.year} - ${schedule.section}`}
-                            </div>
-                            <div style={{ fontSize: 11, color: "#3730a3", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
-                              <FontAwesomeIcon icon={faDoorOpen} style={{ fontSize: 10 }} />
-                              {schedule.room}
-                            </div>
-                            <div style={{
-                              position: "absolute",
-                              top: 2,
-                              right: 2,
-                              background: "#1e40af",
-                              color: "white",
-                              padding: "2px 6px",
-                              borderRadius: 4,
-                              fontSize: 9,
-                              fontWeight: 600,
-                            }}>
-                              {schedule.timeDisplay || schedule.time}
+                            ))
+                          )}
                             </div>
                           </div>
                         );
-                      } else {
-                        // Empty slot cell (neutral, no highlight)
-                        return (
-                          <div
-                            key={`${day.key}-${timeSlot}`}
-                            style={{
-                              backgroundColor: slotIndex % 2 === 0 ? "#f8fafc" : "#ffffff",
-                              borderBottom: "1px solid #f1f5f9",
-                              borderRight: "1px solid #f1f5f9",
-                              minHeight: 40,
-                            }}
-                          />
-                        );
-                      }
-                    })}
-                  </React.Fragment>
-                );
-              }); })()}
+                  })}
             </div>
-
-            {/* Combined: Admin-style table appended below grid */}
-            <div style={{ marginTop: 24, width: "100%", maxHeight: 600, overflowY: "auto", overflowX: "auto", border: "2px solid #e5e7eb", borderRadius: 14 }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", fontSize: 16 }}>
-                <colgroup>
-                  <col style={{ width: "20%" }} />
-                  <col style={{ width: "25%" }} />
-                  <col style={{ width: "55%" }} />
-                </colgroup>
-                <thead style={{ position: "sticky", top: 0, zIndex: 10, background: "linear-gradient(135deg, #0f2c63 0%, #1e40af 100%)", color: "white" }}>
-                  <tr>
-                    <th style={{ padding: "22px 28px", textAlign: "left", fontWeight: 700, fontSize: 16, textTransform: "uppercase", letterSpacing: "0.5px" }}>Day</th>
-                    <th style={{ padding: "22px 28px", textAlign: "left", fontWeight: 700, fontSize: 16, textTransform: "uppercase", letterSpacing: "0.5px" }}>Time</th>
-                    <th style={{ padding: "22px 28px", textAlign: "left", fontWeight: 700, fontSize: 16, textTransform: "uppercase", letterSpacing: "0.5px" }}>Classes</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(() => {
-                    const dayDisplayGroups = [
-                      { label: "Monday", day: "monday", group: "mon" },
-                      { label: "Tuesday", day: "tuesday", group: "tue" },
-                      { label: "Wednesday", day: "wednesday", group: "wed" },
-                      { label: "Thursday", day: "thursday", group: "thu" },
-                      { label: "Friday", day: "friday", group: "fri" },
-                      { label: "Saturday", day: "saturday", group: "sat" },
-                    ];
-                    const coversSlot = (sched, slot) => {
-                      const [slotStart, slotEnd] = slot.split(" - ").map((s) => s.trim());
-                      const slotStartMin = timeStringToMinutes(slotStart);
-                      const slotEndMin = timeStringToMinutes(slotEnd);
-                      const sStart = typeof sched.startMinutes === 'number' ? sched.startMinutes : timeStringToMinutes(String(sched.time || '').split('-')[0] || '');
-                      const sEnd = typeof sched.endMinutes === 'number' ? sched.endMinutes : timeStringToMinutes(String(sched.time || '').split('-')[1] || '');
-                      return sStart <= slotStartMin && slotEndMin <= sEnd;
-                    };
-                    return dayDisplayGroups.flatMap((dayGroup) =>
-                      timeSlots.map((time, timeIndex) => {
-                        const schedule = filteredSchedule.find((sched) => {
-                          const tokens = new Set(normalizeDayTokens(sched.day));
-                          if (!tokens.has(dayGroup.day)) return false;
-                          return coversSlot(sched, time);
-                        });
-
-                        if (schedule) {
-                          // compute first matching slot for rowSpan
-                          let firstIndex = -1;
-                          for (let i = 0; i < timeSlots.length; i++) {
-                            if (coversSlot(schedule, timeSlots[i])) {
-                              firstIndex = i; break;
-                            }
-                          }
-                          const isFirst = firstIndex === timeIndex;
-                          if (!isFirst) {
-                            return (
-                              <tr key={`${dayGroup.label}-${timeIndex}`} style={{ borderBottom: '1px solid #e5e7eb' }}>
-                                <td style={{ padding: '20px 28px', color: '#374151', fontWeight: 500, fontSize: 16 }}>{dayGroup.label}</td>
-                                <td style={{ padding: '20px 28px', color: '#374151', fontSize: 16 }}>{time}</td>
-                              </tr>
-                            );
-                          }
-                          // rowSpan length
-                          let rowSpan = 0;
-                          for (let i = timeIndex; i < timeSlots.length; i++) {
-                            if (coversSlot(schedule, timeSlots[i])) rowSpan++; else break;
-                          }
-                          return (
-                            <tr key={`${dayGroup.label}-${timeIndex}`} style={{ borderBottom: '1px solid #e5e7eb' }}>
-                              <td style={{ padding: '20px 28px', color: '#374151', fontWeight: 500, fontSize: 16 }}>{dayGroup.label}</td>
-                              <td style={{ padding: '20px 28px', color: '#374151', fontSize: 16 }}>{time}</td>
-                              <td rowSpan={rowSpan} style={{ background: 'linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%)', borderLeft: '5px solid #3b82f6', color: '#1e40af', padding: '24px 28px', verticalAlign: 'top' }}>
-                                <div style={{ textAlign: 'left' }}>
-                                  <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 14, color: '#1e40af' }}>{schedule.subject}</div>
-                                  <div style={{ fontSize: 16, marginBottom: 10, color: '#1e40af' }}>
-                                    {`${(schedule.course || '').toUpperCase()} ${schedule.year} - ${schedule.section}`}
-                                  </div>
-                                  <div style={{ fontSize: 16, color: '#1e40af', fontStyle: 'italic' }}>Room: {schedule.room}</div>
-                                </div>
-                              </td>
-                            </tr>
-                          );
+              ) : (
+                <div style={{ padding: '36px 24px 24px 24px', maxWidth: 1250, margin: '0 auto', background: '#fff', borderRadius: 22, boxShadow: '0 8px 32px #0f2c6312', overflowX: 'auto' }}>
+                  {/* Compute displayedWeekdays based on filterDay */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '120px repeat(' + displayedWeekdays.length + ', 1fr)', minWidth: 900 }}>
+                    {/* Grid Header */}
+                    <div style={{ background: 'linear-gradient(120deg,#0f2c63,#f97316 85%)', color:'#fff', fontWeight:800, fontSize:16, textAlign: 'center', padding:'18px 0', letterSpacing:'0.7px', borderTopLeftRadius:14 }}>Time</div>
+                    {displayedWeekdays.map((day,idx) => (
+                      <div key={day.key} style={{ background: 'linear-gradient(120deg,#0f2c63,#f97316 85%)', color:'#fff', fontWeight:800, fontSize:16, textAlign:'center', padding:'18px 0', borderTopRightRadius: idx===displayedWeekdays.length-1?14:0 }}>{day.label}</div>
+                    ))}
+                    {/* Grid Body */}
+                    {timeSlots.map((slot, slotIndex) => {
+                      const rowCells = [
+                        <div key={'time-'+slotIndex} style={{padding:'13px 7px', fontWeight: 700, fontSize: 15, borderLeft:'3px solid #f97316', background:slotIndex%2===0?'#fff':'#f3f4f6', color:'#64748b', textAlign:'center', minHeight: 44, display:'flex',alignItems:'center',justifyContent:'center'}}>
+                          <FontAwesomeIcon icon={faClock} style={{marginRight:6,fontSize:13}}/> {slot}
+                        </div>
+                      ];
+                      displayedWeekdays.forEach((day) => {
+                        if (skipSlots[day.key][slotIndex]) {
+                          // This slot was covered by a previous class's rowSpan block
+                          return;
                         }
-                        return (
-                          <tr key={`${dayGroup.label}-${timeIndex}`} style={{ borderBottom: '1px solid #e5e7eb' }}>
-                            <td style={{ padding: '20px 28px', color: '#374151', fontWeight: 500, fontSize: 16 }}>{dayGroup.label}</td>
-                            <td style={{ padding: '20px 28px', color: '#374151', fontSize: 16 }}>{time}</td>
-                            <td style={{ background: '#ffffff', padding: '20px 28px', border: '1px solid #f1f5f9' }} />
-                          </tr>
-                        );
-                      })
-                    );
-                  })()}
-                  {filteredSchedule.length === 0 && (
-                    <tr>
-                      <td colSpan="3" style={{ padding: 40, textAlign: 'center', color: '#6b7280', fontSize: 16 }}>No schedules found</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                        const dayToken = day.key.toLowerCase();
+                        // Find if a schedule starts at this slot for this day
+                        const scheduleStartHere = filteredSchedule.find((s) => {
+                          const tokens = normalizeDayTokens(s.day);
+                          const slotStartMin = timeStringToMinutes(slot.split('-')[0].trim());
+                          return tokens.includes(dayToken)
+                            && typeof s.startMinutes === 'number' && Math.floor(s.startMinutes/1) === slotStartMin;
+                        });
+                        if (scheduleStartHere) {
+                          // Compute row span for this block (how many slots to merge)
+                          const { startMinutes, endMinutes } = scheduleStartHere;
+                          const step = TIME_SLOT_CONFIGS.DETAILED.duration || 30;
+                          const startRounded = Math.floor(startMinutes/step)*step;
+                          const endRounded = Math.ceil(endMinutes/step)*step;
+                          const rowSpan = Math.max(1, Math.ceil((endRounded-startRounded)/step));
+                          // Mark future slots to be skipped for this day
+                          for(let skip = 1; skip<rowSpan; ++skip) {
+                            skipSlots[day.key][slotIndex+skip]=true;
+                          }
+                          rowCells.push(
+                            <div key={day.key+'-'+slotIndex} style={{
+                              gridRow: `span ${rowSpan}`,
+                              minHeight: 44*rowSpan, display:'flex',flexDirection:'column',justifyContent:'center',alignItems:'center', padding:'0px 4px',
+                              background:'linear-gradient(120deg,#0f2c63 60%,#f97316 100%)',
+                              borderRadius:11, color:'#fff', fontWeight:800, fontSize:15, boxShadow:'0 4px 16px #0f2c6321', position:'relative', border: '2px solid #f97316', margin:'2px 3px'
+                            }}>
+                              <div style={{fontWeight:900, fontSize:15,marginBottom:2}}>{scheduleStartHere.subject}</div>
+                              <div style={{fontSize:13,opacity:0.94, fontWeight:500}}>{scheduleStartHere.timeDisplay || scheduleStartHere.time}</div>
+                              <div style={{marginTop:1, fontSize:12,display:'flex',alignItems:'center',gap:7}}>
+                                <span style={{background:'#fff2',borderRadius:7,padding:'2.5px 8px',color:'#fffbbb',fontWeight:700}}>{`${(scheduleStartHere.course||'').toUpperCase()} ${scheduleStartHere.year}`}</span>
+                                <span style={{fontStyle:'italic',marginLeft:6}}><FontAwesomeIcon icon={faDoorOpen}/> {scheduleStartHere.room}</span>
+                                  </div>
+                                </div>
+                          );
+                        } else {
+                          rowCells.push(<div key={day.key+'-'+slotIndex} style={{minHeight:44, background:slotIndex%2===0?'#fff':'#f3f4f6', borderBottom:'1.5px solid #e5e7eb', borderRight:'1.5px solid #e5e7eb'}}/>);
+                        }
+                      });
+                      return rowCells;
+                    })}
             </div>
           </div>
         )}
 
-        {/* Table View removed; combined into Grid View */}
-
-        {/* Schedule Statistics and Summary */}
-        <div style={{ marginTop: 20, paddingTop: 20, borderTop: "1px solid #e2e8f0", display: "flex", justifyContent: "space-around", flexWrap: "wrap", gap: 15 }}>
-          <div style={{ textAlign: "center", minWidth: 140 }}>
-            <div style={{ fontSize: 24, fontWeight: 700, color: "#1e293b" }}>
-              {filteredSchedule.length}
+              {/* === 5. Stat Bar === */}
+              <div style={{ display: 'flex', gap: 30, justifyContent: 'center', margin: '6px 0 36px 0', padding: '12px 0', flexWrap: 'wrap' }}>
+                {[{
+                  val: filteredSchedule.length, label: 'Classes Shown', icon: faFileAlt, accent: '#f97316', bg: '#ffedd5'
+                },{
+                  val: new Set(filteredSchedule.map(s=>s.day)).size, label: 'Teaching Days', icon: faCalendarAlt, accent: '#0f2c63', bg: '#e0e7ef'
+                },{
+                  val: new Set(filteredSchedule.map(s=>s.subject)).size, label: 'Unique Subjects', icon: faSearch, accent: '#ea580c', bg: '#ffe4e6'
+                },{
+                  val: new Set(filteredSchedule.map(s=>s.room)).size, label: 'Rooms Used', icon: faDoorOpen, accent: '#174ea6', bg: '#fffbeb'
+                }].map((s, i) => (
+                  <div key={s.label} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 120, background: s.bg, borderRadius: 14, boxShadow: '0 2px 8px #6b728014', padding: '17px 18px', gap: 4, border: `2.5px solid ${s.accent}` }}>
+                    <FontAwesomeIcon icon={s.icon} style={{ color: s.accent, fontSize: 23, marginBottom: 3, opacity: 0.86 }} />
+                    <div style={{ fontWeight: 800, fontSize: 23, color: s.accent }}>{s.val}</div>
+                    <div style={{ color: '#64748b', fontSize: 13, fontWeight: 700 }}>{s.label}</div>
             </div>
-            <div style={{ fontSize: 12, color: "#64748b" }}>Classes Shown</div>
-            <div style={{ fontSize: 11, color: "#94a3b8" }}>of {instructorSchedule.length} total</div>
+                ))}
           </div>
-          <div style={{ textAlign: "center", minWidth: 140 }}>
-            <div style={{ fontSize: 24, fontWeight: 700, color: "#1e293b" }}>
-              {new Set(filteredSchedule.map(s => s.day)).size}
-            </div>
-            <div style={{ fontSize: 12, color: "#64748b" }}>Teaching Days</div>
-          </div>
-          <div style={{ textAlign: "center", minWidth: 140 }}>
-            <div style={{ fontSize: 24, fontWeight: 700, color: "#1e293b" }}>
-              {new Set(filteredSchedule.map(s => s.subject)).size}
-            </div>
-            <div style={{ fontSize: 12, color: "#64748b" }}>Unique Subjects</div>
-          </div>
-          <div style={{ textAlign: "center", minWidth: 140 }}>
-            <div style={{ fontSize: 24, fontWeight: 700, color: "#1e293b" }}>
-              {new Set(filteredSchedule.map(s => s.room)).size}
-            </div>
-            <div style={{ fontSize: 12, color: "#64748b" }}>Rooms Used</div>
-          </div>
+            </>
+          )}
         </div>
       </main>
     </div>

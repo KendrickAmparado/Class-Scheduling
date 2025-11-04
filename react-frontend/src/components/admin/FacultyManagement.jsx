@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Sidebar from "../common/Sidebar.jsx";
 import Header from "../common/Header.jsx";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -8,8 +8,20 @@ import {
   faUserPlus,
   faTrashAlt,
   faCopy,
+  faCheckSquare,
+  faSquare,
+  faListCheck,
+  faSearch,
+  faFilter,
+  faDownload,
 } from "@fortawesome/free-solid-svg-icons";
+import TableSortHeader from '../common/TableSortHeader.jsx';
+import XLSX from 'xlsx-js-style';
 import { io } from "socket.io-client";
+import { useToast } from "../common/ToastProvider.jsx";
+import ConfirmationDialog from "../common/ConfirmationDialog.jsx";
+import { SkeletonTable } from "../common/SkeletonLoader.jsx";
+import EmptyState from "../common/EmptyState.jsx";
 
 const socket = io("http://localhost:5000", {
   autoConnect: false,
@@ -59,16 +71,21 @@ const Modal = ({ show, onClose, title, children, actions }) => {
 };
 
 const FacultyManagement = () => {
+  const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState("active");
   const [instructors, setInstructors] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [alertModal, setAlertModal] = useState({ show: false, message: "" });
-  const [confirmModal, setConfirmModal] = useState({
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [isSelectMode, setIsSelectMode] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [departmentFilter, setDepartmentFilter] = useState('all');
+  const [sortConfig, setSortConfig] = useState({ key: 'instructorId', direction: 'asc' });
+  const [confirmDialog, setConfirmDialog] = useState({
     show: false,
     title: "",
     message: "",
     onConfirm: null,
-    onCancel: null,
+    destructive: false,
   });
 
   // Add Instructor states
@@ -90,7 +107,7 @@ const FacultyManagement = () => {
   const [completeRegLoading, setCompleteRegLoading] = useState(false);
 
   // Fetch instructors function
-  const fetchInstructors = () => {
+  const fetchInstructors = useCallback(() => {
     setLoading(true);
     fetch("http://localhost:5000/api/instructors")
       .then((res) => {
@@ -103,9 +120,9 @@ const FacultyManagement = () => {
       })
       .catch(() => {
         setLoading(false);
-        showAlert("Error loading instructors.");
+        showToast("Error loading instructors.", 'error');
       });
-  };
+  }, [showToast]);
 
   useEffect(() => {
     fetchInstructors();
@@ -127,37 +144,92 @@ const FacultyManagement = () => {
       socket.disconnect();
       clearInterval(autoRefreshInterval);
     };
-  }, []);
+  }, [fetchInstructors]);
 
-  const showAlert = (message) => setAlertModal({ show: true, message });
-  const showConfirm = (title, message, onConfirm) =>
-    setConfirmModal({
+  const showConfirm = (title, message, onConfirm, destructive = false) =>
+    setConfirmDialog({
       show: true,
       title,
       message,
       onConfirm: () => {
         onConfirm();
-        setConfirmModal({ show: false });
+        setConfirmDialog({ show: false, title: "", message: "", onConfirm: null });
       },
-      onCancel: () => setConfirmModal({ show: false }),
+      destructive,
     });
 
   const copyToClipboard = async (text) => {
     try {
       await navigator.clipboard.writeText(text);
-      showAlert(`Instructor ID "${text}" copied to clipboard!`);
+      showToast(`Instructor ID "${text}" copied to clipboard!`, 'success');
     } catch (err) {
       console.error('Failed to copy: ', err);
-      showAlert("Failed to copy instructor ID to clipboard");
+      showToast("Failed to copy instructor ID to clipboard", 'error');
     }
   };
 
 
-  const filteredInstructors = instructors.filter((inst) => {
+  const handleSort = (key, direction) => {
+    setSortConfig({ key, direction });
+  };
+
+  // Get unique departments for filter
+  const departments = [...new Set(instructors.map(inst => inst.department).filter(Boolean))].sort();
+
+  let filteredInstructors = instructors.filter((inst) => {
     if (activeTab === "active") return inst.status === "active";
     else if (activeTab === "pending") return inst.status === "pending";
     else if (activeTab === "archived") return inst.status === "archived";
     return true;
+  });
+
+  // Filter by search query
+  if (searchQuery.trim()) {
+    const q = searchQuery.toLowerCase();
+    filteredInstructors = filteredInstructors.filter(inst =>
+      (inst.firstname && inst.firstname.toLowerCase().includes(q)) ||
+      (inst.lastname && inst.lastname.toLowerCase().includes(q)) ||
+      (inst.email && inst.email.toLowerCase().includes(q)) ||
+      (inst.instructorId && inst.instructorId.toLowerCase().includes(q)) ||
+      (inst.department && inst.department.toLowerCase().includes(q)) ||
+      (inst.contact && inst.contact.toLowerCase().includes(q))
+    );
+  }
+
+  // Filter by department
+  if (departmentFilter !== 'all') {
+    filteredInstructors = filteredInstructors.filter(inst => inst.department === departmentFilter);
+  }
+
+  // Sort instructors
+  filteredInstructors = [...filteredInstructors].sort((a, b) => {
+    let aValue = a[sortConfig.key];
+    let bValue = b[sortConfig.key];
+
+    // Handle name sorting (combine firstname and lastname)
+    if (sortConfig.key === 'name') {
+      aValue = `${a.firstname || ''} ${a.lastname || ''}`.trim();
+      bValue = `${b.firstname || ''} ${b.lastname || ''}`.trim();
+    }
+
+    // Handle string sorting
+    if (typeof aValue === 'string') {
+      aValue = aValue.toLowerCase();
+      bValue = (bValue || '').toLowerCase();
+    }
+
+    // Handle null/undefined values
+    if (!aValue && bValue) return 1;
+    if (aValue && !bValue) return -1;
+    if (!aValue && !bValue) return 0;
+
+    if (aValue < bValue) {
+      return sortConfig.direction === 'asc' ? -1 : 1;
+    }
+    if (aValue > bValue) {
+      return sortConfig.direction === 'asc' ? 1 : -1;
+    }
+    return 0;
   });
 
   const btnStyle = (bg) => ({
@@ -171,6 +243,49 @@ const FacultyManagement = () => {
     fontWeight: "600",
     transition: "all 0.2s ease",
   });
+
+  const exportInstructorsToExcel = () => {
+    const wb = XLSX.utils.book_new();
+    
+    const data = [
+      ['Instructor ID', 'First Name', 'Last Name', 'Email', 'Contact', 'Department', 'Status'],
+      ...filteredInstructors.map(inst => [
+        inst.instructorId || '',
+        inst.firstname || '',
+        inst.lastname || '',
+        inst.email || '',
+        inst.contact || '',
+        inst.department || '',
+        inst.status || ''
+      ])
+    ];
+
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    ws['!cols'] = [
+      { wch: 20 },
+      { wch: 20 },
+      { wch: 20 },
+      { wch: 30 },
+      { wch: 15 },
+      { wch: 25 },
+      { wch: 15 }
+    ];
+
+    // Style header row
+    const headerRange = XLSX.utils.decode_range(ws['!ref']);
+    for (let col = headerRange.s.c; col <= headerRange.e.c; col++) {
+      const cellAddress = XLSX.utils.encode_cell({ r: 0, c: col });
+      if (!ws[cellAddress]) continue;
+      ws[cellAddress].s = {
+        fill: { fgColor: { rgb: "0f2c63" } },
+        font: { bold: true, color: { rgb: "FFFFFF" } },
+        alignment: { horizontal: "center", vertical: "center" }
+      };
+    }
+
+    XLSX.utils.book_append_sheet(wb, ws, `${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Instructors`);
+    XLSX.writeFile(wb, `instructors-${activeTab}-${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
 
   const handleArchive = (id) =>
     showConfirm("Archive Instructor", "Are you sure you want to archive this instructor?", () => {
@@ -186,10 +301,10 @@ const FacultyManagement = () => {
             setInstructors((prev) =>
               prev.map((i) => (i._id === id ? { ...i, status: "archived" } : i))
             );
-            showAlert("Instructor archived successfully.");
+            showToast("Instructor archived successfully.", 'success');
           }
         })
-        .catch(() => showAlert("Error archiving instructor."));
+        .catch(() => showToast("Error archiving instructor.", 'error'));
     });
 
   const handleRestore = (id) =>
@@ -206,16 +321,16 @@ const FacultyManagement = () => {
             setInstructors((prev) =>
               prev.map((i) => (i._id === id ? { ...i, status: "active" } : i))
             );
-            showAlert("Instructor restored successfully.");
+            showToast("Instructor restored successfully.", 'success');
           }
         })
-        .catch(() => showAlert("Error restoring instructor."));
+        .catch(() => showToast("Error restoring instructor.", 'error'));
     });
 
   const handlePermanentDelete = (id) =>
     showConfirm(
       "Delete Permanently",
-      "Are you sure you want to permanently delete this instructor?",
+      "Are you sure you want to permanently delete this instructor? This action cannot be undone.",
       () => {
         fetch(`http://localhost:5000/api/instructors/${id}/permanent`, {
           method: "DELETE",
@@ -226,11 +341,12 @@ const FacultyManagement = () => {
           .then((data) => {
             if (data.success || data.message === "Instructor permanently deleted") {
               setInstructors((prev) => prev.filter((i) => i._id !== id));
-              showAlert("Instructor deleted permanently.");
+              showToast("Instructor deleted permanently.", 'success');
             }
           })
-          .catch(() => showAlert("Error deleting instructor."));
-      }
+          .catch(() => showToast("Error deleting instructor.", 'error'));
+      },
+      true
     );
 
   const handleAddInstructor = (e) => {
@@ -257,11 +373,11 @@ const FacultyManagement = () => {
         setAddEmail("");
         setAddDepartment("");
         const instructorIdMsg = data.instructorId ? ` (Instructor ID: ${data.instructorId})` : '';
-        showAlert(`Registration link sent successfully to ${addEmail}!${instructorIdMsg} The instructor can now complete their registration.`);
+        showToast(`Registration link sent successfully to ${addEmail}!${instructorIdMsg}`, 'success');
         fetchInstructors();
       })
       .catch((err) => {
-        showAlert(err.message || "Error sending registration email. Please try again.");
+        showToast(err.message || "Error sending registration email. Please try again.", 'error');
       })
       .finally(() => setAddLoading(false));
   };
@@ -299,13 +415,81 @@ const FacultyManagement = () => {
       
       // Show success message with instructor ID if available
       const instructorId = data.instructor?.id ? ` (Instructor ID: ${data.instructor.id})` : '';
-      showAlert(`Registration completed successfully!${instructorId}`);
+      showToast(`Registration completed successfully!${instructorId}`, 'success');
       fetchInstructors();
     } catch (error) {
-      showAlert(error.message);
+      showToast(error.message, 'error');
     } finally {
       setCompleteRegLoading(false);
     }
+  };
+
+  // Bulk operations
+  const handleToggleSelect = (id) => {
+    setSelectedIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (selectedIds.size === filteredInstructors.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredInstructors.map(inst => inst._id)));
+    }
+  };
+
+  const handleBulkArchive = () => {
+    if (selectedIds.size === 0) return;
+    showConfirm(
+      "Archive Instructors",
+      `Are you sure you want to archive ${selectedIds.size} instructor(s)?`,
+      async () => {
+        const promises = Array.from(selectedIds).map(id =>
+          fetch(`http://localhost:5000/api/instructors/${id}/archive`, { method: "PUT" })
+        );
+        try {
+          const results = await Promise.allSettled(promises);
+          const successful = results.filter(r => r.status === 'fulfilled' && r.value.ok).length;
+          showToast(`Successfully archived ${successful} of ${selectedIds.size} instructor(s).`, 'success');
+          setSelectedIds(new Set());
+          setIsSelectMode(false);
+          fetchInstructors();
+        } catch (err) {
+          showToast("Error archiving instructors.", 'error');
+        }
+      }
+    );
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedIds.size === 0) return;
+    showConfirm(
+      "Delete Permanently",
+      `Are you sure you want to permanently delete ${selectedIds.size} instructor(s)? This action cannot be undone.`,
+      async () => {
+        const promises = Array.from(selectedIds).map(id =>
+          fetch(`http://localhost:5000/api/instructors/${id}/permanent`, { method: "DELETE" })
+        );
+        try {
+          const results = await Promise.allSettled(promises);
+          const successful = results.filter(r => r.status === 'fulfilled' && r.value.ok).length;
+          showToast(`Successfully deleted ${successful} of ${selectedIds.size} instructor(s).`, 'success');
+          setSelectedIds(new Set());
+          setIsSelectMode(false);
+          fetchInstructors();
+        } catch (err) {
+          showToast("Error deleting instructors.", 'error');
+        }
+      },
+      true
+    );
   };
 
   return (
@@ -320,6 +504,88 @@ const FacultyManagement = () => {
             minHeight: "calc(100vh - 80px)",
           }}
         >
+          {/* Search and Filters */}
+          <div style={{
+            background: '#fff',
+            padding: '16px',
+            borderRadius: '12px',
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.06)',
+            marginBottom: '20px'
+          }}>
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <div style={{ position: 'relative', flex: 1, minWidth: '250px' }}>
+                <FontAwesomeIcon
+                  icon={faSearch}
+                  style={{
+                    position: 'absolute',
+                    left: '12px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    color: '#9ca3af',
+                    fontSize: '14px'
+                  }}
+                />
+                <input
+                  type="text"
+                  placeholder="Search by name, email, ID, department..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 10px 10px 36px',
+                    border: '2px solid #e5e7eb',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    outline: 'none'
+                  }}
+                />
+              </div>
+              <select
+                value={departmentFilter}
+                onChange={(e) => setDepartmentFilter(e.target.value)}
+                style={{
+                  padding: '10px 16px',
+                  border: '2px solid #e5e7eb',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  minWidth: '180px',
+                  background: '#fff'
+                }}
+              >
+                <option value="all">All Departments</option>
+                {departments.map(dept => (
+                  <option key={dept} value={dept}>{dept}</option>
+                ))}
+              </select>
+              {filteredInstructors.length > 0 && (
+                <button
+                  onClick={exportInstructorsToExcel}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '10px 16px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: 'linear-gradient(135deg, #0f2c63 0%, #1e40af 100%)',
+                    color: '#fff',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    transition: 'all 0.2s ease'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+                  onMouseLeave={(e) => e.currentTarget.style.transform = ''}
+                >
+                  <FontAwesomeIcon icon={faDownload} />
+                  Export Excel
+                </button>
+              )}
+            </div>
+          </div>
+
           {/* Tabs */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 30 }}>
             <div style={{ display: "flex", gap: 15 }}>
@@ -342,50 +608,227 @@ const FacultyManagement = () => {
                 Archived ({instructors.filter(i => i.status === "archived").length})
               </button>
             </div>
-            <button
-              style={btnStyle("#2563eb")}
-              onClick={() => setShowAddModal(true)}
-              onMouseEnter={(e) => (e.currentTarget.style.transform = "translateY(-2px)")}
-              onMouseLeave={(e) => (e.currentTarget.style.transform = "translateY(0)")}
-            >
-              <FontAwesomeIcon icon={faPlus} /> Add Instructor
-            </button>
+            <div style={{ display: "flex", gap: 12 }}>
+              {!isSelectMode ? (
+                <>
+                  <button
+                    style={btnStyle("#7c3aed")}
+                    onClick={() => setIsSelectMode(true)}
+                    onMouseEnter={(e) => (e.currentTarget.style.transform = "translateY(-2px)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.transform = "translateY(0)")}
+                  >
+                    <FontAwesomeIcon icon={faListCheck} /> Select Multiple
+                  </button>
+                  <button
+                    style={btnStyle("#2563eb")}
+                    onClick={() => setShowAddModal(true)}
+                    onMouseEnter={(e) => (e.currentTarget.style.transform = "translateY(-2px)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.transform = "translateY(0)")}
+                  >
+                    <FontAwesomeIcon icon={faPlus} /> Add Instructor
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    style={btnStyle("#6b7280")}
+                    onClick={() => {
+                      setIsSelectMode(false);
+                      setSelectedIds(new Set());
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  {selectedIds.size > 0 && (
+                    <>
+                      {activeTab === "active" && (
+                        <button
+                          style={btnStyle("#059669")}
+                          onClick={handleBulkArchive}
+                        >
+                          Archive ({selectedIds.size})
+                        </button>
+                      )}
+                      {activeTab === "archived" && (
+                        <button
+                          style={btnStyle("#dc2626")}
+                          onClick={handleBulkDelete}
+                        >
+                          Delete ({selectedIds.size})
+                        </button>
+                      )}
+                    </>
+                  )}
+                </>
+              )}
+            </div>
           </div>
 
-          {loading ? (
-            <div style={{ textAlign: "center", padding: 40, color: "white", fontSize: 16 }}>
-              Loading instructors...
+          {/* Bulk Selection Header */}
+          {isSelectMode && (
+            <div style={{
+              background: "#fff",
+              padding: "12px 16px",
+              borderRadius: "10px",
+              marginBottom: "16px",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+            }}>
+              <button
+                onClick={handleSelectAll}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: "#374151",
+                }}
+              >
+                <FontAwesomeIcon
+                  icon={selectedIds.size === filteredInstructors.length ? faCheckSquare : faSquare}
+                  style={{ fontSize: 18, color: "#3b82f6" }}
+                />
+                {selectedIds.size === filteredInstructors.length ? "Deselect All" : "Select All"}
+              </button>
+              <span style={{ fontSize: 14, fontWeight: 600, color: "#6b7280" }}>
+                {selectedIds.size} selected
+              </span>
             </div>
+          )}
+
+          {loading ? (
+            <div style={{
+              background: '#fff',
+              padding: '24px',
+              borderRadius: '12px',
+              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)',
+            }}>
+              <SkeletonTable rows={5} cols={7} />
+            </div>
+          ) : filteredInstructors.length === 0 ? (
+            <EmptyState
+              icon={faUserPlus}
+              title={`No ${activeTab} instructors`}
+              message={
+                activeTab === "active" 
+                  ? "Get started by adding your first instructor to the system."
+                  : activeTab === "pending"
+                  ? "No instructors are currently pending registration."
+                  : "No archived instructors found."
+              }
+              actionLabel={activeTab === "active" ? "Add Your First Instructor" : undefined}
+              onAction={activeTab === "active" ? () => setShowAddModal(true) : undefined}
+            />
           ) : (
             <div style={{ overflowX: "auto", borderRadius: 10, boxShadow: "0 4px 15px rgba(0,0,0,0.2)" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", background: "white", borderRadius: 10, overflow: "hidden" }}>
                 <thead style={{ background: "#0f2c63", color: "white" }}>
                   <tr>
-                    {["Instructor ID", "Name", "Email", "Contact Number", "Department", "Status", "Actions"].map((h) => (
-                      <th key={h} style={{ padding: 14, textAlign: "left", fontSize: 14, fontWeight: "700", whiteSpace: "nowrap" }}>
-                        {h === "Instructor ID" ? (
-                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                            {h}
-                            <span style={{ 
-                              fontSize: "10px", 
-                              color: "#f97316", 
-                              fontWeight: "500",
-                              background: "rgba(249, 115, 22, 0.1)",
-                              padding: "2px 6px",
-                              borderRadius: "4px"
-                            }}>
-                              Unique ID
-                            </span>
-                          </div>
-                        ) : h}
+                    {isSelectMode && (
+                      <th style={{ padding: 14, textAlign: "left", fontSize: 14, fontWeight: "700", width: "50px" }}>
+                        <FontAwesomeIcon icon={faSquare} style={{ color: "#9ca3af", fontSize: 16 }} />
                       </th>
-                    ))}
+                    )}
+                    <TableSortHeader
+                      sortKey="instructorId"
+                      currentSort={sortConfig}
+                      onSort={handleSort}
+                      style={{
+                        padding: 14,
+                        fontSize: 14,
+                        fontWeight: "700",
+                        whiteSpace: "nowrap",
+                        background: sortConfig.key === 'instructorId' ? 'rgba(255, 255, 255, 0.1)' : 'transparent'
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        Instructor ID
+                        <span style={{ 
+                          fontSize: "10px", 
+                          color: "#f97316", 
+                          fontWeight: "500",
+                          background: "rgba(249, 115, 22, 0.1)",
+                          padding: "2px 6px",
+                          borderRadius: "4px"
+                        }}>
+                          Unique ID
+                        </span>
+                      </div>
+                    </TableSortHeader>
+                    <TableSortHeader
+                      sortKey="name"
+                      currentSort={sortConfig}
+                      onSort={handleSort}
+                      style={{
+                        padding: 14,
+                        fontSize: 14,
+                        fontWeight: "700",
+                        whiteSpace: "nowrap",
+                        background: sortConfig.key === 'name' ? 'rgba(255, 255, 255, 0.1)' : 'transparent'
+                      }}
+                    >
+                      Name
+                    </TableSortHeader>
+                    <TableSortHeader
+                      sortKey="email"
+                      currentSort={sortConfig}
+                      onSort={handleSort}
+                      style={{
+                        padding: 14,
+                        fontSize: 14,
+                        fontWeight: "700",
+                        whiteSpace: "nowrap",
+                        background: sortConfig.key === 'email' ? 'rgba(255, 255, 255, 0.1)' : 'transparent'
+                      }}
+                    >
+                      Email
+                    </TableSortHeader>
+                    <TableSortHeader
+                      sortKey="contact"
+                      currentSort={sortConfig}
+                      onSort={handleSort}
+                      style={{
+                        padding: 14,
+                        fontSize: 14,
+                        fontWeight: "700",
+                        whiteSpace: "nowrap",
+                        background: sortConfig.key === 'contact' ? 'rgba(255, 255, 255, 0.1)' : 'transparent'
+                      }}
+                    >
+                      Contact Number
+                    </TableSortHeader>
+                    <TableSortHeader
+                      sortKey="department"
+                      currentSort={sortConfig}
+                      onSort={handleSort}
+                      style={{
+                        padding: 14,
+                        fontSize: 14,
+                        fontWeight: "700",
+                        whiteSpace: "nowrap",
+                        background: sortConfig.key === 'department' ? 'rgba(255, 255, 255, 0.1)' : 'transparent'
+                      }}
+                    >
+                      Department
+                    </TableSortHeader>
+                    <th style={{ padding: 14, textAlign: "left", fontSize: 14, fontWeight: "700", whiteSpace: "nowrap" }}>
+                      Status
+                    </th>
+                    <th style={{ padding: 14, textAlign: "left", fontSize: 14, fontWeight: "700", whiteSpace: "nowrap" }}>
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredInstructors.length === 0 ? (
                     <tr>
-                      <td colSpan={7} style={{ padding: 40, textAlign: "center", color: "#6b7280" }}>
+                      <td colSpan={isSelectMode ? 8 : 7} style={{ padding: 40, textAlign: "center", color: "#6b7280" }}>
                         No instructors found in this category.
                       </td>
                     </tr>
@@ -393,10 +836,39 @@ const FacultyManagement = () => {
                     filteredInstructors.map((inst) => (
                       <tr
                         key={inst._id}
-                        style={{ borderBottom: "1px solid #f1f5f9", transition: "background 0.2s ease" }}
-                        onMouseEnter={(e) => (e.currentTarget.style.background = "#f9fafb")}
-                        onMouseLeave={(e) => (e.currentTarget.style.background = "white")}
+                        style={{ 
+                          borderBottom: "1px solid #f1f5f9", 
+                          transition: "background 0.2s ease",
+                          background: selectedIds.has(inst._id) ? "#eff6ff" : "white"
+                        }}
+                        onMouseEnter={(e) => {
+                          if (!selectedIds.has(inst._id)) e.currentTarget.style.background = "#f9fafb";
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!selectedIds.has(inst._id)) e.currentTarget.style.background = "white";
+                        }}
                       >
+                        {isSelectMode && (
+                          <td style={{ padding: 14 }}>
+                            <button
+                              onClick={() => handleToggleSelect(inst._id)}
+                              style={{
+                                background: "transparent",
+                                border: "none",
+                                cursor: "pointer",
+                                padding: 0,
+                              }}
+                            >
+                              <FontAwesomeIcon
+                                icon={selectedIds.has(inst._id) ? faCheckSquare : faSquare}
+                                style={{ 
+                                  fontSize: 18, 
+                                  color: selectedIds.has(inst._id) ? "#3b82f6" : "#9ca3af" 
+                                }}
+                              />
+                            </button>
+                          </td>
+                        )}
                         <td style={{ padding: 14, fontSize: 14, fontWeight: "600", color: "#0f2c63" }}>
                           {inst.instructorId && inst.instructorId.trim() !== "" ? (
                             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -630,38 +1102,16 @@ const FacultyManagement = () => {
         </form>
       </Modal>
 
-      {/* Confirm Modal */}
-      <Modal
-        show={confirmModal.show}
-        onClose={confirmModal.onCancel}
-        title={confirmModal.title}
-        actions={
-          <>
-            <button onClick={confirmModal.onCancel} style={btnStyle("#6b7280")}>
-              Cancel
-            </button>
-            <button onClick={confirmModal.onConfirm} style={btnStyle("#dc2626")}>
-              Confirm
-            </button>
-          </>
-        }
-      >
-        <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6 }}>{confirmModal.message}</p>
-      </Modal>
-
-      {/* Alert Modal */}
-      <Modal
-        show={alertModal.show}
-        onClose={() => setAlertModal({ show: false, message: "" })}
-        title="Notification"
-        actions={
-          <button onClick={() => setAlertModal({ show: false, message: "" })} style={btnStyle("#2563eb")}>
-            OK
-          </button>
-        }
-      >
-        <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6, whiteSpace: "pre-line" }}>{alertModal.message}</p>
-      </Modal>
+      {/* Confirmation Dialog */}
+      <ConfirmationDialog
+        show={confirmDialog.show}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        onConfirm={confirmDialog.onConfirm || (() => {})}
+        onCancel={() => setConfirmDialog({ show: false, title: "", message: "", onConfirm: null, destructive: false })}
+        destructive={confirmDialog.destructive}
+        confirmText={confirmDialog.destructive ? "Delete" : "Confirm"}
+      />
     </div>
   );
 };

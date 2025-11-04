@@ -3,6 +3,7 @@ import Admin from "../models/Admin.js";
 import Room from '../models/Room.js';
 import Alert from '../models/Alert.js';
 import InstructorNotification from '../models/InstructorNotification.js';
+import bcrypt from 'bcryptjs';
 
 const router = express.Router();
 
@@ -34,11 +35,22 @@ router.post("/login", async (req, res) => {
       });
     }
 
-    if (password.trim() === admin.password.trim()) {
-      return res.json({ 
-        success: true, 
-        message: "Login successful!" 
-      });
+    // Handle initial migration: if admin.password is not hashed, hash it on correct login, else use bcrypt
+    let isValid;
+    if (admin.password.length < 20) {
+      // Probably plaintext
+      isValid = (password.trim() === admin.password.trim());
+      if (isValid) {
+        // Upgrade/migrate to hashed password
+        const hash = await bcrypt.hash(password, 10);
+        admin.password = hash;
+        await admin.save();
+      }
+    } else {
+      isValid = await bcrypt.compare(password, admin.password);
+    }
+    if (isValid) {
+      return res.json({ success: true, message: "Login successful!" });
     } else {
       return res.status(401).json({ 
         success: false, 
@@ -70,9 +82,13 @@ router.get('/alerts', async (req, res) => {
   }
 });
 
-// GET /api/admin/activity - Get all activities (admin alerts + instructor notifications)
+// GET /api/admin/activity - Get all activities (admin alerts + instructor notifications) with pagination
 router.get('/activity', async (req, res) => {
   try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 50;
+    const skip = (page - 1) * limit;
+
     const [alerts, instructorNotifs] = await Promise.all([
       Alert.find({}).sort({ createdAt: -1 }).lean(),
       InstructorNotification.find({}).sort({ createdAt: -1 }).lean(),
@@ -97,10 +113,94 @@ router.get('/activity', async (req, res) => {
       })),
     ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
-    res.json({ success: true, activities: normalized });
+    const total = normalized.length;
+    const paginated = normalized.slice(skip, skip + limit);
+
+    res.json({ 
+      success: true, 
+      activities: paginated,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+        hasNext: page < Math.ceil(total / limit),
+        hasPrev: page > 1
+      }
+    });
   } catch (err) {
     console.error('Failed to fetch activity:', err);
     res.status(500).json({ success: false, message: 'Server error while fetching activity' });
+  }
+});
+
+// Unified search (rooms, instructors, schedules) with pagination
+router.get('/search', async (req, res) => {
+  try {
+    const q = String(req.query.q || '').trim();
+    if (!q) return res.json({ rooms: [], instructors: [], schedules: [], pagination: { rooms: {}, instructors: {}, schedules: {} } });
+
+    const regex = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    
+    // Pagination parameters
+    const roomsPage = parseInt(req.query.roomsPage) || 1;
+    const instructorsPage = parseInt(req.query.instructorsPage) || 1;
+    const schedulesPage = parseInt(req.query.schedulesPage) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const roomsSkip = (roomsPage - 1) * limit;
+    const instructorsSkip = (instructorsPage - 1) * limit;
+    const schedulesSkip = (schedulesPage - 1) * limit;
+
+    const [RoomModel, InstructorModel, ScheduleModel] = await Promise.all([
+      import('../models/Room.js').then(m => m.default),
+      import('../models/Instructor.js').then(m => m.default),
+      import('../models/Schedule.js').then(m => m.default),
+    ]);
+
+    // Get counts and paginated results
+    const [roomsCount, instructorsCount, schedulesCount, rooms, instructors, schedules] = await Promise.all([
+      RoomModel.countDocuments({ $or: [{ room: regex }, { area: regex }, { status: regex }] }),
+      InstructorModel.countDocuments({ $or: [ { firstname: regex }, { lastname: regex }, { email: regex }, { department: regex } ] }),
+      ScheduleModel.countDocuments({ $or: [ { subject: regex }, { course: regex }, { section: regex }, { room: regex }, { day: regex } ] }),
+      RoomModel.find({ $or: [{ room: regex }, { area: regex }, { status: regex }] }).skip(roomsSkip).limit(limit).lean(),
+      InstructorModel.find({ $or: [ { firstname: regex }, { lastname: regex }, { email: regex }, { department: regex } ] }).skip(instructorsSkip).limit(limit).lean(),
+      ScheduleModel.find({ $or: [ { subject: regex }, { course: regex }, { section: regex }, { room: regex }, { day: regex } ] }).skip(schedulesSkip).limit(limit).lean(),
+    ]);
+
+    res.json({ 
+      rooms, 
+      instructors, 
+      schedules,
+      pagination: {
+        rooms: {
+          page: roomsPage,
+          limit,
+          total: roomsCount,
+          totalPages: Math.ceil(roomsCount / limit),
+          hasNext: roomsPage < Math.ceil(roomsCount / limit),
+          hasPrev: roomsPage > 1
+        },
+        instructors: {
+          page: instructorsPage,
+          limit,
+          total: instructorsCount,
+          totalPages: Math.ceil(instructorsCount / limit),
+          hasNext: instructorsPage < Math.ceil(instructorsCount / limit),
+          hasPrev: instructorsPage > 1
+        },
+        schedules: {
+          page: schedulesPage,
+          limit,
+          total: schedulesCount,
+          totalPages: Math.ceil(schedulesCount / limit),
+          hasNext: schedulesPage < Math.ceil(schedulesCount / limit),
+          hasPrev: schedulesPage > 1
+        }
+      }
+    });
+  } catch (err) {
+    console.error('Search failed:', err);
+    res.status(500).json({ rooms: [], instructors: [], schedules: [], pagination: { rooms: {}, instructors: {}, schedules: {} } });
   }
 });
 

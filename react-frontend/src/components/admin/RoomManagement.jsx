@@ -15,15 +15,22 @@ import {
   faTools
 } from '@fortawesome/free-solid-svg-icons';
 import axios from 'axios';
+import { useToast } from '../common/ToastProvider.jsx';
+import ConfirmationDialog from '../common/ConfirmationDialog.jsx';
+import { SkeletonCard } from '../common/SkeletonLoader.jsx';
+import EmptyState from '../common/EmptyState.jsx';
 
 const RoomManagement = () => {
+  const { showToast } = useToast();
   const [showAddRoomPopup, setShowAddRoomPopup] = useState(false);
   const [rooms, setRooms] = useState([]);
   const [loadingRooms, setLoadingRooms] = useState(true);
   const [roomError, setRoomError] = useState(null);
-  const [popup, setPopup] = useState({ show: false, message: '', type: '' });
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [areaFilter, setAreaFilter] = useState('all');
+  const [sortConfig, setSortConfig] = useState({ key: 'room', direction: 'asc' });
+  const [confirmDialog, setConfirmDialog] = useState({ show: false, title: '', message: '', onConfirm: null, destructive: false });
 
   // Add Room form state
   const [newRoom, setNewRoom] = useState({ room: '', area: '', status: 'available' });
@@ -33,11 +40,6 @@ const RoomManagement = () => {
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [showEditRoomPopup, setShowEditRoomPopup] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
-
-  // Delete room popup state
-  const [showDeleteRoomPopup, setShowDeleteRoomPopup] = useState(false);
-  const [roomToDelete, setRoomToDelete] = useState(null);
-  const [deleteLoading, setDeleteLoading] = useState(false);
 
   // Fetch rooms from backend
   const fetchRooms = async () => {
@@ -58,6 +60,13 @@ const RoomManagement = () => {
       setLoadingRooms(false);
     }
   };
+
+  // Initialize search from URL query (?q=)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const q = params.get('q');
+    if (q) setSearchQuery(q);
+  }, []);
 
   useEffect(() => {
     fetchRooms();
@@ -81,19 +90,18 @@ const RoomManagement = () => {
     try {
       const res = await axios.post('http://localhost:5000/api/rooms', newRoom);
       if (res.data.success) {
-        setPopup({ show: true, message: 'Room added successfully!', type: 'success' });
+        showToast('Room added successfully!', 'success');
         setShowAddRoomPopup(false);
         setNewRoom({ room: '', area: '', status: 'available' });
         fetchRooms();
       } else {
-        setPopup({ show: true, message: res.data.message || 'Failed to add room', type: 'error' });
+        showToast(res.data.message || 'Failed to add room', 'error');
       }
     } catch (err) {
       console.error('Add room failed:', err);
-      setPopup({ show: true, message: 'Server error while adding room.', type: 'error' });
+      showToast('Server error while adding room.', 'error');
     }
     setAddLoading(false);
-    setTimeout(() => setPopup({ show: false, message: '', type: '' }), 3000);
   };
 
   // Edit Room handlers
@@ -110,55 +118,73 @@ const RoomManagement = () => {
     try {
       const res = await axios.put(`http://localhost:5000/api/rooms/${selectedRoom._id}`, selectedRoom);
       if (res.data.success) {
-        setPopup({ show: true, message: 'Room updated successfully!', type: 'success' });
+        showToast('Room updated successfully!', 'success');
         setShowEditRoomPopup(false);
         fetchRooms();
       } else {
-        setPopup({ show: true, message: res.data.message || 'Failed to update room', type: 'error' });
+        showToast(res.data.message || 'Failed to update room', 'error');
       }
     } catch (err) {
       console.error('Update room failed:', err);
-      setPopup({ show: true, message: 'Server error while updating room.', type: 'error' });
+      showToast('Server error while updating room.', 'error');
     }
     setEditLoading(false);
-    setTimeout(() => setPopup({ show: false, message: '', type: '' }), 3000);
   };
 
   // Delete Room handlers
-  const openDeleteRoomPopup = () => {
-    setRoomToDelete(null);
-    setShowDeleteRoomPopup(true);
-  };
-  const handleDeleteRoom = async () => {
-    if (!roomToDelete) {
-      setPopup({ show: true, message: 'Please select a room to delete.', type: 'error' });
-      setTimeout(() => setPopup({ show: false, message: '', type: '' }), 3000);
-      return;
-    }
-    setDeleteLoading(true);
-    try {
-      const res = await axios.delete(`http://localhost:5000/api/rooms/${roomToDelete._id}`);
-      if (res.data.success) {
-        setPopup({ show: true, message: 'Room deleted successfully!', type: 'success' });
-        setShowDeleteRoomPopup(false);
-        fetchRooms();
-      } else {
-        setPopup({ show: true, message: res.data.message || 'Failed to delete room', type: 'error' });
-      }
-    } catch (err) {
-      console.error('Delete room failed:', err);
-      setPopup({ show: true, message: 'Server error while deleting room.', type: 'error' });
-    }
-    setDeleteLoading(false);
-    setTimeout(() => setPopup({ show: false, message: '', type: '' }), 3000);
+  const handleDeleteRoom = (room) => {
+    setConfirmDialog({
+      show: true,
+      title: 'Delete Room',
+      message: `Are you sure you want to delete room "${room.room}"? This action cannot be undone.`,
+      onConfirm: async () => {
+        try {
+          const res = await axios.delete(`http://localhost:5000/api/rooms/${room._id}`);
+          if (res.data.success) {
+            showToast('Room deleted successfully!', 'success');
+            fetchRooms();
+          } else {
+            showToast(res.data.message || 'Failed to delete room', 'error');
+          }
+        } catch (err) {
+          console.error('Delete room failed:', err);
+          showToast('Server error while deleting room.', 'error');
+        }
+        setConfirmDialog({ show: false, title: '', message: '', onConfirm: null, destructive: false });
+      },
+      destructive: true,
+    });
   };
 
-  // Filter rooms based on search and status
-  const filteredRooms = rooms.filter(room => {
+  // Get unique areas for filter
+  const areas = [...new Set(rooms.map(room => room.area).filter(Boolean))].sort();
+
+  // Filter and sort rooms
+  let filteredRooms = rooms.filter(room => {
     const matchesSearch = room.room.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          room.area.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = statusFilter === 'all' || room.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    const matchesArea = areaFilter === 'all' || room.area === areaFilter;
+    return matchesSearch && matchesStatus && matchesArea;
+  });
+
+  // Sort rooms
+  filteredRooms = [...filteredRooms].sort((a, b) => {
+    let aValue = a[sortConfig.key];
+    let bValue = b[sortConfig.key];
+
+    if (typeof aValue === 'string') {
+      aValue = aValue.toLowerCase();
+      bValue = (bValue || '').toLowerCase();
+    }
+
+    if (aValue < bValue) {
+      return sortConfig.direction === 'asc' ? -1 : 1;
+    }
+    if (aValue > bValue) {
+      return sortConfig.direction === 'asc' ? 1 : -1;
+    }
+    return 0;
   });
 
   const getStatusIcon = (status) => {
@@ -186,32 +212,7 @@ const RoomManagement = () => {
         <main className="main-content" style={{ flex: 1, padding: '1rem', overflowY: 'auto' }}>
           <Header title="Room Management" />
 
-          {/* Popup for success/error messages */}
-          {popup.show && (
-            <div
-              style={{
-                position: 'fixed',
-                top: '20px',
-                right: '20px',
-                backgroundColor: popup.type === 'success' ? '#d1fae5' : '#fee2e2',
-                color: popup.type === 'success' ? '#065f46' : '#991b1b',
-                border: `2px solid ${popup.type === 'success' ? '#10b981' : '#f87171'}`,
-                padding: '16px 24px',
-                borderRadius: '12px',
-                boxShadow: '0 8px 20px rgba(0,0,0,0.15)',
-                fontWeight: '600',
-                zIndex: 10000,
-                minWidth: '280px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                fontSize: '15px',
-              }}
-            >
-              <FontAwesomeIcon icon={popup.type === 'success' ? faCheckCircle : faExclamationTriangle} />
-              {popup.message}
-            </div>
-          )}
+          {/* Popup removed - using Toast system now */}
 
           <div className="dashboard-content">
             {/* Welcome Section */}
@@ -268,35 +269,12 @@ const RoomManagement = () => {
                     <FontAwesomeIcon icon={faPlus} />
                     Add Room
                   </button>
-                  <button
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      padding: '12px 20px',
-                      background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '10px',
-                      cursor: 'pointer',
-                      fontSize: '15px',
-                      fontWeight: '600',
-                      transition: 'all 0.3s ease',
-                      boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)',
-                    }}
-                    onClick={openDeleteRoomPopup}
-                    onMouseOver={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
-                    onMouseOut={(e) => e.currentTarget.style.transform = 'translateY(0)'}
-                  >
-                    <FontAwesomeIcon icon={faTrash} />
-                    Delete Room
-                  </button>
                 </div>
               </div>
 
               {/* Search and Filter */}
-              <div style={{ display: 'flex', gap: '16px', marginTop: '20px' }}>
-                <div style={{ flex: 1, position: 'relative' }}>
+              <div style={{ display: 'flex', gap: '12px', marginTop: '20px', flexWrap: 'wrap' }}>
+                <div style={{ flex: 1, position: 'relative', minWidth: '250px' }}>
                   <FontAwesomeIcon 
                     icon={faSearch} 
                     style={{ 
@@ -336,7 +314,8 @@ const RoomManagement = () => {
                     fontSize: '15px',
                     fontWeight: '500',
                     cursor: 'pointer',
-                    minWidth: '180px',
+                    minWidth: '160px',
+                    background: '#fff'
                   }}
                 >
                   <option value="all">All Status</option>
@@ -344,20 +323,62 @@ const RoomManagement = () => {
                   <option value="occupied">Occupied</option>
                   <option value="maintenance">Maintenance</option>
                 </select>
+                <select
+                  value={areaFilter}
+                  onChange={(e) => setAreaFilter(e.target.value)}
+                  style={{
+                    padding: '12px 16px',
+                    border: '2px solid #e5e7eb',
+                    borderRadius: '10px',
+                    fontSize: '15px',
+                    fontWeight: '500',
+                    cursor: 'pointer',
+                    minWidth: '160px',
+                    background: '#fff'
+                  }}
+                >
+                  <option value="all">All Areas</option>
+                  {areas.map(area => (
+                    <option key={area} value={area}>{area}</option>
+                  ))}
+                </select>
+                <select
+                  value={`${sortConfig.key}-${sortConfig.direction}`}
+                  onChange={(e) => {
+                    const [key, direction] = e.target.value.split('-');
+                    setSortConfig({ key, direction });
+                  }}
+                  style={{
+                    padding: '12px 16px',
+                    border: '2px solid #e5e7eb',
+                    borderRadius: '10px',
+                    fontSize: '15px',
+                    fontWeight: '500',
+                    cursor: 'pointer',
+                    minWidth: '160px',
+                    background: '#fff'
+                  }}
+                >
+                  <option value="room-asc">Sort: Room (A-Z)</option>
+                  <option value="room-desc">Sort: Room (Z-A)</option>
+                  <option value="area-asc">Sort: Area (A-Z)</option>
+                  <option value="area-desc">Sort: Area (Z-A)</option>
+                  <option value="status-asc">Sort: Status (A-Z)</option>
+                  <option value="status-desc">Sort: Status (Z-A)</option>
+                </select>
               </div>
             </div>
 
             {/* Rooms Grid */}
             {loadingRooms ? (
               <div style={{
-                background: '#fff',
-                padding: '60px 30px',
-                borderRadius: '18px',
-                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)',
-                textAlign: 'center',
-                borderLeft: '5px solid #f97316',
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+                gap: '24px',
               }}>
-                <p style={{ color: '#64748b', fontSize: '16px', margin: 0 }}>Loading rooms...</p>
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <SkeletonCard key={i} />
+                ))}
               </div>
             ) : roomError ? (
               <div style={{
@@ -372,24 +393,15 @@ const RoomManagement = () => {
                 <p style={{ color: '#991b1b', fontSize: '16px', margin: 0 }}>{roomError}</p>
               </div>
             ) : filteredRooms.length === 0 ? (
-              <div style={{
-                background: '#fff',
-                padding: '60px 30px',
-                borderRadius: '18px',
-                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)',
-                textAlign: 'center',
-                borderLeft: '5px solid #f97316',
-              }}>
-                <FontAwesomeIcon icon={faDoorOpen} style={{ fontSize: 48, color: '#f97316', marginBottom: '16px' }} />
-                <h3 style={{ color: '#1e293b', fontSize: '20px', fontWeight: '600', marginBottom: '8px' }}>
-                  No Rooms Found
-                </h3>
-                <p style={{ color: '#64748b', fontSize: '16px', margin: 0 }}>
-                  {searchQuery || statusFilter !== 'all' 
-                    ? 'Try adjusting your search or filter criteria' 
-                    : 'Start by adding a new room'}
-                </p>
-              </div>
+              <EmptyState
+                icon={faDoorOpen}
+                title={searchQuery || statusFilter !== 'all' ? 'No rooms found' : 'No rooms yet'}
+                message={searchQuery || statusFilter !== 'all'
+                  ? 'Try adjusting your search or filter criteria to find rooms.'
+                  : 'Get started by adding your first room to the system.'}
+                actionLabel={searchQuery || statusFilter !== 'all' ? undefined : 'Add Your First Room'}
+                onAction={searchQuery || statusFilter !== 'all' ? undefined : () => setShowAddRoomPopup(true)}
+              />
             ) : (
               <div style={{
                 display: 'grid',
@@ -484,16 +496,69 @@ const RoomManagement = () => {
                         position: 'absolute',
                         top: '16px',
                         right: '16px',
-                        width: '40px',
-                        height: '40px',
-                        borderRadius: '50%',
-                        background: 'rgba(59, 130, 246, 0.1)',
                         display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: '#3b82f6',
+                        gap: '8px',
                       }}>
-                        <FontAwesomeIcon icon={faEdit} style={{ fontSize: '16px' }} />
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigateToRoomDetails(room);
+                          }}
+                          style={{
+                            width: '36px',
+                            height: '36px',
+                            borderRadius: '50%',
+                            background: 'rgba(59, 130, 246, 0.1)',
+                            border: 'none',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: '#3b82f6',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                          }}
+                          onMouseOver={(e) => {
+                            e.currentTarget.style.background = 'rgba(59, 130, 246, 0.2)';
+                            e.currentTarget.style.transform = 'scale(1.1)';
+                          }}
+                          onMouseOut={(e) => {
+                            e.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)';
+                            e.currentTarget.style.transform = 'scale(1)';
+                          }}
+                          title="Edit Room"
+                        >
+                          <FontAwesomeIcon icon={faEdit} style={{ fontSize: '14px' }} />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteRoom(room);
+                          }}
+                          style={{
+                            width: '36px',
+                            height: '36px',
+                            borderRadius: '50%',
+                            background: 'rgba(239, 68, 68, 0.1)',
+                            border: 'none',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: '#ef4444',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                          }}
+                          onMouseOver={(e) => {
+                            e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)';
+                            e.currentTarget.style.transform = 'scale(1.1)';
+                          }}
+                          onMouseOut={(e) => {
+                            e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
+                            e.currentTarget.style.transform = 'scale(1)';
+                          }}
+                          title="Delete Room"
+                        >
+                          <FontAwesomeIcon icon={faTrash} style={{ fontSize: '14px' }} />
+                        </button>
                       </div>
                     </div>
                   );
@@ -848,122 +913,16 @@ const RoomManagement = () => {
         </div>
       )}
 
-      {/* Delete Room Popup Modal */}
-      {showDeleteRoomPopup && (
-        <div
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'rgba(0,0,0,0.6)',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            zIndex: 1000,
-            backdropFilter: 'blur(4px)',
-          }}
-          onClick={() => setShowDeleteRoomPopup(false)}
-        >
-          <div
-            style={{
-              background: 'white',
-              padding: '32px',
-              borderRadius: '18px',
-              width: '480px',
-              maxWidth: '90vw',
-              boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-              <h3 style={{ fontSize: '22px', fontWeight: '700', color: '#991b1b', margin: 0 }}>Delete Room</h3>
-              <button
-                onClick={() => setShowDeleteRoomPopup(false)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  fontSize: '24px',
-                  color: '#64748b',
-                  cursor: 'pointer',
-                  padding: '4px',
-                }}
-              >
-                <FontAwesomeIcon icon={faTimes} />
-              </button>
-            </div>
-
-            <p style={{ color: '#374151', fontSize: '15px', marginBottom: '20px' }}>
-              Please select a room to delete:
-            </p>
-
-            <select
-              value={roomToDelete ? roomToDelete._id : ''}
-              onChange={(e) => {
-                const selectedId = e.target.value;
-                const selected = rooms.find((r) => r._id === selectedId);
-                setRoomToDelete(selected || null);
-              }}
-              style={{ 
-                width: '100%', 
-                padding: '12px 16px',
-                border: '2px solid #e5e7eb',
-                borderRadius: '10px',
-                fontSize: '15px',
-                marginBottom: '24px',
-                cursor: 'pointer',
-              }}
-            >
-              <option value="" disabled>
-                -- Select a room --
-              </option>
-              {rooms.map((room) => (
-                <option key={room._id} value={room._id}>
-                  {room.room} ({room.area})
-                </option>
-              ))}
-            </select>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-              <button
-                type="button"
-                onClick={() => setShowDeleteRoomPopup(false)}
-                style={{ 
-                  padding: '12px 24px',
-                  border: '2px solid #e5e7eb',
-                  background: 'white',
-                  borderRadius: '10px',
-                  cursor: 'pointer',
-                  fontSize: '15px',
-                  fontWeight: '600',
-                  color: '#374151',
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleDeleteRoom}
-                disabled={deleteLoading || !roomToDelete}
-                style={{ 
-                  padding: '12px 24px',
-                  background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '10px',
-                  cursor: (deleteLoading || !roomToDelete) ? 'not-allowed' : 'pointer',
-                  fontSize: '15px',
-                  fontWeight: '600',
-                  opacity: (deleteLoading || !roomToDelete) ? 0.6 : 1,
-                }}
-              >
-                {deleteLoading ? 'Deleting...' : 'Delete Room'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Confirmation Dialog */}
+      <ConfirmationDialog
+        show={confirmDialog.show}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        onConfirm={confirmDialog.onConfirm || (() => {})}
+        onCancel={() => setConfirmDialog({ show: false, title: '', message: '', onConfirm: null, destructive: false })}
+        destructive={confirmDialog.destructive}
+        confirmText={confirmDialog.destructive ? "Delete" : "Confirm"}
+      />
     </>
   );
 };

@@ -3,6 +3,9 @@ import { Link, useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faEnvelope, faLock, faCalendarAlt, faRightToBracket, faCheckCircle, faTimes } from '@fortawesome/free-solid-svg-icons';
 import axios from 'axios';
+import ReCAPTCHA from 'react-google-recaptcha';
+
+const RECAPTCHA_SITE_KEY = '6LcxZ_wrAAAAADV8aWfxkks2Weu6DuHNYnGw7jnT';
 
 const InstructorLogin = () => {
   const [formData, setFormData] = useState({
@@ -13,6 +16,8 @@ const InstructorLogin = () => {
   const [error, setError] = useState('');
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [instructorName, setInstructorName] = useState('');
+  const [recaptchaToken, setRecaptchaToken] = useState('');
+  const [recaptchaError, setRecaptchaError] = useState('');
   const navigate = useNavigate();
 
   const handleChange = (e) => {
@@ -24,8 +29,17 @@ const InstructorLogin = () => {
     if (error) setError('');
   };
 
+  const handleRecaptcha = (token) => {
+    setRecaptchaToken(token);
+    setRecaptchaError('');
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!recaptchaToken) {
+      setRecaptchaError('Please complete the reCAPTCHA.');
+      return;
+    }
     setLoading(true);
     setError('');
 
@@ -271,9 +285,16 @@ const InstructorLogin = () => {
               </div>
             </div>
 
+            <ReCAPTCHA
+              sitekey={RECAPTCHA_SITE_KEY}
+              onChange={handleRecaptcha}
+              style={{ margin: '20px 0', alignSelf: 'center' }}
+            />
+            {recaptchaError && <div style={{ color:'#ef4444', marginBottom:10 }}>{recaptchaError}</div>}
+
             <button 
               type="submit" 
-              disabled={loading}
+              disabled={loading || !recaptchaToken}
               className="login-btn2 instructor-btn2"
               style={{
                 display: "flex",
@@ -355,10 +376,33 @@ const InstructorLogin = () => {
 
           <p className="signup-text2" style={{
             color: "#666",
-            fontSize: "14px"
+            fontSize: "14px",
+            marginBottom: "10px"
           }}>
             Don't have an account? <Link to="/instructor/signup" style={{ color: "#f97316", textDecoration: "none", fontWeight: "600" }}>Sign up here!</Link>
           </p>
+          
+          <Link 
+            to="/forgot-password?type=instructor"
+            style={{
+              color: "#0f2c63",
+              textDecoration: "none",
+              fontSize: "14px",
+              fontWeight: "600",
+              transition: "all 0.2s ease",
+              display: "inline-block"
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.color = "#f97316";
+              e.target.style.textDecoration = "underline";
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.color = "#0f2c63";
+              e.target.style.textDecoration = "none";
+            }}
+          >
+            Forgot Password?
+          </Link>
         </div>
       </div>
 

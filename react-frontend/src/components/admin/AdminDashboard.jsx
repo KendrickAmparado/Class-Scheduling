@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import Sidebar from '../common/Sidebar.jsx';
 import Header from '../common/Header.jsx';
 import axios from 'axios';
@@ -11,6 +11,10 @@ import {
   faTimesCircle,
   faExclamationTriangle,
   faArrowRight,
+  faCalendarPlus,
+  faTrash,
+  faUserPlus,
+  faLayerGroup,
 } from '@fortawesome/free-solid-svg-icons';
 
 const AdminDashboard = () => {
@@ -60,6 +64,18 @@ const AdminDashboard = () => {
         return <FontAwesomeIcon icon={faTimesCircle} style={{ color: '#b91c1c', fontSize: 18, marginTop: 2 }} />;
       case 'availability-update':
         return <FontAwesomeIcon icon={faCheckCircle} style={{ color: '#059669', fontSize: 18, marginTop: 2 }} />;
+      case 'schedule-created':
+        return <FontAwesomeIcon icon={faCalendarPlus} style={{ color: '#16a34a', fontSize: 18, marginTop: 2 }} />;
+      case 'schedule-deleted':
+        return <FontAwesomeIcon icon={faTrash} style={{ color: '#dc2626', fontSize: 18, marginTop: 2 }} />;
+      case 'section-created':
+        return <FontAwesomeIcon icon={faLayerGroup} style={{ color: '#2563eb', fontSize: 18, marginTop: 2 }} />;
+      case 'yearlevel-added':
+        return <FontAwesomeIcon icon={faLayerGroup} style={{ color: '#0ea5e9', fontSize: 18, marginTop: 2 }} />;
+      case 'instructor-added':
+        return <FontAwesomeIcon icon={faUserPlus} style={{ color: '#4f46e5', fontSize: 18, marginTop: 2 }} />;
+      case 'instructor-notification':
+        return <FontAwesomeIcon icon={faClipboardList} style={{ color: '#4f46e5', fontSize: 18, marginTop: 2 }} />;
       default:
         return <FontAwesomeIcon icon={faExclamationTriangle} style={{ color: '#dc2626', fontSize: 18, marginTop: 2 }} />;
     }

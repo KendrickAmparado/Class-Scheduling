@@ -1,141 +1,121 @@
 import express from 'express';
 import nodemailer from 'nodemailer';
 import Instructor from '../models/Instructor.js';
+import Schedule from '../models/Schedule.js';
 import dotenv from 'dotenv';
+import rateLimit from "express-rate-limit";
+import validator from 'validator';
+import axios from 'axios';
 
 dotenv.config();
 
 const router = express.Router();
 
-router.post('/send-registration', async (req, res) => {
-  const { email, department } = req.body;
+// Rate limiting: max 10 emails per 10 minutes per client
+const registerLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 10,
+  message: "Too many registration attempts. Please wait a bit."
+});
 
-  console.log('📧 Registration request received:', { email, department });
+router.post('/send-registration', registerLimiter, async (req, res) => {
+  let { email, department, recaptchaToken } = req.body;
 
-  if (!email) {
-    return res.status(400).json({ error: 'Email is required' });
-  }
-
-  if (!department) {
+  // Normalize emails
+  let emails = Array.isArray(email) ? email : [email];
+  emails = emails.map(e => (typeof e === 'string' ? e.trim().toLowerCase() : ''));
+  department = typeof department === 'string' ? department.trim() : '';
+  // Validate department
+  if (!department || validator.isEmpty(department)) {
     return res.status(400).json({ error: 'Department is required' });
   }
-
-  // ✅ Check EMAIL_USER and EMAIL_PASS
-  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-    console.error('❌ EMAIL_USER or EMAIL_PASS not configured in .env');
-    return res.status(500).json({ 
-      error: 'Email service not configured. Please contact administrator.' 
-    });
+  // Validate emails
+  for (let e of emails) {
+    if (!e || !validator.isEmail(e)) {
+      return res.status(400).json({ error: `Invalid email: ${e}` });
+    }
   }
+  // Verify reCAPTCHA if provided
+  if (recaptchaToken) {
+    try {
+      // Place your secret key here (not the site key)
+      const secretKey = process.env.RECAPTCHA_SECRET_KEY || 'YOUR_SECRET_KEY_HERE';
+      const verify = await axios.post('https://www.google.com/recaptcha/api/siteverify', null, {
+        params: { secret: secretKey, response: recaptchaToken },
+      });
+      if (!verify.data.success) {
+        return res.status(400).json({ error: 'reCAPTCHA verification failed.' });
+      }
+    } catch (err) {
+      return res.status(500).json({ error: 'Error during reCAPTCHA check.' });
+    }
+  }
+
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    return res.status(500).json({ error: 'Email service not configured. Please contact administrator.' });
+  }
+
+  const transporter = nodemailer.createTransport({
+    host: 'smtp.gmail.com',
+    port: 587,
+    secure: false,
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS,
+    },
+  });
 
   try {
-    // Check if instructor already exists
-    let existingInstructor = await Instructor.findOne({ email });
-    
-    if (existingInstructor && existingInstructor.status === 'active') {
-      return res.status(400).json({ 
-        error: 'An instructor with this email is already registered and active.' 
-      });
-    }
-
-    // Create or update instructor
-    if (!existingInstructor) {
-      const newInstructor = new Instructor({
-        email,
-        department,
-        status: 'pending',
-      });
-      await newInstructor.save();
-      console.log('✅ New instructor created:', { email, department });
-    } else {
-      existingInstructor.department = department;
-      existingInstructor.status = 'pending';
-      await existingInstructor.save();
-      console.log('✅ Existing instructor updated:', { email, department });
-    }
-
-    // Configure email
-    const transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 587,
-      secure: false,
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-    });
-
-    // Verify connection
     await transporter.verify();
-    console.log('✅ SMTP connection verified');
-
-    // Registration link with email AND department
-    const registrationLink = `http://localhost:3000/instructor/signup?email=${encodeURIComponent(email)}&department=${encodeURIComponent(department)}`;
-    
-    console.log('🔗 Registration link:', registrationLink);
-    
-    const mailOptions = {
-      from: `"Class Scheduling System" <${process.env.EMAIL_USER}>`,
-      to: email,
-      subject: 'Complete Your Instructor Registration',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9fafb; border-radius: 10px;">
-          <div style="background: linear-gradient(135deg, #0f2c63 0%, #1e40af 100%); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
-            <h1 style="color: #ffffff; margin: 0; font-size: 24px;">Class Scheduling System</h1>
-          </div>
-          <div style="background: white; padding: 30px; border-radius: 0 0 10px 10px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);">
-            <h2 style="color: #1e293b; margin-top: 0;">Welcome to ${department}!</h2>
-            <p style="color: #475569; font-size: 16px; line-height: 1.6;">
-              You have been invited to join the <strong>Class Scheduling System</strong> at Bukidnon State University as an instructor in the <strong>${department}</strong> department.
-            </p>
-            <p style="color: #475569; font-size: 16px; line-height: 1.6;">
-              Click the button below to complete your registration:
-            </p>
-            <div style="text-align: center; margin: 30px 0;">
-              <a href="${registrationLink}" 
-                 style="display: inline-block; padding: 14px 32px; background: linear-gradient(135deg, #0f2c63 0%, #1e40af 100%); color: white; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">
-                Complete Registration
-              </a>
-            </div>
-            <p style="color: #64748b; font-size: 14px;">
-              Or copy this link: <br/>
-              <span style="color: #3b82f6; word-break: break-all;">${registrationLink}</span>
-            </p>
-          </div>
-        </div>
-      `,
-    };
-
-    await transporter.sendMail(mailOptions);
-    console.log('✅ Email sent successfully to:', email);
-
-    res.json({ 
-      success: true, 
-      message: 'Registration email sent successfully.',
-      instructor: { email, department, status: 'pending' }
-    });
-
   } catch (err) {
-    console.error('❌ Registration error:', err);
-    
-    // Send specific error message
-    if (err.code === 'EAUTH') {
-      return res.status(500).json({ 
-        error: 'Email authentication failed. Please check EMAIL_USER and EMAIL_PASS in .env file.' 
-      });
-    }
-    
-    if (err.code === 'ECONNECTION') {
-      return res.status(500).json({ 
-        error: 'Cannot connect to email server. Please check your internet connection.' 
-      });
-    }
-    
-    res.status(500).json({ 
-      error: 'Failed to send registration email.',
-      details: err.message 
-    });
+    return res.status(500).json({ error: 'Failed to verify email connection' });
   }
+
+  let results = [];
+  for (let emailAddr of emails) {
+    try {
+      let existingInstructor = await Instructor.findOne({ email: emailAddr });
+      if (existingInstructor && existingInstructor.status === 'active') {
+        results.push({ email: emailAddr, status: 'failed', error: 'Already registered and active.' });
+        continue;
+      }
+      if (!existingInstructor) {
+        const newInstructor = new Instructor({ email: emailAddr, department, status: 'pending' });
+        await newInstructor.save();
+      } else {
+        existingInstructor.department = department;
+        existingInstructor.status = 'pending';
+        await existingInstructor.save();
+      }
+      const registrationLink = `http://localhost:3000/instructor/signup?email=${encodeURIComponent(emailAddr)}&department=${encodeURIComponent(department)}`;
+      const mailOptions = {
+        from: `"Class Scheduling System" <${process.env.EMAIL_USER}>`,
+        to: emailAddr,
+        subject: 'Complete Your Instructor Registration',
+        html: `Registration link: <a href="${registrationLink}">${registrationLink}</a>`
+      };
+      await transporter.sendMail(mailOptions);
+
+      // Check if this instructor has any schedule
+      let hasSchedule = false;
+      try {
+        // Try with the explicit instructorEmail field (most accurate)
+        const scheduleCount = await Schedule.countDocuments({ instructorEmail: emailAddr });
+        if (scheduleCount > 0) {
+          hasSchedule = true;
+        } else if (existingInstructor && existingInstructor.firstname && existingInstructor.lastname) {
+          // Fallback: try by instructor full name if modeled
+          const instructorName = `${existingInstructor.firstname} ${existingInstructor.lastname}`;
+          const scheduleCountByName = await Schedule.countDocuments({ instructor: instructorName });
+          if (scheduleCountByName > 0) hasSchedule = true;
+        }
+      } catch (err) {}
+      results.push({ email: emailAddr, status: 'success', hasSchedule });
+    } catch (err) {
+      results.push({ email: emailAddr, status: 'failed', error: err.message });
+    }
+  }
+  res.json({ results, total: results.length });
 });
 
 export default router;

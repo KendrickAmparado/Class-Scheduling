@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
@@ -9,15 +9,26 @@ import {
   faGraduationCap,
   faCode,
   faTimes,
-  faCheckCircle,
   faExclamationCircle,
   faClock,
   faUser,
-  faDoorOpen
+  faDoorOpen,
+  faCopy,
+  faFileImport,
+  faFileAlt,
+  faEdit,
+  faDownload,
+  faCalendar
 } from '@fortawesome/free-solid-svg-icons';
 import axios from 'axios';
 import Sidebar from '../common/Sidebar.jsx';
 import Header from '../common/Header.jsx';
+import { useToast } from '../common/ToastProvider.jsx';
+import ConfirmationDialog from '../common/ConfirmationDialog.jsx';
+import ConflictResolutionModal from './ConflictResolutionModal.jsx';
+import ScheduleTemplateManager from './ScheduleTemplateManager.jsx';
+import ScheduleImporter from './ScheduleImporter.jsx';
+import { downloadIcalFile, generateGoogleCalendarUrl } from '../../utils/icalExporter.js';
 
 // ============== SCHEDULE VALIDATION UTILITIES ==============
 const parseTime = (timeStr) => {
@@ -225,6 +236,7 @@ const checkScheduleConflicts = (newSchedule, existingSchedules) => {
 const ScheduleManagementDetails = () => {
   const { course, year } = useParams();
   const navigate = useNavigate();
+  const { showToast } = useToast();
 
   const formatYearParam = (yearParam) => {
     return yearParam.replace(/(\d+)(st|nd|rd|th)?year/i, '$1st year').toLowerCase();
@@ -240,9 +252,14 @@ const ScheduleManagementDetails = () => {
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(false);
   const [addingSchedule, setAddingSchedule] = useState(false);
-  const [notification, setNotification] = useState({ show: false, type: '', message: '' });
-  const [deleteConfirm, setDeleteConfirm] = useState({ open: false, scheduleId: null });
+  const [confirmDialog, setConfirmDialog] = useState({ show: false, title: '', message: '', onConfirm: null, destructive: false });
   const [conflictDetails, setConflictDetails] = useState(null);
+  const [pendingScheduleData, setPendingScheduleData] = useState(null);
+  const [showTemplateManager, setShowTemplateManager] = useState(false);
+  const [showImporter, setShowImporter] = useState(false);
+  const [showEditSchedulePopup, setShowEditSchedulePopup] = useState(false);
+  const [scheduleToEdit, setScheduleToEdit] = useState(null);
+  const [editingSchedule, setEditingSchedule] = useState(false);
 
   const courseDetails = {
     bsit: {
@@ -263,24 +280,7 @@ const ScheduleManagementDetails = () => {
     return yearParam.replace(/(\d+)/, '$1 ').replace(/([a-z])([A-Z])/g, '$1 $2');
   };
 
-  useEffect(() => {
-    fetchData();
-
-    // Auto-refresh every 30 seconds
-    const autoRefreshInterval = setInterval(fetchData, 30000);
-
-    return () => {
-      clearInterval(autoRefreshInterval);
-    };
-  }, [course, normalizedYear]);
-
-  useEffect(() => {
-    if (sections.length > 0 && !selectedSection) {
-      setSelectedSection(sections[0]);
-    }
-  }, [sections, selectedSection]);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const [sectionsRes, schedulesRes, instructorsRes, roomsRes] = await Promise.all([
@@ -290,9 +290,7 @@ const ScheduleManagementDetails = () => {
         axios.get('http://localhost:5000/api/admin/rooms')
       ]);
   
-      console.log('Sections fetched:', sectionsRes.data);
-      console.log('Schedules fetched:', schedulesRes.data);
-      console.log('Instructors fetched:', instructorsRes.data); // ✅ Check what you're getting
+      // Data fetched successfully
   
       const sortedSections = (Array.isArray(sectionsRes.data) ? sectionsRes.data : []).sort((a, b) =>
         a.name.localeCompare(b.name)
@@ -334,24 +332,88 @@ const ScheduleManagementDetails = () => {
         setRooms([]);
       }
   
-      console.log('✅ Instructors processed:', instructors.length); // Debug log
-      console.log('✅ Rooms processed:', rooms.length); // Debug log
+      // Debug logs removed to avoid dependency warnings
     } catch (error) {
-      showNotification('error', 'Error fetching data.');
+      showToast('Error fetching data.', 'error');
       console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
     }
+  }, [course, normalizedYear, showToast]);
+
+  useEffect(() => {
+    fetchData();
+
+    // Auto-refresh every 30 seconds
+    const autoRefreshInterval = setInterval(fetchData, 30000);
+
+    return () => {
+      clearInterval(autoRefreshInterval);
+    };
+  }, [fetchData]);
+
+  useEffect(() => {
+    if (sections.length > 0 && !selectedSection) {
+      setSelectedSection(sections[0]);
+    }
+  }, [sections, selectedSection]);
+  
+  const getSectionSchedules = useCallback((sectionName) => {
+    return schedules.filter(sched => sched.section === sectionName);
+  }, [schedules]);
+
+  const handleExportToIcal = () => {
+    if (!selectedSection) {
+      showToast('Please select a section first', 'warning');
+      return;
+    }
+    
+    const sectionSchedules = getSectionSchedules(selectedSection.name);
+    if (sectionSchedules.length === 0) {
+      showToast('No schedules to export', 'warning');
+      return;
+    }
+    
+    try {
+      const filename = `${course}-${year}-${selectedSection.name}-schedule`;
+      const calendarName = `${course.toUpperCase()} ${year} - Section ${selectedSection.name} Schedule`;
+      
+      downloadIcalFile(sectionSchedules, filename, {
+        calendarName,
+        courseName: course,
+        sectionName: selectedSection.name
+      });
+      
+      showToast('Schedule exported to iCal file successfully!', 'success');
+    } catch (error) {
+      console.error('Error exporting to iCal:', error);
+      showToast(error.message || 'Failed to export schedule. Please check the schedule data.', 'error');
+    }
   };
   
-
-  const showNotification = (type, message) => {
-    setNotification({ show: true, type, message });
-    setTimeout(() => setNotification({ show: false, type: '', message: '' }), 5000);
-  };
-
-  const getSectionSchedules = (sectionName) => {
-    return schedules.filter(sched => sched.section === sectionName);
+  const handleExportToGoogleCalendar = () => {
+    if (!selectedSection) {
+      showToast('Please select a section first', 'warning');
+      return;
+    }
+    
+    const sectionSchedules = getSectionSchedules(selectedSection.name);
+    if (sectionSchedules.length === 0) {
+      showToast('No schedules to export', 'warning');
+      return;
+    }
+    
+    // For multiple schedules, export the first one as example
+    // In a real scenario, you might want to create a combined calendar
+    if (sectionSchedules.length > 0) {
+      const url = generateGoogleCalendarUrl(sectionSchedules[0]);
+      if (url) {
+        window.open(url, '_blank');
+        showToast('Opening Google Calendar...', 'info');
+      } else {
+        showToast('Could not generate Google Calendar URL', 'error');
+      }
+    }
   };
 
   const handleAddSchedule = async (e) => {
@@ -365,8 +427,7 @@ const ScheduleManagementDetails = () => {
     const selectedInstructor = instructors.find(inst => inst.name === instructorName);
     const instructorEmail = selectedInstructor ? selectedInstructor.email : '';
     
-    console.log('🔍 Creating schedule for instructor:', instructorName);
-    console.log('🔍 Instructor email:', instructorEmail);
+    // Creating schedule for instructor
     
     const scheduleData = {
       course,
@@ -392,7 +453,7 @@ const ScheduleManagementDetails = () => {
     );
     
     if (!sessionCheck.valid) {
-      showNotification('error', sessionCheck.message);
+      showToast(sessionCheck.message, 'error');
       setAddingSchedule(false);
       return;
     }
@@ -405,43 +466,239 @@ const ScheduleManagementDetails = () => {
 
     if (hasConflicts) {
       setConflictDetails(conflicts);
+      setPendingScheduleData(scheduleData);
       setAddingSchedule(false);
       return;
     }
 
+    // No conflicts, proceed with creation
+    await submitSchedule(scheduleData, e.target);
+  };
+
+  const submitSchedule = async (scheduleData, formElement = null) => {
     try {
       const res = await axios.post('http://localhost:5000/api/schedule/create', scheduleData);
       if (res.data.success) {
-        showNotification('success', 'Schedule added successfully!');
+        showToast('Schedule added successfully!', 'success');
         setShowAddSchedulePopup(false);
+        setConflictDetails(null);
+        setPendingScheduleData(null);
         await fetchData();
-        e.target.reset();
+        if (formElement) formElement.reset();
       } else {
-        showNotification('error', res.data.message || 'Failed to add schedule.');
+        showToast(res.data.message || 'Failed to add schedule.', 'error');
       }
     } catch (error) {
-      showNotification('error', 'Error adding schedule.');
+      if (error.response?.status === 409) {
+        showToast(error.response.data.message || 'Schedule conflict detected.', 'error');
+      } else {
+        showToast('Error adding schedule.', 'error');
+      }
       console.error('Error adding schedule:', error);
     } finally {
       setAddingSchedule(false);
     }
   };
 
-  const handleDeleteSchedule = async () => {
+  const handleConflictProceed = async () => {
+    if (pendingScheduleData) {
+      await submitSchedule(pendingScheduleData);
+    }
+  };
+
+  const handleConflictModify = () => {
+    setConflictDetails(null);
+    setPendingScheduleData(null);
+    // Keep the form open so user can modify
+  };
+
+  const handleConflictCancel = () => {
+    setConflictDetails(null);
+    setPendingScheduleData(null);
+    setShowAddSchedulePopup(false);
+  };
+
+  const handleDeleteSchedule = (scheduleId) => {
+    setConfirmDialog({
+      show: true,
+      title: 'Delete Schedule',
+      message: 'Are you sure you want to delete this schedule? This action cannot be undone.',
+      onConfirm: async () => {
+        try {
+          const res = await axios.delete(`http://localhost:5000/api/schedule/${scheduleId}`);
+          if (res.data.success) {
+            showToast('Schedule deleted successfully.', 'success');
+            await fetchData();
+          } else {
+            showToast(res.data.message || 'Failed to delete schedule.', 'error');
+          }
+        } catch (error) {
+          showToast('Error deleting schedule.', 'error');
+          console.error('Error deleting schedule:', error);
+        }
+        setConfirmDialog({ show: false, title: '', message: '', onConfirm: null, destructive: false });
+      },
+      destructive: true,
+    });
+  };
+
+  const handleDuplicateSchedule = async (schedule) => {
     try {
-      const res = await axios.delete(`http://localhost:5000/api/schedule/${deleteConfirm.scheduleId}`);
+      // Prepare schedule data for duplication
+      const scheduleData = {
+        course: schedule.course,
+        year: schedule.year,
+        section: schedule.section,
+        subject: `${schedule.subject} (Copy)`,
+        day: schedule.day,
+        time: schedule.time,
+        instructor: schedule.instructor,
+        room: schedule.room,
+      };
+
+      // Add instructor email if available
+      const selectedInstructor = instructors.find(inst => inst.name === schedule.instructor);
+      if (selectedInstructor?.email) {
+        scheduleData.instructorEmail = selectedInstructor.email;
+      }
+
+      // Check for conflicts first
+      const conflicts = checkScheduleConflicts(scheduleData, schedules);
+      const hasConflicts = conflicts.instructor.length > 0 || 
+                          conflicts.room.length > 0 || 
+                          conflicts.section.length > 0;
+
+      if (hasConflicts) {
+        setConflictDetails(conflicts);
+        setPendingScheduleData(scheduleData);
+        return;
+      }
+
+      // No conflicts, proceed with duplication
+      await submitSchedule(scheduleData);
+    } catch (error) {
+      showToast('Error duplicating schedule.', 'error');
+      console.error('Error duplicating schedule:', error);
+    }
+  };
+
+  const handleEditClick = (schedule) => {
+    setScheduleToEdit(schedule);
+    setShowEditSchedulePopup(true);
+  };
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    setEditingSchedule(true);
+
+    const formData = new FormData(e.target);
+    const instructorName = formData.get('instructor');
+    
+    // Find instructor email from the instructor name
+    const selectedInstructor = instructors.find(inst => inst.name === instructorName);
+    const instructorEmail = selectedInstructor ? selectedInstructor.email : '';
+    
+    const scheduleData = {
+      course: scheduleToEdit.course,
+      year: scheduleToEdit.year,
+      section: scheduleToEdit.section,
+      subject: formData.get('subject'),
+      day: formData.get('day'),
+      time: `${formData.get('startTime')} - ${formData.get('endTime')}`,
+      instructor: instructorName,
+      room: formData.get('room')
+    };
+    
+    // Add instructorEmail if found
+    if (instructorEmail) {
+      scheduleData.instructorEmail = instructorEmail;
+    }
+
+    try {
+      const res = await axios.put(`http://localhost:5000/api/schedule/${scheduleToEdit._id}`, scheduleData);
       if (res.data.success) {
-        showNotification('success', 'Schedule deleted successfully.');
+        showToast('Schedule updated successfully!', 'success');
+        setShowEditSchedulePopup(false);
+        setScheduleToEdit(null);
         await fetchData();
       } else {
-        showNotification('error', res.data.message || 'Failed to delete schedule.');
+        showToast(res.data.message || 'Failed to update schedule.', 'error');
       }
     } catch (error) {
-      showNotification('error', 'Error deleting schedule.');
-      console.error('Error deleting schedule:', error);
+      if (error.response?.status === 409) {
+        showToast(error.response.data.message || 'Schedule conflict detected.', 'error');
+      } else {
+        showToast('Error updating schedule.', 'error');
+      }
+      console.error('Error updating schedule:', error);
+    } finally {
+      setEditingSchedule(false);
     }
-    setDeleteConfirm({ open: false, scheduleId: null });
   };
+
+  const handleApplyTemplate = useCallback(async (template) => {
+    if (!selectedSection) {
+      showToast('Please select a section first.', 'error');
+      return;
+    }
+
+    if (!template.schedules || template.schedules.length === 0) {
+      showToast('Template has no schedules.', 'error');
+      return;
+    }
+
+    try {
+      const sectionSchedules = getSectionSchedules(selectedSection.name);
+      let successCount = 0;
+      let conflictCount = 0;
+
+      for (const templateSchedule of template.schedules) {
+        const scheduleData = {
+          course,
+          year: normalizedYear,
+          section: selectedSection.name,
+          subject: templateSchedule.subject,
+          day: templateSchedule.day,
+          time: templateSchedule.time,
+          instructor: templateSchedule.instructor,
+          room: templateSchedule.room,
+        };
+
+        // Add instructor email if available
+        const selectedInstructor = instructors.find(inst => inst.name === templateSchedule.instructor);
+        if (selectedInstructor?.email) {
+          scheduleData.instructorEmail = selectedInstructor.email;
+        }
+
+        // Check for conflicts
+        const conflicts = checkScheduleConflicts(scheduleData, [...schedules, ...sectionSchedules]);
+        const hasConflicts = conflicts.instructor.length > 0 || 
+                            conflicts.room.length > 0 || 
+                            conflicts.section.length > 0;
+
+        if (!hasConflicts) {
+          try {
+            await axios.post('http://localhost:5000/api/schedule/create', scheduleData);
+            successCount++;
+          } catch (error) {
+            conflictCount++;
+          }
+        } else {
+          conflictCount++;
+        }
+      }
+
+      if (successCount > 0) {
+        showToast(`Template applied: ${successCount} schedule(s) added${conflictCount > 0 ? `, ${conflictCount} skipped due to conflicts` : ''}.`, 'success');
+        await fetchData();
+      } else {
+        showToast('No schedules could be applied. All conflicts detected.', 'error');
+      }
+    } catch (error) {
+      showToast('Error applying template.', 'error');
+      console.error('Error applying template:', error);
+    }
+  }, [selectedSection, course, normalizedYear, instructors, schedules, getSectionSchedules, showToast, fetchData]);
 
   return (
     <div className="dashboard-container" style={{ display: 'flex', height: '100vh' }}>
@@ -632,28 +889,122 @@ const ScheduleManagementDetails = () => {
                           {getSectionSchedules(selectedSection.name).length} schedule(s)
                         </p>
                       </div>
-                      <button
-                        onClick={() => setShowAddSchedulePopup(true)}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '10px',
-                          padding: '12px 20px',
-                          background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '10px',
-                          fontWeight: '600',
-                          cursor: 'pointer',
-                          fontSize: '15px',
-                          transition: 'transform 0.18s ease',
-                        }}
-                        onMouseOver={(e) => (e.currentTarget.style.transform = 'translateY(-2px)')}
-                        onMouseOut={(e) => (e.currentTarget.style.transform = '')}
-                      >
-                        <FontAwesomeIcon icon={faPlus} />
-                        Add Schedule
-                      </button>
+                      <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                        {getSectionSchedules(selectedSection.name).length > 0 && (
+                          <>
+                            <button
+                              onClick={handleExportToIcal}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                padding: '12px 20px',
+                                background: 'linear-gradient(135deg, #0f2c63 0%, #1e40af 100%)',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '10px',
+                                fontWeight: '600',
+                                cursor: 'pointer',
+                                fontSize: '15px',
+                                transition: 'transform 0.18s ease',
+                              }}
+                              onMouseOver={(e) => (e.currentTarget.style.transform = 'translateY(-2px)')}
+                              onMouseOut={(e) => (e.currentTarget.style.transform = '')}
+                            >
+                              <FontAwesomeIcon icon={faDownload} />
+                              Export iCal
+                            </button>
+                            <button
+                              onClick={handleExportToGoogleCalendar}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                padding: '12px 20px',
+                                background: 'linear-gradient(135deg, #4285f4 0%, #1a73e8 100%)',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '10px',
+                                fontWeight: '600',
+                                cursor: 'pointer',
+                                fontSize: '15px',
+                                transition: 'transform 0.18s ease',
+                              }}
+                              onMouseOver={(e) => (e.currentTarget.style.transform = 'translateY(-2px)')}
+                              onMouseOut={(e) => (e.currentTarget.style.transform = '')}
+                            >
+                              <FontAwesomeIcon icon={faCalendar} />
+                              Google Calendar
+                            </button>
+                          </>
+                        )}
+                        <button
+                          onClick={() => setShowTemplateManager(true)}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            padding: '12px 20px',
+                            background: 'linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%)',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '10px',
+                            fontWeight: '600',
+                            cursor: 'pointer',
+                            fontSize: '15px',
+                            transition: 'transform 0.18s ease',
+                          }}
+                          onMouseOver={(e) => (e.currentTarget.style.transform = 'translateY(-2px)')}
+                          onMouseOut={(e) => (e.currentTarget.style.transform = '')}
+                        >
+                          <FontAwesomeIcon icon={faFileAlt} />
+                          Templates
+                        </button>
+                        <button
+                          onClick={() => setShowImporter(true)}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            padding: '12px 20px',
+                            background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '10px',
+                            fontWeight: '600',
+                            cursor: 'pointer',
+                            fontSize: '15px',
+                            transition: 'transform 0.18s ease',
+                          }}
+                          onMouseOver={(e) => (e.currentTarget.style.transform = 'translateY(-2px)')}
+                          onMouseOut={(e) => (e.currentTarget.style.transform = '')}
+                        >
+                          <FontAwesomeIcon icon={faFileImport} />
+                          Import
+                        </button>
+                        <button
+                          onClick={() => setShowAddSchedulePopup(true)}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px',
+                            padding: '12px 20px',
+                            background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '10px',
+                            fontWeight: '600',
+                            cursor: 'pointer',
+                            fontSize: '15px',
+                            transition: 'transform 0.18s ease',
+                          }}
+                          onMouseOver={(e) => (e.currentTarget.style.transform = 'translateY(-2px)')}
+                          onMouseOut={(e) => (e.currentTarget.style.transform = '')}
+                        >
+                          <FontAwesomeIcon icon={faPlus} />
+                          Add Schedule
+                        </button>
+                      </div>
                     </div>
 
                     <div style={{
@@ -719,26 +1070,71 @@ const ScheduleManagementDetails = () => {
                               <h4 style={{ fontSize: '16px', fontWeight: '600', color: '#1f2937', margin: 0, flex: 1 }}>
                                 {schedule.subject}
                               </h4>
-                              <button
-                                onClick={() => setDeleteConfirm({ open: true, scheduleId: schedule._id })}
-                                style={{
-                                  background: '#fee2e2',
-                                  color: '#dc2626',
-                                  border: 'none',
-                                  width: '32px',
-                                  height: '32px',
-                                  borderRadius: '8px',
-                                  cursor: 'pointer',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  transition: 'all 0.2s ease',
-                                }}
-                                onMouseOver={(e) => (e.currentTarget.style.background = '#fecaca')}
-                                onMouseOut={(e) => (e.currentTarget.style.background = '#fee2e2')}
-                              >
-                                <FontAwesomeIcon icon={faTrash} />
-                              </button>
+                              <div style={{ display: 'flex', gap: '8px' }}>
+                                <button
+                                  onClick={() => handleEditClick(schedule)}
+                                  title="Edit Schedule"
+                                  style={{
+                                    background: '#fef3c7',
+                                    color: '#d97706',
+                                    border: 'none',
+                                    width: '32px',
+                                    height: '32px',
+                                    borderRadius: '8px',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    transition: 'all 0.2s ease',
+                                  }}
+                                  onMouseOver={(e) => (e.currentTarget.style.background = '#fde68a')}
+                                  onMouseOut={(e) => (e.currentTarget.style.background = '#fef3c7')}
+                                >
+                                  <FontAwesomeIcon icon={faEdit} />
+                                </button>
+                                <button
+                                  onClick={() => handleDuplicateSchedule(schedule)}
+                                  title="Duplicate Schedule"
+                                  style={{
+                                    background: '#eff6ff',
+                                    color: '#3b82f6',
+                                    border: 'none',
+                                    width: '32px',
+                                    height: '32px',
+                                    borderRadius: '8px',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    transition: 'all 0.2s ease',
+                                  }}
+                                  onMouseOver={(e) => (e.currentTarget.style.background = '#dbeafe')}
+                                  onMouseOut={(e) => (e.currentTarget.style.background = '#eff6ff')}
+                                >
+                                  <FontAwesomeIcon icon={faCopy} />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteSchedule(schedule._id)}
+                                  title="Delete Schedule"
+                                  style={{
+                                    background: '#fee2e2',
+                                    color: '#dc2626',
+                                    border: 'none',
+                                    width: '32px',
+                                    height: '32px',
+                                    borderRadius: '8px',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    transition: 'all 0.2s ease',
+                                  }}
+                                  onMouseOver={(e) => (e.currentTarget.style.background = '#fecaca')}
+                                  onMouseOut={(e) => (e.currentTarget.style.background = '#fee2e2')}
+                                >
+                                  <FontAwesomeIcon icon={faTrash} />
+                                </button>
+                              </div>
                             </div>
 
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -769,32 +1165,7 @@ const ScheduleManagementDetails = () => {
             </div>
           )}
 
-          {/* Notification */}
-          {notification.show && (
-            <div
-              style={{
-                position: 'fixed',
-                top: '20px',
-                right: '20px',
-                padding: '16px 20px',
-                borderRadius: '12px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                fontWeight: '600',
-                boxShadow: '0 8px 20px rgba(0, 0, 0, 0.15)',
-                zIndex: 10000,
-                background: notification.type === 'success' ? '#d1fae5' : '#fee2e2',
-                color: notification.type === 'success' ? '#065f46' : '#991b1b',
-                animation: 'slideIn 0.3s ease',
-              }}
-            >
-              <FontAwesomeIcon
-                icon={notification.type === 'success' ? faCheckCircle : faExclamationCircle}
-              />
-              <span>{notification.message}</span>
-            </div>
-          )}
+          {/* Notification removed - using Toast system now */}
 
           {/* Add Schedule Popup */}
           {showAddSchedulePopup && (
@@ -1058,12 +1429,19 @@ const ScheduleManagementDetails = () => {
                       }}
                     >
                       <option value="">Select Room</option>
-                      {rooms.map((room) => (
-                        <option key={room._id} value={room.room}>
-                          {room.room}
-                        </option>
-                      ))}
+                      {rooms
+                        .filter(room => room.status === 'available')
+                        .map((room) => (
+                          <option key={room._id} value={room.room}>
+                            {room.room} ({room.area})
+                          </option>
+                        ))}
                     </select>
+                    {rooms.filter(room => room.status === 'available').length === 0 && (
+                      <p style={{ margin: '8px 0 0 0', fontSize: '13px', color: '#ef4444' }}>
+                        No available rooms. Please check room status in Room Management.
+                      </p>
+                    )}
                   </div>
 
                   <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
@@ -1107,8 +1485,8 @@ const ScheduleManagementDetails = () => {
             </div>
           )}
 
-          {/* Delete Confirmation Modal */}
-          {deleteConfirm.open && (
+          {/* Edit Schedule Popup */}
+          {showEditSchedulePopup && scheduleToEdit && (
             <div style={{
               position: 'fixed',
               top: 0,
@@ -1123,48 +1501,288 @@ const ScheduleManagementDetails = () => {
             }}>
               <div style={{
                 background: 'white',
-                padding: '30px',
                 borderRadius: '18px',
-                textAlign: 'center',
-                maxWidth: '400px',
+                width: '90%',
+                maxWidth: '500px',
+                maxHeight: '90vh',
+                overflowY: 'auto',
                 boxShadow: '0 20px 50px rgba(0, 0, 0, 0.3)',
               }}>
-                <p style={{ fontSize: '16px', color: '#374151', marginBottom: '24px' }}>
-                  Are you sure you want to delete this schedule?
-                </p>
-                <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '24px',
+                  borderBottom: '2px solid #f3f4f6',
+                }}>
+                  <h3 style={{
+                    fontSize: '20px',
+                    fontWeight: '700',
+                    color: '#1f2937',
+                    margin: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                  }}>
+                    <FontAwesomeIcon icon={faEdit} style={{ color: '#d97706' }} />
+                    Edit Schedule
+                  </h3>
                   <button
-                    onClick={handleDeleteSchedule}
+                    onClick={() => {
+                      setShowEditSchedulePopup(false);
+                      setScheduleToEdit(null);
+                    }}
+                    disabled={editingSchedule}
                     style={{
-                      padding: '12px 24px',
-                      background: '#dc2626',
-                      color: 'white',
+                      background: '#f3f4f6',
                       border: 'none',
-                      borderRadius: '10px',
-                      fontWeight: '600',
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '8px',
                       cursor: 'pointer',
+                      color: '#6b7280',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
                     }}
                   >
-                    Yes, Delete
-                  </button>
-                  <button
-                    onClick={() => setDeleteConfirm({ open: false, scheduleId: null })}
-                    style={{
-                      padding: '12px 24px',
-                      background: '#e5e7eb',
-                      color: '#374151',
-                      border: 'none',
-                      borderRadius: '10px',
-                      fontWeight: '600',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Cancel
+                    <FontAwesomeIcon icon={faTimes} />
                   </button>
                 </div>
+
+                <form onSubmit={handleEditSubmit} style={{ padding: '24px' }}>
+                  <div style={{ marginBottom: '20px' }}>
+                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#374151', marginBottom: '8px' }}>
+                      Subject Name *
+                    </label>
+                    <input
+                      name="subject"
+                      type="text"
+                      defaultValue={scheduleToEdit.subject}
+                      placeholder="e.g., Data Structures and Algorithms"
+                      required
+                      disabled={editingSchedule}
+                      style={{
+                        width: '100%',
+                        padding: '12px',
+                        border: '2px solid #e5e7eb',
+                        borderRadius: '10px',
+                        fontSize: '14px',
+                      }}
+                    />
+                  </div>
+
+                  <div style={{ marginBottom: '20px' }}>
+                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#374151', marginBottom: '8px' }}>
+                      Day *
+                    </label>
+                    <select
+                      name="day"
+                      defaultValue={scheduleToEdit.day}
+                      required
+                      disabled={editingSchedule}
+                      style={{
+                        width: '100%',
+                        padding: '12px',
+                        border: '2px solid #e5e7eb',
+                        borderRadius: '10px',
+                        fontSize: '14px',
+                      }}
+                    >
+                      <option value="">Select Day</option>
+                      <option value="Monday">Monday</option>
+                      <option value="Tuesday">Tuesday</option>
+                      <option value="Wednesday">Wednesday</option>
+                      <option value="Thursday">Thursday</option>
+                      <option value="Friday">Friday</option>
+                      <option value="Saturday">Saturday</option>
+                    </select>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#374151', marginBottom: '8px' }}>
+                        Start Time *
+                      </label>
+                      <input
+                        name="startTime"
+                        type="text"
+                        defaultValue={scheduleToEdit.time?.split(' - ')[0]?.trim() || ''}
+                        placeholder="8:00 AM"
+                        required
+                        disabled={editingSchedule}
+                        style={{
+                          width: '100%',
+                          padding: '12px',
+                          border: '2px solid #e5e7eb',
+                          borderRadius: '10px',
+                          fontSize: '14px',
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#374151', marginBottom: '8px' }}>
+                        End Time *
+                      </label>
+                      <input
+                        name="endTime"
+                        type="text"
+                        defaultValue={scheduleToEdit.time?.split(' - ')[1]?.trim() || ''}
+                        placeholder="9:30 AM"
+                        required
+                        disabled={editingSchedule}
+                        style={{
+                          width: '100%',
+                          padding: '12px',
+                          border: '2px solid #e5e7eb',
+                          borderRadius: '10px',
+                          fontSize: '14px',
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ marginBottom: '20px' }}>
+                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#374151', marginBottom: '8px' }}>
+                      Instructor *
+                    </label>
+                    <select
+                      name="instructor"
+                      defaultValue={scheduleToEdit.instructor}
+                      required
+                      disabled={editingSchedule}
+                      style={{
+                        width: '100%',
+                        padding: '12px',
+                        border: '2px solid #e5e7eb',
+                        borderRadius: '10px',
+                        fontSize: '14px',
+                      }}
+                    >
+                      <option value="">Select Instructor</option>
+                      {instructors.map((instructor) => (
+                        <option key={instructor.id} value={instructor.name}>
+                          {instructor.name} ({instructor.id})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div style={{ marginBottom: '24px' }}>
+                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#374151', marginBottom: '8px' }}>
+                      Room *
+                    </label>
+                    <select
+                      name="room"
+                      defaultValue={scheduleToEdit.room}
+                      required
+                      disabled={editingSchedule}
+                      style={{
+                        width: '100%',
+                        padding: '12px',
+                        border: '2px solid #e5e7eb',
+                        borderRadius: '10px',
+                        fontSize: '14px',
+                      }}
+                    >
+                      <option value="">Select Room</option>
+                      {rooms
+                        .filter(room => room.status === 'available')
+                        .map((room) => (
+                          <option key={room._id} value={room.room}>
+                            {room.room} ({room.area})
+                          </option>
+                        ))}
+                    </select>
+                    {rooms.filter(room => room.status === 'available').length === 0 && (
+                      <p style={{ margin: '8px 0 0 0', fontSize: '13px', color: '#ef4444' }}>
+                        No available rooms. Please check room status in Room Management.
+                      </p>
+                    )}
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowEditSchedulePopup(false);
+                        setScheduleToEdit(null);
+                      }}
+                      disabled={editingSchedule}
+                      style={{
+                        padding: '12px 24px',
+                        background: '#f3f4f6',
+                        color: '#374151',
+                        border: 'none',
+                        borderRadius: '10px',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={editingSchedule}
+                      style={{
+                        padding: '12px 24px',
+                        background: editingSchedule ? '#9ca3af' : 'linear-gradient(135deg, #d97706 0%, #f59e0b 100%)',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '10px',
+                        fontWeight: '600',
+                        cursor: editingSchedule ? 'not-allowed' : 'pointer',
+                      }}
+                    >
+                      {editingSchedule ? 'Updating...' : 'Save Changes'}
+                    </button>
+                  </div>
+                </form>
               </div>
             </div>
           )}
+
+          {/* Conflict Resolution Modal */}
+          <ConflictResolutionModal
+            show={conflictDetails !== null}
+            conflicts={conflictDetails}
+            scheduleData={pendingScheduleData}
+            onProceed={handleConflictProceed}
+            onCancel={handleConflictCancel}
+            onModify={handleConflictModify}
+          />
+
+          {/* Confirmation Dialog */}
+          <ConfirmationDialog
+            show={confirmDialog.show}
+            title={confirmDialog.title}
+            message={confirmDialog.message}
+            onConfirm={confirmDialog.onConfirm || (() => {})}
+            onCancel={() => setConfirmDialog({ show: false, title: '', message: '', onConfirm: null, destructive: false })}
+            destructive={confirmDialog.destructive}
+            confirmText={confirmDialog.destructive ? "Delete" : "Confirm"}
+          />
+
+          {/* Schedule Template Manager */}
+          <ScheduleTemplateManager
+            show={showTemplateManager}
+            onClose={() => setShowTemplateManager(false)}
+            course={course}
+            year={normalizedYear}
+            currentSchedules={selectedSection ? getSectionSchedules(selectedSection.name) : []}
+            onApplyTemplate={handleApplyTemplate}
+            sectionName={selectedSection?.name}
+          />
+
+          {/* Schedule Importer */}
+          <ScheduleImporter
+            show={showImporter}
+            onClose={() => setShowImporter(false)}
+            course={course}
+            year={normalizedYear}
+            sectionName={selectedSection?.name}
+            onImportComplete={fetchData}
+          />
         </div>
       </main>
     </div>

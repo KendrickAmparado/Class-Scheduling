@@ -5,8 +5,8 @@ const scheduleSchema = new mongoose.Schema({
   year: { type: String, required: true },
   section: { type: String, required: true },
   subject: { type: String, required: true },
-  instructor: { type: String, required: true }, // Keep for backward compatibility
-  instructorEmail: { type: String, required: false }, // Optional for backward compatibility
+  instructor: { type: String, required: true },
+  instructorEmail: { type: String, required: false },
   day: { type: String, required: true },
   time: { type: String, required: true },
   room: { type: String, required: true },

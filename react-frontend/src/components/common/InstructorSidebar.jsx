@@ -5,7 +5,8 @@ import {
   faHome,
   faSignOutAlt,
   faChartBar,
-  faCog
+  faCog,
+  faBell
 } from '@fortawesome/free-solid-svg-icons';
 
 const InstructorSidebar = () => {
@@ -14,6 +15,7 @@ const InstructorSidebar = () => {
 
   const menuItems = [
     { path: '/instructor/dashboard', icon: faHome, label: 'Dashboard' },
+    { path: '/instructor/notifications', icon: faBell, label: 'Notifications' },
     { path: '/instructor/reports', icon: faChartBar, label: 'Reports' },
     { path: '/instructor/settings', icon: faCog, label: 'Settings' }
   ];

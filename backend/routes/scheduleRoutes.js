@@ -1,28 +1,77 @@
 import express from "express";
 import Schedule from "../models/Schedule.js";
+import ScheduleTemplate from "../models/ScheduleTemplate.js";
 import InstructorNotification from "../models/InstructorNotification.js";
 import Alert from '../models/Alert.js';
+import validator from 'validator';
 
 const router = express.Router();
 
 // CREATE schedule
 router.post("/create", async (req, res) => {
   try {
-    const { course, year, section, subject, instructor, day, time, room } = req.body;
+    const { course, year, section, subject, instructor, instructorEmail, day, time, room } = req.body;
 
-    if (!course || !year || !section || !subject || !instructor || !day || !time || !room) {
+    let instructorEmailFinal = instructorEmail ? String(instructorEmail).trim().toLowerCase() : undefined;
+    let instructorNameFinal = instructor ? String(instructor).trim() : undefined;
+
+    if (!course || !year || !section || !subject || !instructorNameFinal || !day || !time || !room) {
       return res.status(400).json({ success: false, message: "All fields are required." });
     }
 
+    // Use email if available, else try to resolve from name
+    if (!instructorEmailFinal && instructorNameFinal) {
+      const Instructor = (await import('../models/Instructor.js')).default;
+      const resolved = await Instructor.findOne({ $or: [
+        { email: { $regex: new RegExp('^'+validator.escape(instructorNameFinal)+'$', 'i') } },
+        { $expr: { $regexMatch: { input: { $concat: ['$firstname', ' ', '$lastname'] }, regex: instructorNameFinal, options: 'i' } } }
+      ]});
+      instructorEmailFinal = resolved ? resolved.email.toLowerCase() : undefined;
+    }
+
+    // Conflict detection (room and instructor at same time/day)
+    const [startStr, endStr] = String(time).split(' - ').map(s => s.trim());
+    const toMinutes = (t) => {
+      if (!t) return -1;
+      const [hhmm, ampm] = t.split(' ');
+      let [h, m] = hhmm.split(':').map(Number);
+      let H = h;
+      if (ampm?.toLowerCase() === 'pm' && h !== 12) H = h + 12;
+      if (ampm?.toLowerCase() === 'am' && h === 12) H = 0;
+      return (H * 60) + (m || 0);
+    };
+    const startMin = toMinutes(startStr);
+    const endMin = toMinutes(endStr);
+    if (startMin < 0 || endMin <= startMin) {
+      return res.status(400).json({ success: false, message: 'Invalid time range' });
+    }
+    const overlaps = (aStart, aEnd, bStart, bEnd) => aStart < bEnd && bStart < aEnd;
+    // Room conflicts
+    const roomConflicts = await Schedule.find({ room, day }).lean();
+    const hasRoomConflict = roomConflicts.some(s => {
+      const [st, et] = String(s.time || '').split(' - ').map(x=>x.trim());
+      const sMin = toMinutes(st), eMin = toMinutes(et);
+      return overlaps(startMin, endMin, sMin, eMin);
+    });
+    if (hasRoomConflict) {
+      return res.status(409).json({ success: false, message: `Room ${room} is occupied at ${day} ${time}` });
+    }
+    // Instructor conflicts
+    const instructorConflicts = await Schedule.find({ instructor: instructorNameFinal, day }).lean();
+    const hasInstructorConflict = instructorConflicts.some(s => {
+      const [st, et] = String(s.time || '').split(' - ').map(x=>x.trim());
+      const sMin = toMinutes(st), eMin = toMinutes(et);
+      return overlaps(startMin, endMin, sMin, eMin);
+    });
+    if (hasInstructorConflict) {
+      return res.status(409).json({ success: false, message: `${instructorNameFinal} already has a schedule at ${day} ${time}` });
+    }
+
     const newSchedule = new Schedule({
-      course,
-      year,
-      section,
-      subject,
-      instructor,
-      day,
-      time,
-      room
+      course, year, section, subject,
+      instructor: instructorNameFinal,
+      instructorEmail: instructorEmailFinal,
+      day, time, room
     });
 
     await newSchedule.save();
@@ -99,37 +148,31 @@ router.get('/instructor/:instructorEmail', async (req, res) => {
     const instructor = await Instructor.findOne({ email: { $regex: new RegExp(`^${instructorEmail}$`, 'i') } });
     console.log('🔍 Backend: Instructor profile found:', instructor ? 'Yes' : 'No');
     
-    if (!instructor) {
-      console.log('❌ Backend: Instructor not found in database');
-      return res.status(404).json({ 
-        message: 'Instructor profile not found',
-        debug: { searchEmail: instructorEmail }
-      });
+    const instructorName = instructor ? `${instructor.firstname} ${instructor.lastname}` : null;
+    if (instructorName) {
+      console.log('🔍 Backend: Instructor full name:', instructorName);
+      console.log('🔍 Backend: Instructor status:', instructor.status);
     }
     
-    const instructorName = `${instructor.firstname} ${instructor.lastname}`;
-    console.log('🔍 Backend: Instructor full name:', instructorName);
-    console.log('🔍 Backend: Instructor status:', instructor.status);
-    
-    // Step 2: Search strategies with detailed logging
+    // Step 2: Search strategies with detailed logging - CASE INSENSITIVE
     let schedules = [];
     let searchMethod = '';
     
-    // Strategy 1: Search by exact email match
-    schedules = await Schedule.find({ instructorEmail: instructorEmail });
-    console.log('🔍 Backend: Strategy 1 (exact email):', schedules.length, 'schedules');
+    // Strategy 1: Search by email (case-insensitive)
+    schedules = await Schedule.find({ instructorEmail: { $regex: new RegExp(`^${instructorEmail}$`, 'i') } });
+    console.log('🔍 Backend: Strategy 1 (case-insensitive email):', schedules.length, 'schedules');
     
     if (schedules.length > 0) {
-      searchMethod = 'exact-email';
-    } else {
-      // Strategy 2: Search by instructor name (exact match)
-      schedules = await Schedule.find({ instructor: instructorName });
-      console.log('🔍 Backend: Strategy 2 (exact name):', schedules.length, 'schedules');
+      searchMethod = 'case-insensitive-email';
+    } else if (instructorName) {
+      // Strategy 2: Search by instructor name (case-insensitive)
+      schedules = await Schedule.find({ instructor: { $regex: new RegExp(`^${instructorName}$`, 'i') } });
+      console.log('🔍 Backend: Strategy 2 (case-insensitive name):', schedules.length, 'schedules');
       
       if (schedules.length > 0) {
-        searchMethod = 'exact-name';
+        searchMethod = 'case-insensitive-name';
       } else {
-        // Strategy 3: Search by partial name matches (case insensitive)
+        // Strategy 3: Search by partial name matches
         schedules = await Schedule.find({ 
           instructor: { $regex: new RegExp(instructorName, 'i') }
         });
@@ -137,22 +180,6 @@ router.get('/instructor/:instructorEmail', async (req, res) => {
         
         if (schedules.length > 0) {
           searchMethod = 'partial-name';
-        } else {
-          // Strategy 4: Search by individual name parts
-          const firstnameRegex = new RegExp(instructor.firstname, 'i');
-          const lastnameRegex = new RegExp(instructor.lastname, 'i');
-          
-          schedules = await Schedule.find({ 
-            $and: [
-              { instructor: firstnameRegex },
-              { instructor: lastnameRegex }
-            ]
-          });
-          console.log('🔍 Backend: Strategy 4 (name parts):', schedules.length, 'schedules');
-          
-          if (schedules.length > 0) {
-            searchMethod = 'name-parts';
-          }
         }
       }
     }
@@ -177,10 +204,10 @@ router.get('/instructor/:instructorEmail', async (req, res) => {
         schedules: [],
         debug: {
           requestedEmail: instructorEmail,
-          instructorFound: true,
+          instructorFound: !!instructor,
           instructorName: instructorName,
-          instructorStatus: instructor.status,
-          searchStrategiesUsed: ['exact-email', 'exact-name', 'partial-name', 'name-parts'],
+          instructorStatus: instructor?.status,
+          searchStrategiesUsed: ['case-insensitive-email', 'case-insensitive-name', 'partial-name'],
           totalSchedulesInDB: await Schedule.countDocuments(),
           sampleScheduleInstructors: allInstructorNames.slice(0, 5),
           suggestion: 'Check if schedules were created with correct instructor information'
@@ -223,24 +250,181 @@ router.get('/instructor/by-name/:name', async (req, res) => {
   }
 });
 
+// UPDATE schedule
+router.put('/:id', async (req, res) => {
+  try {
+    const scheduleId = req.params.id;
+    const { course, year, section, subject, instructor, instructorEmail, day, time, room } = req.body;
+
+    // Find the existing schedule
+    const existingSchedule = await Schedule.findById(scheduleId);
+    if (!existingSchedule) {
+      return res.status(404).json({ success: false, message: "Schedule not found." });
+    }
+
+    let instructorEmailFinal = instructorEmail ? String(instructorEmail).trim().toLowerCase() : undefined;
+    let instructorNameFinal = instructor ? String(instructor).trim() : undefined;
+
+    if (!course || !year || !section || !subject || !instructorNameFinal || !day || !time || !room) {
+      return res.status(400).json({ success: false, message: "All fields are required." });
+    }
+
+    // Resolve instructor email if not provided
+    if (!instructorEmailFinal && instructorNameFinal) {
+      const Instructor = (await import('../models/Instructor.js')).default;
+      const resolved = await Instructor.findOne({ $or: [
+        { email: { $regex: new RegExp('^'+validator.escape(instructorNameFinal)+'$', 'i') } },
+        { $expr: { $regexMatch: { input: { $concat: ['$firstname', ' ', '$lastname'] }, regex: instructorNameFinal, options: 'i' } } }
+      ]});
+      instructorEmailFinal = resolved ? resolved.email.toLowerCase() : undefined;
+    }
+
+    // Conflict detection - EXCLUDE current schedule being edited
+    const [startStr, endStr] = String(time).split(' - ').map(s => s.trim());
+    const toMinutes = (t) => {
+      if (!t) return -1;
+      const [hhmm, ampm] = t.split(' ');
+      let [h, m] = hhmm.split(':').map(Number);
+      let H = h;
+      if (ampm?.toLowerCase() === 'pm' && h !== 12) H = h + 12;
+      if (ampm?.toLowerCase() === 'am' && h === 12) H = 0;
+      return (H * 60) + (m || 0);
+    };
+    const startMin = toMinutes(startStr);
+    const endMin = toMinutes(endStr);
+    if (startMin < 0 || endMin <= startMin) {
+      return res.status(400).json({ success: false, message: 'Invalid time range' });
+    }
+    const overlaps = (aStart, aEnd, bStart, bEnd) => aStart < bEnd && bStart < aEnd;
+    
+    // Room conflicts - exclude current schedule
+    const roomConflicts = await Schedule.find({ 
+      room, 
+      day,
+      _id: { $ne: scheduleId } // Exclude the schedule being edited
+    }).lean();
+    const hasRoomConflict = roomConflicts.some(s => {
+      const [st, et] = String(s.time || '').split(' - ').map(x=>x.trim());
+      const sMin = toMinutes(st), eMin = toMinutes(et);
+      return overlaps(startMin, endMin, sMin, eMin);
+    });
+    if (hasRoomConflict) {
+      return res.status(409).json({ success: false, message: `Room ${room} is occupied at ${day} ${time}` });
+    }
+    
+    // Instructor conflicts - exclude current schedule
+    const instructorConflicts = await Schedule.find({ 
+      instructor: instructorNameFinal, 
+      day,
+      _id: { $ne: scheduleId } // Exclude the schedule being edited
+    }).lean();
+    const hasInstructorConflict = instructorConflicts.some(s => {
+      const [st, et] = String(s.time || '').split(' - ').map(x=>x.trim());
+      const sMin = toMinutes(st), eMin = toMinutes(et);
+      return overlaps(startMin, endMin, sMin, eMin);
+    });
+    if (hasInstructorConflict) {
+      return res.status(409).json({ success: false, message: `${instructorNameFinal} already has a schedule at ${day} ${time}` });
+    }
+
+    // Store old values for notification comparison
+    const oldInstructor = existingSchedule.instructor;
+    const oldInstructorEmail = existingSchedule.instructorEmail;
+
+    // Update the schedule
+    existingSchedule.course = course;
+    existingSchedule.year = year;
+    existingSchedule.section = section;
+    existingSchedule.subject = subject;
+    existingSchedule.instructor = instructorNameFinal;
+    existingSchedule.instructorEmail = instructorEmailFinal;
+    existingSchedule.day = day;
+    existingSchedule.time = time;
+    existingSchedule.room = room;
+
+    await existingSchedule.save();
+
+    // Send notification to instructor (new or changed)
+    try {
+      let targetEmail = instructorEmailFinal;
+      if (!targetEmail) {
+        const Instructor = (await import('../models/Instructor.js')).default;
+        const instructorDoc = await Instructor.findOne({
+          $or: [
+            { email: instructorNameFinal },
+            { $expr: { $regexMatch: { input: { $concat: ['$firstname', ' ', '$lastname'] }, regex: instructorNameFinal, options: 'i' } } }
+          ]
+        });
+        targetEmail = instructorDoc?.email;
+      }
+      
+      if (targetEmail) {
+        const notif = await InstructorNotification.create({
+          instructorEmail: targetEmail,
+          title: 'Schedule Updated',
+          message: `Your schedule for ${course} ${year} - ${section} (${subject}) has been updated`,
+          link: null
+        });
+        if (req.io) {
+          req.io.emit('instructor-notification', { email: targetEmail, notification: notif });
+        }
+      }
+
+      // If instructor changed, notify the old instructor too
+      if (oldInstructor !== instructorNameFinal && oldInstructorEmail) {
+        const oldNotif = await InstructorNotification.create({
+          instructorEmail: oldInstructorEmail,
+          title: 'Schedule Removed',
+          message: `You have been removed from ${course} ${year} - ${section} (${subject})`,
+          link: null
+        });
+        if (req.io) {
+          req.io.emit('instructor-notification', { email: oldInstructorEmail, notification: oldNotif });
+        }
+      }
+    } catch (e) {
+      console.error('Failed to create instructor notification:', e);
+    }
+
+    // Create activity log
+    const alert = await Alert.create({
+      type: 'schedule-updated',
+      message: `Schedule updated for ${course} ${year} - Section ${section} (${subject})`,
+      link: `/admin/schedule/${course}/${year}`,
+    });
+    if (req.io) {
+      req.io.emit('new-alert', alert);
+    }
+
+    res.json({ success: true, message: "Schedule updated successfully!" });
+  } catch (err) {
+    console.error("Schedule update error:", err);
+    res.status(500).json({ success: false, message: "Server error while updating schedule." });
+  }
+});
+
 // DELETE schedule
 router.delete('/:id', async (req, res) => {
   try {
     const scheduleId = req.params.id;
-    const deleted = await Schedule.findByIdAndDelete(scheduleId);
-    if (deleted) {
-      const alert = await Alert.create({
-        type: 'schedule-deleted',
-        message: `Schedule for Section ${deleted.section} (${deleted.subject}) was deleted.`,
-        link: `/admin/schedule/${deleted.course || ''}/${deleted.year || ''}`,
-      });
-      if (req.io) {
-        req.io.emit('new-alert', alert);
-      }
-      res.json({ success: true, message: "Schedule deleted successfully." });
-    } else {
-      res.status(404).json({ success: false, message: "Schedule not found." });
+    const scheduleToDelete = await Schedule.findById(scheduleId);
+    
+    if (!scheduleToDelete) {
+      return res.status(404).json({ success: false, message: "Schedule not found." });
     }
+    
+    // Delete the schedule
+    await Schedule.findByIdAndDelete(scheduleId);
+    
+    const alert = await Alert.create({
+      type: 'schedule-deleted',
+      message: `Schedule for Section ${scheduleToDelete.section} (${scheduleToDelete.subject}) was deleted.`,
+      link: `/admin/schedule/${scheduleToDelete.course || ''}/${scheduleToDelete.year || ''}`,
+    });
+    if (req.io) {
+      req.io.emit('new-alert', alert);
+    }
+    res.json({ success: true, message: "Schedule deleted successfully." });
   } catch (err) {
     console.error("Error deleting schedule:", err);
     res.status(500).json({ success: false, message: "Server error deleting schedule." });
@@ -373,6 +557,129 @@ router.post('/admin/fix-instructor-emails', async (req, res) => {
       message: 'Error fixing schedule data', 
       error: err.message 
     });
+  }
+});
+
+// ============== SCHEDULE TEMPLATES ==============
+
+// GET all templates for a course/year
+router.get('/templates', async (req, res) => {
+  try {
+    const { course, year } = req.query;
+    const query = {};
+    if (course) query.course = course;
+    if (year) query.year = year;
+    
+    const templates = await ScheduleTemplate.find(query).sort({ createdAt: -1 });
+    res.json({ success: true, templates });
+  } catch (err) {
+    console.error('Error fetching templates:', err);
+    res.status(500).json({ success: false, message: 'Error fetching templates' });
+  }
+});
+
+// GET single template by ID
+router.get('/templates/:id', async (req, res) => {
+  try {
+    const template = await ScheduleTemplate.findById(req.params.id);
+    if (!template) {
+      return res.status(404).json({ success: false, message: 'Template not found' });
+    }
+    res.json({ success: true, template });
+  } catch (err) {
+    console.error('Error fetching template:', err);
+    res.status(500).json({ success: false, message: 'Error fetching template' });
+  }
+});
+
+// POST create new template
+router.post('/templates', async (req, res) => {
+  try {
+    const { name, description, course, year, schedules } = req.body;
+    
+    if (!name || !course || !year || !schedules || !Array.isArray(schedules)) {
+      return res.status(400).json({ success: false, message: 'Missing required fields' });
+    }
+    
+    const template = new ScheduleTemplate({
+      name,
+      description: description || '',
+      course,
+      year,
+      schedules,
+      createdBy: 'admin'
+    });
+    
+    await template.save();
+    res.json({ success: true, template, message: 'Template saved successfully' });
+  } catch (err) {
+    console.error('Error creating template:', err);
+    res.status(500).json({ success: false, message: 'Error creating template' });
+  }
+});
+
+// DELETE template
+router.delete('/templates/:id', async (req, res) => {
+  try {
+    const template = await ScheduleTemplate.findByIdAndDelete(req.params.id);
+    if (!template) {
+      return res.status(404).json({ success: false, message: 'Template not found' });
+    }
+    res.json({ success: true, message: 'Template deleted successfully' });
+  } catch (err) {
+    console.error('Error deleting template:', err);
+    res.status(500).json({ success: false, message: 'Error deleting template' });
+  }
+});
+
+// POST apply template to section (creates schedules from template)
+router.post('/templates/:id/apply', async (req, res) => {
+  try {
+    const { section } = req.body;
+    const template = await ScheduleTemplate.findById(req.params.id);
+    
+    if (!template) {
+      return res.status(404).json({ success: false, message: 'Template not found' });
+    }
+    
+    if (!section) {
+      return res.status(400).json({ success: false, message: 'Section is required' });
+    }
+    
+    const createdSchedules = [];
+    const errors = [];
+    
+    // Create schedules from template
+    for (const scheduleData of template.schedules) {
+      try {
+        const schedule = new Schedule({
+          course: template.course,
+          year: template.year,
+          section,
+          subject: scheduleData.subject,
+          instructor: scheduleData.instructor,
+          instructorEmail: scheduleData.instructorEmail,
+          day: scheduleData.day,
+          time: scheduleData.time,
+          room: scheduleData.room,
+        });
+        await schedule.save();
+        createdSchedules.push(schedule);
+      } catch (err) {
+        errors.push({ schedule: scheduleData, error: err.message });
+      }
+    }
+    
+    res.json({
+      success: true,
+      message: `Applied template: ${createdSchedules.length} schedules created`,
+      created: createdSchedules.length,
+      errors: errors.length,
+      errorDetails: errors
+    });
+  } catch (err) {
+    console.error('Error applying template:', err);
+    res.status(500).json({ success: false, message: 'Error applying template' });
   }
 });
 

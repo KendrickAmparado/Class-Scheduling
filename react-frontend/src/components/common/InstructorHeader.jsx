@@ -1,12 +1,15 @@
 import React, { useEffect, useState, useContext } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../../context/AuthContext';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faBell, faSearch } from '@fortawesome/free-solid-svg-icons';
 
 const InstructorHeader = () => {
+  const navigate = useNavigate();
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const { userEmail } = useContext(AuthContext);
+  const [search, setSearch] = useState('');
 
   const apiBase = process.env.REACT_APP_API_BASE || 'http://localhost:5000';
 
@@ -120,6 +123,14 @@ const InstructorHeader = () => {
               fontSize: '14px',
               background: '#f8fafc',
               transition: 'all 0.3s ease'
+            }}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                const q = search.trim();
+                if (q) navigate(`/instructor/reports?q=${encodeURIComponent(q)}`);
+              }
             }}
             onFocus={(e) => {
               e.target.style.outline = 'none';

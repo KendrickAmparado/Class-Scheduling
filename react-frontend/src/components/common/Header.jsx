@@ -1,8 +1,19 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faSearch } from '@fortawesome/free-solid-svg-icons';
 
 const Header = ({ title }) => {
+  const navigate = useNavigate();
+  const [search, setSearch] = useState('');
+  const onKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      const q = search.trim();
+      if (q) {
+        navigate(`/admin/search?q=${encodeURIComponent(q)}`);
+      }
+    }
+  };
   return (
     <header
       className="top-header"
@@ -42,6 +53,9 @@ const Header = ({ title }) => {
               background: '#f8fafc',
               transition: 'all 0.3s ease',
             }}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={onKeyDown}
             onFocus={(e) => {
               e.target.style.outline = 'none';
               e.target.style.borderColor = '#0f2c63';

@@ -8,7 +8,6 @@ import {
   faGraduationCap,
   faCode,
   faTimes,
-  faCheckCircle,
   faExclamationCircle,
   faMinusCircle,
   faArrowLeft,
@@ -16,11 +15,14 @@ import {
 import axios from 'axios';
 import Sidebar from '../common/Sidebar.jsx';
 import Header from '../common/Header.jsx';
+import { useToast } from '../common/ToastProvider.jsx';
+import ConfirmationDialog from '../common/ConfirmationDialog.jsx';
 import { generateTimeSlots, TIME_SLOT_CONFIGS } from '../../utils/timeUtils.js';
 
 const ScheduleCalendar = () => {
   const { course, year } = useParams();
   const navigate = useNavigate();
+  const { showToast } = useToast();
 
   const formatYearParam = (yearParam) => {
     return yearParam.replace(/(\d+)(st|nd|rd|th)?year/i, '$1st year').toLowerCase();
@@ -35,8 +37,7 @@ const ScheduleCalendar = () => {
   const [showAddSectionPopup, setShowAddSectionPopup] = useState(false);
   const [loadingSchedules, setLoadingSchedules] = useState(false);
   const [addingSection, setAddingSection] = useState(false);
-  const [notification, setNotification] = useState({ show: false, type: '', message: '' });
-  const [removeSectionConfirm, setRemoveSectionConfirm] = useState({ open: false, sectionId: null, sectionName: '' });
+  const [confirmDialog, setConfirmDialog] = useState({ show: false, title: '', message: '', onConfirm: null, destructive: false });
   const [sections, setSections] = useState([]);
   const [newSectionName, setNewSectionName] = useState('');
   const [sectionErrorMessage, setSectionErrorMessage] = useState('');
@@ -88,11 +89,11 @@ const ScheduleCalendar = () => {
       setScheduleData(Array.isArray(schedulesRes.data) ? schedulesRes.data : []);
     } catch (error) {
       console.error('Error fetching data:', error);
-      showNotification('error', 'Error fetching data.');
+      showToast('Error fetching data.', 'error');
     } finally {
       setLoadingSchedules(false);
     }
-  }, [course, normalizedYear]);
+  }, [course, normalizedYear, showToast]);
 
   useEffect(() => {
     fetchAllData();
@@ -119,16 +120,15 @@ const ScheduleCalendar = () => {
     setDayFilter(selectedFilter);
   };
 
-  const showNotification = (type, message) => {
-    setNotification({ show: true, type, message });
-    setTimeout(() => setNotification({ show: false, type: '', message: '' }), 3000);
-  };
 
   const toggleRemoveSectionMode = () => {
     setRemoveSectionMode(!removeSectionMode);
   };
 
-  const downloadSchedule = () => alert('Download functionality would export the schedule as PDF or Excel');
+  const downloadSchedule = () => {
+    // TODO: Implement download functionality
+    console.log('Download schedule functionality to be implemented');
+  };
 
   const timeStringToMinutes = (timeStr) => {
     if (!timeStr) return -1;
@@ -143,23 +143,30 @@ const ScheduleCalendar = () => {
     return h * 60 + (m || 0);
   };
 
-  const confirmRemoveSection = async () => {
-    try {
-      setRemoveSectionConfirm({ open: false, sectionId: null, sectionName: '' });
-      
-      const response = await axios.delete(`http://localhost:5000/api/sections/${removeSectionConfirm.sectionId}`);
-      
-      if (response.data.success) {
-        showNotification('success', 'Section removed successfully.');
-        await fetchAllData();
-        setSelectedSection(null);
-      } else {
-        showNotification('error', response.data.message || 'Failed to remove section.');
-      }
-    } catch (err) {
-      showNotification('error', 'Error removing section.');
-      console.error('Remove section error:', err.response?.data || err.message);
-    }
+  const handleRemoveSection = (sectionId, sectionName) => {
+    setConfirmDialog({
+      show: true,
+      title: 'Remove Section',
+      message: `Are you sure you want to remove section "${sectionName}"? This action cannot be undone.`,
+      onConfirm: async () => {
+        try {
+          const response = await axios.delete(`http://localhost:5000/api/sections/${sectionId}`);
+          
+          if (response.data.success) {
+            showToast('Section removed successfully.', 'success');
+            await fetchAllData();
+            setSelectedSection(null);
+          } else {
+            showToast(response.data.message || 'Failed to remove section.', 'error');
+          }
+        } catch (err) {
+          showToast('Error removing section.', 'error');
+          console.error('Remove section error:', err.response?.data || err.message);
+        }
+        setConfirmDialog({ show: false, title: '', message: '', onConfirm: null, destructive: false });
+      },
+      destructive: true,
+    });
   };
 
   const handleAddSectionSubmit = async (e) => {
@@ -190,15 +197,15 @@ const ScheduleCalendar = () => {
         name: trimmedName,
       });
       if (res.data.success) {
-        showNotification('success', 'Section added successfully!');
+        showToast('Section added successfully!', 'success');
         setNewSectionName('');
         setShowAddSectionPopup(false);
         await fetchAllData();
       } else {
-        showNotification('error', res.data.message || 'Failed to add section.');
+        showToast(res.data.message || 'Failed to add section.', 'error');
       }
     } catch (error) {
-      showNotification('error', 'Error adding section.');
+      showToast('Error adding section.', 'error');
       console.error(error);
     }
     setAddingSection(false);
@@ -447,11 +454,7 @@ const ScheduleCalendar = () => {
                       <div style={{ display: 'flex', gap: '10px' }}>
                         {removeSectionMode && (
                           <button
-                            onClick={() => setRemoveSectionConfirm({ 
-                              open: true, 
-                              sectionId: selectedSection._id, 
-                              sectionName: selectedSection.name 
-                            })}
+                            onClick={() => handleRemoveSection(selectedSection._id, selectedSection.name)}
                             style={{
                               padding: '12px 20px',
                               background: 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)',
@@ -595,30 +598,7 @@ const ScheduleCalendar = () => {
           )}
 
           {/* Notification */}
-          {notification.show && (
-            <div
-              style={{
-                position: 'fixed',
-                top: '20px',
-                right: '20px',
-                padding: '16px 20px',
-                borderRadius: '12px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                fontWeight: '600',
-                boxShadow: '0 8px 20px rgba(0, 0, 0, 0.15)',
-                zIndex: 10000,
-                background: notification.type === 'success' ? '#d1fae5' : '#fee2e2',
-                color: notification.type === 'success' ? '#065f46' : '#991b1b',
-              }}
-            >
-              <FontAwesomeIcon
-                icon={notification.type === 'success' ? faCheckCircle : faExclamationCircle}
-              />
-              <span>{notification.message}</span>
-            </div>
-          )}
+          {/* Notification removed - using Toast system now */}
 
           {/* Add Section Popup */}
           {showAddSectionPopup && (
@@ -768,67 +748,16 @@ const ScheduleCalendar = () => {
             </div>
           )}
 
-          {/* Remove Section Confirmation Modal */}
-          {removeSectionConfirm.open && (
-            <div style={{
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              background: 'rgba(0, 0, 0, 0.5)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 9999,
-            }}>
-              <div style={{
-                background: 'white',
-                padding: '30px',
-                borderRadius: '18px',
-                textAlign: 'center',
-                maxWidth: '400px',
-                boxShadow: '0 20px 50px rgba(0, 0, 0, 0.3)',
-              }}>
-                <p style={{ fontSize: '16px', color: '#374151', marginBottom: '10px' }}>
-                  Are you sure you want to remove section <strong>{removeSectionConfirm.sectionName}</strong>?
-                </p>
-                <p style={{ fontSize: '13px', color: '#dc2626', marginBottom: '24px' }}>
-                  Warning: This will permanently delete the section and all schedules associated with it from the database.
-                </p>
-                <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-                  <button
-                    onClick={confirmRemoveSection}
-                    style={{
-                      padding: '12px 24px',
-                      background: '#dc2626',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '10px',
-                      fontWeight: '600',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Yes, Remove Section
-                  </button>
-                  <button
-                    onClick={() => setRemoveSectionConfirm({ open: false, sectionId: null, sectionName: '' })}
-                    style={{
-                      padding: '12px 24px',
-                      background: '#e5e7eb',
-                      color: '#374151',
-                      border: 'none',
-                      borderRadius: '10px',
-                      fontWeight: '600',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
+          {/* Confirmation Dialog */}
+          <ConfirmationDialog
+            show={confirmDialog.show}
+            title={confirmDialog.title}
+            message={confirmDialog.message}
+            onConfirm={confirmDialog.onConfirm || (() => {})}
+            onCancel={() => setConfirmDialog({ show: false, title: '', message: '', onConfirm: null, destructive: false })}
+            destructive={confirmDialog.destructive}
+            confirmText={confirmDialog.destructive ? "Remove" : "Confirm"}
+          />
         </div>
       </main>
     </div>
