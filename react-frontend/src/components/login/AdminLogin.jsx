@@ -338,29 +338,6 @@ const AdminLogin = () => {
               <span>Back to User Selection</span>
             </Link>
           </form>
-          
-          <Link 
-            to="/forgot-password?type=admin"
-            style={{
-              color: "#0f2c63",
-              textDecoration: "none",
-              fontSize: "14px",
-              fontWeight: "600",
-              transition: "all 0.2s ease",
-              display: "inline-block",
-              marginTop: "15px"
-            }}
-            onMouseEnter={(e) => {
-              e.target.style.color = "#f97316";
-              e.target.style.textDecoration = "underline";
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.color = "#0f2c63";
-              e.target.style.textDecoration = "none";
-            }}
-          >
-            Forgot Password?
-          </Link>
         </div>
       </div>
       <style>{`

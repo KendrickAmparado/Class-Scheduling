@@ -4,8 +4,85 @@ import ScheduleTemplate from "../models/ScheduleTemplate.js";
 import InstructorNotification from "../models/InstructorNotification.js";
 import Alert from '../models/Alert.js';
 import validator from 'validator';
+import { createCalendarEvent, updateCalendarEvent, deleteCalendarEvent, isGoogleCalendarConfigured } from '../services/googleCalendarService.js';
 
 const router = express.Router();
+
+// ============== GOOGLE CALENDAR SYNC HELPERS ==============
+
+// Helper function to resolve instructor email from schedule
+const resolveInstructorEmail = async (schedule) => {
+  // If email already exists, use it
+  if (schedule.instructorEmail) {
+    return schedule.instructorEmail.trim().toLowerCase();
+  }
+
+  // Try to resolve from instructor name
+  if (schedule.instructor) {
+    const Instructor = (await import('../models/Instructor.js')).default;
+    const instructorDoc = await Instructor.findOne({
+      $or: [
+        { email: { $regex: new RegExp('^' + validator.escape(schedule.instructor) + '$', 'i') } },
+        { $expr: { $regexMatch: { input: { $concat: ['$firstname', ' ', '$lastname'] }, regex: schedule.instructor, options: 'i' } } }
+      ],
+      status: 'active'
+    });
+    
+    if (instructorDoc && instructorDoc.email) {
+      // Update the schedule with the resolved email
+      schedule.instructorEmail = instructorDoc.email.toLowerCase();
+      await schedule.save();
+      return instructorDoc.email.toLowerCase();
+    }
+  }
+
+  return null;
+};
+
+// Helper function to sync a single schedule to Google Calendar
+const syncScheduleToCalendar = async (schedule) => {
+  try {
+    // Skip if already synced
+    if (schedule.googleCalendarEventId) {
+      return { success: true, message: 'Already synced', scheduleId: schedule._id };
+    }
+
+    // Resolve instructor email
+    const instructorEmail = await resolveInstructorEmail(schedule);
+    if (!instructorEmail) {
+      return { success: false, message: 'Could not resolve instructor email', scheduleId: schedule._id };
+    }
+
+    // Verify instructor exists and is active
+    const Instructor = (await import('../models/Instructor.js')).default;
+    const instructorDoc = await Instructor.findOne({
+      email: { $regex: new RegExp(`^${instructorEmail}$`, 'i') },
+      status: 'active'
+    });
+
+    if (!instructorDoc) {
+      return { success: false, message: 'Instructor not found or not active', scheduleId: schedule._id };
+    }
+
+    // Check if Google Calendar is configured
+    if (!isGoogleCalendarConfigured()) {
+      return { success: false, message: 'Google Calendar not configured', scheduleId: schedule._id };
+    }
+
+    // Create calendar event
+    const eventId = await createCalendarEvent(schedule, instructorEmail);
+    if (eventId) {
+      schedule.googleCalendarEventId = eventId;
+      await schedule.save();
+      return { success: true, message: 'Synced successfully', scheduleId: schedule._id, eventId };
+    }
+
+    return { success: false, message: 'Failed to create calendar event', scheduleId: schedule._id };
+  } catch (error) {
+    console.error(`Error syncing schedule ${schedule._id}:`, error.message);
+    return { success: false, message: error.message, scheduleId: schedule._id };
+  }
+};
 
 // CREATE schedule
 router.post("/create", async (req, res) => {
@@ -22,10 +99,13 @@ router.post("/create", async (req, res) => {
     // Use email if available, else try to resolve from name
     if (!instructorEmailFinal && instructorNameFinal) {
       const Instructor = (await import('../models/Instructor.js')).default;
-      const resolved = await Instructor.findOne({ $or: [
-        { email: { $regex: new RegExp('^'+validator.escape(instructorNameFinal)+'$', 'i') } },
-        { $expr: { $regexMatch: { input: { $concat: ['$firstname', ' ', '$lastname'] }, regex: instructorNameFinal, options: 'i' } } }
-      ]});
+      const resolved = await Instructor.findOne({ 
+        $or: [
+          { email: { $regex: new RegExp('^'+validator.escape(instructorNameFinal)+'$', 'i') } },
+          { $expr: { $regexMatch: { input: { $concat: ['$firstname', ' ', '$lastname'] }, regex: instructorNameFinal, options: 'i' } } }
+        ],
+        status: 'active'
+      });
       instructorEmailFinal = resolved ? resolved.email.toLowerCase() : undefined;
     }
 
@@ -75,6 +155,23 @@ router.post("/create", async (req, res) => {
     });
 
     await newSchedule.save();
+
+    // Google Calendar integration - only for instructors
+    // Use the sync helper function to ensure proper email resolution
+    // Try sync even if email wasn't resolved initially, the helper will try to resolve it
+    if (isGoogleCalendarConfigured()) {
+      try {
+        const syncResult = await syncScheduleToCalendar(newSchedule);
+        if (syncResult.success) {
+          console.log(`✅ Schedule ${newSchedule._id} synced to Google Calendar: ${syncResult.eventId}`);
+        } else {
+          console.warn(`⚠️ Failed to sync schedule ${newSchedule._id}: ${syncResult.message}`);
+        }
+      } catch (calendarError) {
+        // Log error but don't fail the schedule creation
+        console.error('⚠️ Failed to create Google Calendar event:', calendarError.message);
+      }
+    }
 
     // Create instructor-targeted notification if we can resolve an email
     try {
@@ -330,6 +427,7 @@ router.put('/:id', async (req, res) => {
     // Store old values for notification comparison
     const oldInstructor = existingSchedule.instructor;
     const oldInstructorEmail = existingSchedule.instructorEmail;
+    const oldEventId = existingSchedule.googleCalendarEventId;
 
     // Update the schedule
     existingSchedule.course = course;
@@ -343,6 +441,61 @@ router.put('/:id', async (req, res) => {
     existingSchedule.room = room;
 
     await existingSchedule.save();
+
+    // Google Calendar integration - only for instructors
+    if (isGoogleCalendarConfigured()) {
+      try {
+        // If instructor changed, delete old event
+        if (oldInstructorEmail !== instructorEmailFinal && oldEventId && oldInstructorEmail) {
+          try {
+            await deleteCalendarEvent(oldEventId, oldInstructorEmail);
+            existingSchedule.googleCalendarEventId = undefined;
+          } catch (deleteError) {
+            console.error('⚠️ Failed to delete old Google Calendar event:', deleteError.message);
+          }
+        }
+        
+        // Use sync helper to handle email resolution and event creation/update
+        if (existingSchedule.googleCalendarEventId && oldInstructorEmail === instructorEmailFinal) {
+          // Try to update existing event if instructor hasn't changed
+          try {
+            const instructorEmail = await resolveInstructorEmail(existingSchedule);
+            if (instructorEmail) {
+              await updateCalendarEvent(existingSchedule.googleCalendarEventId, existingSchedule, instructorEmail);
+              console.log(`✅ Updated Google Calendar event for schedule ${existingSchedule._id}`);
+            }
+          } catch (updateError) {
+            console.error('⚠️ Failed to update Google Calendar event, will re-sync:', updateError.message);
+            // If update fails, clear the event ID and let sync recreate it
+            existingSchedule.googleCalendarEventId = undefined;
+            const syncResult = await syncScheduleToCalendar(existingSchedule);
+            if (syncResult.success) {
+              console.log(`✅ Re-synced schedule ${existingSchedule._id} to Google Calendar`);
+            }
+          }
+        } else {
+          // Create new event or re-sync
+          const syncResult = await syncScheduleToCalendar(existingSchedule);
+          if (syncResult.success) {
+            console.log(`✅ Schedule ${existingSchedule._id} synced to Google Calendar: ${syncResult.eventId}`);
+          } else {
+            console.warn(`⚠️ Failed to sync schedule ${existingSchedule._id}: ${syncResult.message}`);
+          }
+        }
+      } catch (calendarError) {
+        // Log error but don't fail the schedule update
+        console.error('⚠️ Failed to sync Google Calendar event:', calendarError.message);
+      }
+    } else if (oldEventId && oldInstructorEmail) {
+      // If Google Calendar was enabled before but is now disabled, delete old event
+      try {
+        await deleteCalendarEvent(oldEventId, oldInstructorEmail);
+        existingSchedule.googleCalendarEventId = undefined;
+        await existingSchedule.save();
+      } catch (deleteError) {
+        console.error('⚠️ Failed to delete Google Calendar event:', deleteError.message);
+      }
+    }
 
     // Send notification to instructor (new or changed)
     try {
@@ -411,6 +564,25 @@ router.delete('/:id', async (req, res) => {
     
     if (!scheduleToDelete) {
       return res.status(404).json({ success: false, message: "Schedule not found." });
+    }
+    
+    // Google Calendar integration - delete event if it exists
+    if (scheduleToDelete.googleCalendarEventId && scheduleToDelete.instructorEmail && isGoogleCalendarConfigured()) {
+      try {
+        // Verify that the email belongs to an instructor before deleting
+        const Instructor = (await import('../models/Instructor.js')).default;
+        const instructorDoc = await Instructor.findOne({ 
+          email: { $regex: new RegExp(`^${scheduleToDelete.instructorEmail}$`, 'i') },
+          status: 'active'
+        });
+        
+        if (instructorDoc) {
+          await deleteCalendarEvent(scheduleToDelete.googleCalendarEventId, scheduleToDelete.instructorEmail);
+        }
+      } catch (calendarError) {
+        // Log error but continue with schedule deletion
+        console.error('⚠️ Failed to delete Google Calendar event:', calendarError.message);
+      }
     }
     
     // Delete the schedule
@@ -680,6 +852,123 @@ router.post('/templates/:id/apply', async (req, res) => {
   } catch (err) {
     console.error('Error applying template:', err);
     res.status(500).json({ success: false, message: 'Error applying template' });
+  }
+});
+
+// ============== GOOGLE CALENDAR SYNC ENDPOINTS ==============
+
+// POST /api/schedule/sync-all - Sync all existing schedules to Google Calendar
+router.post('/sync-all', async (req, res) => {
+  try {
+    if (!isGoogleCalendarConfigured()) {
+      return res.status(503).json({
+        success: false,
+        message: 'Google Calendar is not configured. Please configure Google Calendar first.'
+      });
+    }
+
+    // Get all schedules that don't have googleCalendarEventId
+    const unsyncedSchedules = await Schedule.find({
+      $or: [
+        { googleCalendarEventId: { $exists: false } },
+        { googleCalendarEventId: null },
+        { googleCalendarEventId: '' }
+      ]
+    });
+
+    if (unsyncedSchedules.length === 0) {
+      return res.json({
+        success: true,
+        message: 'All schedules are already synced',
+        total: 0,
+        synced: 0,
+        failed: 0,
+        results: []
+      });
+    }
+
+    const results = [];
+    let syncedCount = 0;
+    let failedCount = 0;
+
+    // Sync schedules one by one (with a small delay to avoid rate limiting)
+    for (const schedule of unsyncedSchedules) {
+      const result = await syncScheduleToCalendar(schedule);
+      results.push(result);
+      
+      if (result.success) {
+        syncedCount++;
+      } else {
+        failedCount++;
+      }
+
+      // Small delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    res.json({
+      success: true,
+      message: `Sync completed. ${syncedCount} synced, ${failedCount} failed.`,
+      total: unsyncedSchedules.length,
+      synced: syncedCount,
+      failed: failedCount,
+      results: results
+    });
+
+  } catch (error) {
+    console.error('Error syncing all schedules:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error syncing schedules',
+      error: error.message
+    });
+  }
+});
+
+// POST /api/schedule/:id/sync - Sync a single schedule to Google Calendar
+router.post('/:id/sync', async (req, res) => {
+  try {
+    const scheduleId = req.params.id;
+    const schedule = await Schedule.findById(scheduleId);
+
+    if (!schedule) {
+      return res.status(404).json({
+        success: false,
+        message: 'Schedule not found'
+      });
+    }
+
+    if (!isGoogleCalendarConfigured()) {
+      return res.status(503).json({
+        success: false,
+        message: 'Google Calendar is not configured'
+      });
+    }
+
+    const result = await syncScheduleToCalendar(schedule);
+
+    if (result.success) {
+      res.json({
+        success: true,
+        message: result.message,
+        scheduleId: result.scheduleId,
+        eventId: result.eventId
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        message: result.message,
+        scheduleId: result.scheduleId
+      });
+    }
+
+  } catch (error) {
+    console.error('Error syncing schedule:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error syncing schedule',
+      error: error.message
+    });
   }
 });
 

@@ -1,7 +1,7 @@
 import InstructorSidebar from '../common/InstructorSidebar.jsx';
 import InstructorHeader from '../common/InstructorHeader.jsx';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faUser, faCalendarAlt, faClock, faMapMarkerAlt, faFilter, faCalendarWeek } from '@fortawesome/free-solid-svg-icons';
+import { faUser, faCalendarAlt, faClock, faMapMarkerAlt, faFilter, faCalendarWeek, faSync, faExternalLinkAlt, faCheckCircle, faExclamationCircle, faCloudSun, faCloudRain, faSun, faBolt, faWind, faEye, faTemperatureHigh, faTemperatureLow, faExclamationTriangle, faInfoCircle } from '@fortawesome/free-solid-svg-icons';
 import '../../styles/InstructorDashboard.css';
 import { AuthContext } from '../../context/AuthContext.jsx';
 import React, { useState, useEffect, useContext } from 'react';
@@ -27,6 +27,14 @@ const InstructorDashboard = () => {
   const [allSchedules, setAllSchedules] = useState([]);
   const [selectedDay, setSelectedDay] = useState('all');
   const [selectedDate] = useState(new Date());
+  const [calendarEvents, setCalendarEvents] = useState([]);
+  const [syncedSchedules, setSyncedSchedules] = useState([]);
+  const [calendarConfigured, setCalendarConfigured] = useState(false);
+  const [loadingCalendar, setLoadingCalendar] = useState(false);
+  const [weather, setWeather] = useState(null);
+  const [weatherForecast, setWeatherForecast] = useState(null);
+  const [weatherAlert, setWeatherAlert] = useState(null);
+  const [loadingWeather, setLoadingWeather] = useState(false);
 
   // Days of the week for filtering
   const daysOfWeek = [
@@ -155,9 +163,144 @@ const InstructorDashboard = () => {
     };
   }, [userEmail, instructorData.firstname, instructorData.lastname]); // ensure fallback by name has data
 
+  // Fetch Google Calendar events
+  useEffect(() => {
+    if (!userEmail) return;
+
+    const fetchCalendarEvents = async () => {
+      setLoadingCalendar(true);
+      try {
+        const token = localStorage.getItem('token');
+        const apiBase = process.env.REACT_APP_API_BASE || 'http://localhost:5000';
+        
+        const response = await fetch(`${apiBase}/api/instructors/calendar/events`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setCalendarEvents(data.events || []);
+          setSyncedSchedules(data.syncedSchedules || []);
+          setCalendarConfigured(data.configured || false);
+        } else if (response.status === 503) {
+          // Google Calendar not configured
+          setCalendarConfigured(false);
+          setCalendarEvents([]);
+          setSyncedSchedules([]);
+        }
+      } catch (error) {
+        console.error('Error fetching calendar events:', error);
+        setCalendarConfigured(false);
+      } finally {
+        setLoadingCalendar(false);
+      }
+    };
+
+    fetchCalendarEvents();
+    
+    // Refresh every 5 minutes
+    const calendarInterval = setInterval(fetchCalendarEvents, 300000);
+    
+    return () => clearInterval(calendarInterval);
+  }, [userEmail]);
+
+  // Fetch weather for Malaybalay City, Bukidnon
+  useEffect(() => {
+    const fetchWeather = async () => {
+      setLoadingWeather(true);
+      try {
+        const response = await fetch(`${apiBase}/api/weather/current?city=Malaybalay&countryCode=PH`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success) {
+            setWeather(data.weather);
+            setWeatherAlert(data.alert);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching weather:', error);
+      } finally {
+        setLoadingWeather(false);
+      }
+    };
+
+    const fetchForecast = async () => {
+      try {
+        const response = await fetch(`${apiBase}/api/weather/forecast?city=Malaybalay&countryCode=PH`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success) {
+            setWeatherForecast(data.forecast);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching weather forecast:', error);
+      }
+    };
+
+    // Initial fetch
+    fetchWeather();
+    fetchForecast();
+
+    // Auto-refresh every 30 minutes
+    const weatherInterval = setInterval(() => {
+      fetchWeather();
+      fetchForecast();
+    }, 30 * 60 * 1000);
+
+    return () => clearInterval(weatherInterval);
+  }, [apiBase]);
+
   if (!userEmail) {
     return <p>Loading user information...</p>;
   }
+
+  // Helper functions for weather display
+  const getWeatherIcon = (main) => {
+    switch (main) {
+      case 'Thunderstorm':
+        return faBolt;
+      case 'Rain':
+      case 'Drizzle':
+        return faCloudRain;
+      case 'Clear':
+        return faSun;
+      default:
+        return faCloudSun;
+    }
+  };
+
+  const getSeverityColor = (severity) => {
+    switch (severity) {
+      case 'danger':
+        return '#dc2626';
+      case 'warning':
+        return '#f59e0b';
+      case 'info':
+        return '#3b82f6';
+      default:
+        return '#6b7280';
+    }
+  };
+
+  // Format date for display
+  const formatEventDate = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { 
+      weekday: 'short', 
+      month: 'short', 
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit'
+    });
+  };
+
+  // Get Google Calendar URL
+  const getGoogleCalendarUrl = () => {
+    return `https://calendar.google.com/calendar/u/0/r`;
+  };
 
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
@@ -643,6 +786,326 @@ const InstructorDashboard = () => {
               </div>
             )}
           </div>
+
+          {/* Weather Section */}
+          <div style={{ 
+            background: '#fff', 
+            padding: '30px', 
+            borderRadius: '15px', 
+            boxShadow: '0 4px 20px rgba(0,0,0,0.08)', 
+            borderLeft: '5px solid #3b82f6', 
+            marginTop: '30px' 
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '25px', flexWrap: 'wrap', gap: '15px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                <FontAwesomeIcon icon={faCloudSun} style={{ color: '#3b82f6', fontSize: '24px' }} />
+                <h3 style={{ color: '#1e293b', fontSize: '24px', fontWeight: '600', margin: 0 }}>Weather Forecast - Malaybalay City</h3>
+              </div>
+            </div>
+
+            {loadingWeather ? (
+              <div style={{ textAlign: 'center', padding: '40px' }}>
+                <FontAwesomeIcon icon={faSync} spin style={{ fontSize: '24px', color: '#3b82f6', marginBottom: '10px' }} />
+                <p style={{ color: '#64748b', margin: 0 }}>Loading weather data...</p>
+              </div>
+            ) : weather ? (
+              <>
+                {/* Current Weather */}
+                <div style={{ 
+                  background: 'linear-gradient(135deg, #3b82f6 0%, #1e40af 100%)', 
+                  padding: '25px', 
+                  borderRadius: '12px', 
+                  color: 'white',
+                  marginBottom: '20px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '20px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+                      <FontAwesomeIcon icon={getWeatherIcon(weather.main)} style={{ fontSize: '64px' }} />
+                      <div>
+                        <div style={{ fontSize: '48px', fontWeight: '700', lineHeight: '1' }}>
+                          {weather.temperature}°C
+                        </div>
+                        <div style={{ fontSize: '18px', opacity: 0.9, marginTop: '5px', textTransform: 'capitalize' }}>
+                          {weather.description}
+                        </div>
+                        <div style={{ fontSize: '14px', opacity: 0.8, marginTop: '5px' }}>
+                          Feels like {weather.feelsLike}°C
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '15px', flex: '1', maxWidth: '300px' }}>
+                      <div style={{ background: 'rgba(255,255,255,0.2)', padding: '12px', borderRadius: '8px', textAlign: 'center' }}>
+                        <FontAwesomeIcon icon={faWind} style={{ marginBottom: '5px' }} />
+                        <div style={{ fontSize: '12px', opacity: 0.9 }}>Wind</div>
+                        <div style={{ fontSize: '16px', fontWeight: '600' }}>{Math.round(weather.windSpeed * 3.6)} km/h</div>
+                      </div>
+                      <div style={{ background: 'rgba(255,255,255,0.2)', padding: '12px', borderRadius: '8px', textAlign: 'center' }}>
+                        <FontAwesomeIcon icon={faTemperatureHigh} style={{ marginBottom: '5px' }} />
+                        <div style={{ fontSize: '12px', opacity: 0.9 }}>Humidity</div>
+                        <div style={{ fontSize: '16px', fontWeight: '600' }}>{weather.humidity}%</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Weather Alert */}
+                {weatherAlert && weatherAlert.hasAlert && (
+                  <div style={{
+                    background: weatherAlert.severity === 'danger' ? '#fee2e2' : 
+                               weatherAlert.severity === 'warning' ? '#fef3c7' : '#dbeafe',
+                    border: `2px solid ${getSeverityColor(weatherAlert.severity)}`,
+                    padding: '15px',
+                    borderRadius: '10px',
+                    marginBottom: '20px'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                      <FontAwesomeIcon 
+                        icon={weatherAlert.severity === 'danger' || weatherAlert.severity === 'warning' ? faExclamationTriangle : faInfoCircle} 
+                        style={{ color: getSeverityColor(weatherAlert.severity), fontSize: '18px' }} 
+                      />
+                      <strong style={{ color: getSeverityColor(weatherAlert.severity), textTransform: 'uppercase', fontSize: '14px' }}>
+                        {weatherAlert.severity} Alert
+                      </strong>
+                    </div>
+                    <p style={{ margin: 0, color: '#1e293b', fontSize: '14px' }}>{weatherAlert.message}</p>
+                  </div>
+                )}
+
+                {/* 5-Day Forecast */}
+                {weatherForecast && weatherForecast.forecast && weatherForecast.forecast.length > 0 && (
+                  <div>
+                    <h4 style={{ color: '#374151', fontSize: '16px', fontWeight: '600', marginBottom: '15px' }}>
+                      5-Day Forecast
+                    </h4>
+                    <div style={{ display: 'grid', gap: '10px' }}>
+                      {weatherForecast.forecast.slice(0, 5).map((day, idx) => {
+                        const mainForecast = day.forecasts[0]; // Get first forecast of the day
+                        return (
+                          <div
+                            key={idx}
+                            style={{
+                              padding: '15px',
+                              background: '#f8fafc',
+                              borderRadius: '10px',
+                              border: '1px solid #e2e8f0',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              flexWrap: 'wrap',
+                              gap: '15px'
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '15px', flex: '1' }}>
+                              <div style={{ width: '60px', textAlign: 'center' }}>
+                                <div style={{ fontSize: '14px', fontWeight: '600', color: '#1e293b' }}>
+                                  {day.dayName.slice(0, 3)}
+                                </div>
+                                <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
+                                  {new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                </div>
+                              </div>
+                              <FontAwesomeIcon 
+                                icon={getWeatherIcon(mainForecast?.main || 'Clouds')} 
+                                style={{ fontSize: '32px', color: '#3b82f6' }} 
+                              />
+                              <div style={{ flex: '1' }}>
+                                <div style={{ fontSize: '14px', color: '#64748b', textTransform: 'capitalize', marginBottom: '3px' }}>
+                                  {mainForecast?.description || 'N/A'}
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '15px', fontSize: '12px', color: '#64748b' }}>
+                                  <span><FontAwesomeIcon icon={faWind} style={{ marginRight: '5px' }} /> {Math.round((mainForecast?.windSpeed || 0) * 3.6)} km/h</span>
+                                  <span><FontAwesomeIcon icon={faTemperatureHigh} style={{ marginRight: '5px' }} /> {mainForecast?.humidity || 0}%</span>
+                                </div>
+                              </div>
+                              <div style={{ fontSize: '24px', fontWeight: '700', color: '#1e293b' }}>
+                                {mainForecast?.temperature || 'N/A'}°C
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
+                <FontAwesomeIcon icon={faCloudSun} style={{ fontSize: '48px', marginBottom: '15px', opacity: 0.5 }} />
+                <p>Weather data unavailable</p>
+              </div>
+            )}
+          </div>
+
+          {/* Google Calendar Section */}
+          {calendarConfigured && (
+            <div style={{ background: '#fff', padding: '30px', borderRadius: '15px', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', borderLeft: '5px solid #4285f4', marginTop: '30px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '25px', flexWrap: 'wrap', gap: '15px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                  <FontAwesomeIcon icon={faCalendarAlt} style={{ color: '#4285f4', fontSize: '24px' }} />
+                  <h3 style={{ color: '#1e293b', fontSize: '24px', fontWeight: '600', margin: 0 }}>Google Calendar</h3>
+                  {syncedSchedules.length > 0 && (
+                    <span style={{
+                      background: 'linear-gradient(135deg, #10b981 0%, #34d399 100%)',
+                      color: 'white',
+                      padding: '4px 12px',
+                      borderRadius: '12px',
+                      fontSize: '12px',
+                      fontWeight: '600',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}>
+                      <FontAwesomeIcon icon={faCheckCircle} style={{ fontSize: '10px' }} />
+                      {syncedSchedules.length} Synced
+                    </span>
+                  )}
+                </div>
+                <a
+                  href={getGoogleCalendarUrl()}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '10px 20px',
+                    background: 'linear-gradient(135deg, #4285f4 0%, #1a73e8 100%)',
+                    color: 'white',
+                    textDecoration: 'none',
+                    borderRadius: '8px',
+                    fontWeight: '600',
+                    fontSize: '14px',
+                    transition: 'transform 0.2s ease',
+                  }}
+                  onMouseOver={(e) => (e.currentTarget.style.transform = 'translateY(-2px)')}
+                  onMouseOut={(e) => (e.currentTarget.style.transform = '')}
+                >
+                  <FontAwesomeIcon icon={faExternalLinkAlt} />
+                  Open Google Calendar
+                </a>
+              </div>
+
+              {loadingCalendar ? (
+                <div style={{ textAlign: 'center', padding: '40px' }}>
+                  <FontAwesomeIcon icon={faSync} spin style={{ fontSize: '24px', color: '#4285f4', marginBottom: '10px' }} />
+                  <p style={{ color: '#64748b', margin: 0 }}>Loading calendar events...</p>
+                </div>
+              ) : calendarEvents.length > 0 ? (
+                <div style={{ marginTop: '20px' }}>
+                  <h4 style={{ color: '#374151', fontSize: '16px', fontWeight: '600', marginBottom: '15px' }}>
+                    Upcoming Events ({calendarEvents.length})
+                  </h4>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {calendarEvents.slice(0, 5).map((event, index) => (
+                      <div
+                        key={event.id || index}
+                        style={{
+                          padding: '15px',
+                          background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)',
+                          borderRadius: '10px',
+                          border: '1px solid #e2e8f0',
+                          transition: 'all 0.2s ease'
+                        }}
+                        onMouseOver={(e) => {
+                          e.currentTarget.style.background = 'linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%)';
+                          e.currentTarget.style.transform = 'translateX(5px)';
+                        }}
+                        onMouseOut={(e) => {
+                          e.currentTarget.style.background = 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)';
+                          e.currentTarget.style.transform = 'translateX(0)';
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+                          <div style={{ flex: 1 }}>
+                            <h5 style={{ color: '#1e293b', fontSize: '16px', fontWeight: '600', margin: '0 0 5px 0' }}>
+                              {event.summary || 'Untitled Event'}
+                            </h5>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '15px', flexWrap: 'wrap', marginTop: '8px' }}>
+                              <span style={{ color: '#64748b', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                <FontAwesomeIcon icon={faClock} style={{ fontSize: '12px' }} />
+                                {formatEventDate(event.start?.dateTime || event.start?.date || '')}
+                              </span>
+                              {event.location && (
+                                <span style={{ color: '#64748b', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                  <FontAwesomeIcon icon={faMapMarkerAlt} style={{ fontSize: '12px' }} />
+                                  {event.location}
+                                </span>
+                              )}
+                            </div>
+                            {event.description && (
+                              <p style={{ color: '#475569', fontSize: '13px', margin: '8px 0 0 0', lineHeight: '1.5' }}>
+                                {event.description.split('\n')[0]}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {calendarEvents.length > 5 && (
+                      <p style={{ color: '#64748b', fontSize: '13px', textAlign: 'center', marginTop: '10px' }}>
+                        And {calendarEvents.length - 5} more events. View all in Google Calendar.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div style={{ textAlign: 'center', padding: '40px', background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)', borderRadius: '12px' }}>
+                  <FontAwesomeIcon icon={faCalendarAlt} style={{ fontSize: '48px', color: '#cbd5e1', marginBottom: '15px' }} />
+                  <p style={{ color: '#64748b', fontSize: '14px', margin: 0 }}>
+                    No upcoming calendar events. Your schedules will be automatically synced to Google Calendar.
+                  </p>
+                </div>
+              )}
+
+              {syncedSchedules.length > 0 && (
+                <div style={{ marginTop: '25px', paddingTop: '25px', borderTop: '2px solid #e2e8f0' }}>
+                  <h4 style={{ color: '#374151', fontSize: '16px', fontWeight: '600', marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <FontAwesomeIcon icon={faSync} style={{ color: '#4285f4', fontSize: '14px' }} />
+                    Synced Schedules ({syncedSchedules.length})
+                  </h4>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '12px' }}>
+                    {syncedSchedules.map((schedule) => (
+                      <div
+                        key={schedule._id}
+                        style={{
+                          padding: '12px',
+                          background: '#f0fdf4',
+                          borderRadius: '8px',
+                          border: '1px solid #86efac',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '10px'
+                        }}
+                      >
+                        <FontAwesomeIcon icon={faCheckCircle} style={{ color: '#10b981', fontSize: '14px' }} />
+                        <div style={{ flex: 1 }}>
+                          <p style={{ color: '#1e293b', fontSize: '13px', fontWeight: '600', margin: 0 }}>
+                            {schedule.subject}
+                          </p>
+                          <p style={{ color: '#64748b', fontSize: '11px', margin: '4px 0 0 0' }}>
+                            {schedule.day} • {schedule.time}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {!calendarConfigured && !loadingCalendar && (
+            <div style={{ background: '#fff', padding: '30px', borderRadius: '15px', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', borderLeft: '5px solid #f59e0b', marginTop: '30px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '15px' }}>
+                <FontAwesomeIcon icon={faExclamationCircle} style={{ color: '#f59e0b', fontSize: '24px' }} />
+                <h3 style={{ color: '#1e293b', fontSize: '20px', fontWeight: '600', margin: 0 }}>Google Calendar Integration</h3>
+              </div>
+              <p style={{ color: '#64748b', fontSize: '14px', margin: 0, lineHeight: '1.6' }}>
+                Google Calendar integration is not currently configured. When enabled, your schedules will be automatically synced to your Google Calendar.
+                Please contact your administrator for more information.
+              </p>
+            </div>
+          )}
         </div>
       </main>
     </div>

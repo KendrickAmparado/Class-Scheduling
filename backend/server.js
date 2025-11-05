@@ -5,6 +5,13 @@ import dotenv from 'dotenv';
 import http from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 
+// Initialize Sentry BEFORE anything else
+import * as Sentry from '@sentry/node';
+import { initSentry, isSentryReady } from './utils/sentry.js';
+
+// Initialize Sentry
+const sentryInitialized = initSentry();
+
 // Import your route files here
 import adminRoutes from './routes/adminRoutes.js';
 import scheduleRoutes from './routes/scheduleRoutes.js';
@@ -18,6 +25,9 @@ import alertsRoutes from './routes/alertsRoutes.js';
 import instructorNotificationRoutes from './routes/instructorNotificationRoutes.js';
 import scheduleTemplateRoutes from './routes/scheduleTemplateRoutes.js';
 import passwordResetRoutes from './routes/passwordResetRoutes.js';
+import publicRoutes from './routes/publicRoutes.js';
+import weatherRoutes from './routes/weatherRoutes.js';
+import { startWeatherScheduler } from './services/weatherScheduler.js';
 import Instructor from './models/Instructor.js'; // Import the model for index management
 
 dotenv.config();
@@ -27,8 +37,16 @@ const app = express();
 // Middleware
 app.use(cors({
   origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
 }));
+
+// Sentry request handler (must be before express.json)
+// Only use if Sentry is properly initialized
+if (isSentryReady()) {
+  app.use(Sentry.Handlers.requestHandler());
+}
+
 app.use(express.json());
 
 // MongoDB connection URI
@@ -84,6 +102,9 @@ mongoose
       next();
     });
 
+    // Start weather scheduler for automatic weather checks
+    startWeatherScheduler(io);
+
     // Route Mounting
     app.use('/api/admin', adminRoutes);
     app.use('/api/admin', alertsRoutes);
@@ -97,7 +118,15 @@ mongoose
     app.use('/api/sections', sectionRoutes);
     app.use('/api/schedule-templates', scheduleTemplateRoutes);
     app.use('/api/password-reset', passwordResetRoutes);
+    app.use('/api/public', publicRoutes);
+    app.use('/api/weather', weatherRoutes);
     app.use("/uploads", express.static("uploads"));
+
+    // Sentry error handler (must be before other error handlers)
+    // Only use if Sentry is properly initialized
+    if (isSentryReady()) {
+      app.use(Sentry.Handlers.errorHandler());
+    }
 
     // Existing health check, error handlers, socket handlers, etc.
 

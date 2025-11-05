@@ -1,6 +1,7 @@
 // middleware/authMiddleware.js
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
+import { setUser as setSentryUser } from "../utils/sentry.js";
 dotenv.config();
 
 /**
@@ -32,6 +33,13 @@ export const verifyToken = (req, res, next) => {
 
       // Expect token to include email
       req.userEmail = decoded.email;
+      
+      // Set Sentry user context for error tracking
+      setSentryUser({
+        email: decoded.email,
+        id: decoded.id || decoded.userId,
+      });
+      
       next();
     });
   } catch (err) {

@@ -10,6 +10,7 @@ const scheduleSchema = new mongoose.Schema({
   day: { type: String, required: true },
   time: { type: String, required: true },
   room: { type: String, required: true },
+  googleCalendarEventId: { type: String, required: false },
 }, { timestamps: true });
 
 export default mongoose.model("Schedule", scheduleSchema);

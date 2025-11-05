@@ -207,7 +207,7 @@ export const createCalendarEvent = async (schedule, instructorEmail) => {
         timeZone: 'Asia/Manila',
       },
       recurrence: [
-        `RRULE:FREQ=WEEKLY;BYDAY=${rruleDays}`
+        `RRULE:FREQ=DAILY`
       ],
     };
     
@@ -305,7 +305,7 @@ export const updateCalendarEvent = async (eventId, schedule, instructorEmail) =>
         timeZone: 'Asia/Manila',
       },
       recurrence: [
-        `RRULE:FREQ=WEEKLY;BYDAY=${rruleDays}`
+        `RRULE:FREQ=DAILY`
       ],
     };
     

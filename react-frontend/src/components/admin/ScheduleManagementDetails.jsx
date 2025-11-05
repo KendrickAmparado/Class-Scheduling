@@ -16,9 +16,7 @@ import {
   faCopy,
   faFileImport,
   faFileAlt,
-  faEdit,
-  faDownload,
-  faCalendar
+  faEdit
 } from '@fortawesome/free-solid-svg-icons';
 import axios from 'axios';
 import Sidebar from '../common/Sidebar.jsx';
@@ -28,7 +26,6 @@ import ConfirmationDialog from '../common/ConfirmationDialog.jsx';
 import ConflictResolutionModal from './ConflictResolutionModal.jsx';
 import ScheduleTemplateManager from './ScheduleTemplateManager.jsx';
 import ScheduleImporter from './ScheduleImporter.jsx';
-import { downloadIcalFile, generateGoogleCalendarUrl } from '../../utils/icalExporter.js';
 
 // ============== SCHEDULE VALIDATION UTILITIES ==============
 const parseTime = (timeStr) => {
@@ -361,60 +358,6 @@ const ScheduleManagementDetails = () => {
   const getSectionSchedules = useCallback((sectionName) => {
     return schedules.filter(sched => sched.section === sectionName);
   }, [schedules]);
-
-  const handleExportToIcal = () => {
-    if (!selectedSection) {
-      showToast('Please select a section first', 'warning');
-      return;
-    }
-    
-    const sectionSchedules = getSectionSchedules(selectedSection.name);
-    if (sectionSchedules.length === 0) {
-      showToast('No schedules to export', 'warning');
-      return;
-    }
-    
-    try {
-      const filename = `${course}-${year}-${selectedSection.name}-schedule`;
-      const calendarName = `${course.toUpperCase()} ${year} - Section ${selectedSection.name} Schedule`;
-      
-      downloadIcalFile(sectionSchedules, filename, {
-        calendarName,
-        courseName: course,
-        sectionName: selectedSection.name
-      });
-      
-      showToast('Schedule exported to iCal file successfully!', 'success');
-    } catch (error) {
-      console.error('Error exporting to iCal:', error);
-      showToast(error.message || 'Failed to export schedule. Please check the schedule data.', 'error');
-    }
-  };
-  
-  const handleExportToGoogleCalendar = () => {
-    if (!selectedSection) {
-      showToast('Please select a section first', 'warning');
-      return;
-    }
-    
-    const sectionSchedules = getSectionSchedules(selectedSection.name);
-    if (sectionSchedules.length === 0) {
-      showToast('No schedules to export', 'warning');
-      return;
-    }
-    
-    // For multiple schedules, export the first one as example
-    // In a real scenario, you might want to create a combined calendar
-    if (sectionSchedules.length > 0) {
-      const url = generateGoogleCalendarUrl(sectionSchedules[0]);
-      if (url) {
-        window.open(url, '_blank');
-        showToast('Opening Google Calendar...', 'info');
-      } else {
-        showToast('Could not generate Google Calendar URL', 'error');
-      }
-    }
-  };
 
   const handleAddSchedule = async (e) => {
     e.preventDefault();
@@ -890,54 +833,6 @@ const ScheduleManagementDetails = () => {
                         </p>
                       </div>
                       <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                        {getSectionSchedules(selectedSection.name).length > 0 && (
-                          <>
-                            <button
-                              onClick={handleExportToIcal}
-                              style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '8px',
-                                padding: '12px 20px',
-                                background: 'linear-gradient(135deg, #0f2c63 0%, #1e40af 100%)',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '10px',
-                                fontWeight: '600',
-                                cursor: 'pointer',
-                                fontSize: '15px',
-                                transition: 'transform 0.18s ease',
-                              }}
-                              onMouseOver={(e) => (e.currentTarget.style.transform = 'translateY(-2px)')}
-                              onMouseOut={(e) => (e.currentTarget.style.transform = '')}
-                            >
-                              <FontAwesomeIcon icon={faDownload} />
-                              Export iCal
-                            </button>
-                            <button
-                              onClick={handleExportToGoogleCalendar}
-                              style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '8px',
-                                padding: '12px 20px',
-                                background: 'linear-gradient(135deg, #4285f4 0%, #1a73e8 100%)',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '10px',
-                                fontWeight: '600',
-                                cursor: 'pointer',
-                                fontSize: '15px',
-                                transition: 'transform 0.18s ease',
-                              }}
-                              onMouseOver={(e) => (e.currentTarget.style.transform = 'translateY(-2px)')}
-                              onMouseOut={(e) => (e.currentTarget.style.transform = '')}
-                            >
-                              <FontAwesomeIcon icon={faCalendar} />
-                              Google Calendar
-                            </button>
-                          </>
-                        )}
                         <button
                           onClick={() => setShowTemplateManager(true)}
                           style={{

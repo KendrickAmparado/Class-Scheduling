@@ -4,7 +4,9 @@ import jwt from "jsonwebtoken";
 import Instructor from "../models/Instructor.js";
 import Counter from "../models/Counter.js";
 import Alert from "../models/Alert.js";
+import Schedule from "../models/Schedule.js";
 import { verifyToken } from "../middleware/authMiddleware.js";
+import { listCalendarEvents, isGoogleCalendarConfigured } from "../services/googleCalendarService.js";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -44,6 +46,63 @@ router.get("/profile/me", verifyToken, async (req, res) => {
     res.json(instructor);
   } catch (err) {
     res.status(500).json({ message: "Error fetching profile", error: err.message });
+  }
+});
+
+// SELF: Get Google Calendar events for current instructor
+router.get("/calendar/events", verifyToken, async (req, res) => {
+  try {
+    const instructor = await Instructor.findOne({ email: req.userEmail })
+      .select("email status");
+    
+    if (!instructor) {
+      return res.status(404).json({ message: "Instructor not found" });
+    }
+
+    if (instructor.status !== 'active') {
+      return res.status(403).json({ message: "Instructor account is not active" });
+    }
+
+    // Check if Google Calendar is configured
+    if (!isGoogleCalendarConfigured()) {
+      return res.status(503).json({ 
+        message: "Google Calendar is not configured",
+        configured: false
+      });
+    }
+
+    // Get query parameters for filtering
+    const timeMin = req.query.timeMin || new Date().toISOString();
+    const timeMax = req.query.timeMax;
+    const maxResults = parseInt(req.query.maxResults) || 50;
+
+    // Fetch calendar events
+    const events = await listCalendarEvents(instructor.email, {
+      timeMin,
+      timeMax,
+      maxResults
+    });
+
+    // Also get schedules that are synced to calendar
+    const schedules = await Schedule.find({ 
+      instructorEmail: instructor.email,
+      googleCalendarEventId: { $exists: true, $ne: null }
+    }).select('_id subject course year section day time room googleCalendarEventId');
+
+    res.json({
+      configured: true,
+      events: events || [],
+      syncedSchedules: schedules || [],
+      count: events?.length || 0
+    });
+
+  } catch (error) {
+    console.error('Error fetching Google Calendar events:', error);
+    res.status(500).json({ 
+      message: "Error fetching calendar events", 
+      error: error.message,
+      configured: isGoogleCalendarConfigured()
+    });
   }
 });
 

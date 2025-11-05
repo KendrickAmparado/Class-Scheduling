@@ -9,7 +9,7 @@ const RECAPTCHA_SITE_KEY = '6LcxZ_wrAAAAADV8aWfxkks2Weu6DuHNYnGw7jnT';
 
 const ForgotPassword = () => {
   const [searchParams] = useSearchParams();
-  const userType = searchParams.get('type') || 'instructor'; // Default to instructor
+  const userType = 'instructor'; // Only instructors can reset password
   const navigate = useNavigate();
   
   const [formData, setFormData] = useState({
@@ -60,10 +60,11 @@ const ForgotPassword = () => {
       }
     } catch (err) {
       console.error('Forgot password error:', err);
+      console.error('Error response:', err.response?.data);
       if (err.response?.data?.message) {
         setError(err.response.data.message);
       } else {
-        setError('Failed to send reset email. Please try again.');
+        setError('Failed to send reset email. Please check your backend console for details or contact the administrator.');
       }
     } finally {
       setLoading(false);

@@ -4,6 +4,15 @@ import InstructorNotification from '../models/InstructorNotification.js';
 
 const router = express.Router();
 
+// Health check endpoint (no auth required)
+router.get('/notifications/health', (req, res) => {
+  res.json({ 
+    success: true, 
+    message: 'Notifications endpoint is accessible',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // GET current instructor's notifications (with pagination)
 router.get('/notifications', verifyToken, async (req, res) => {
   try {

@@ -32,9 +32,36 @@ const InstructorNotifications = () => {
     setLoading(true);
     try {
       const token = getToken();
-      const res = await fetch(`${apiBase}/api/instructor/notifications?page=${page}&limit=20`, {
-        headers: { Authorization: `Bearer ${token}` }
+      
+      if (!token) {
+        console.error('No authentication token found');
+        showToast('Please log in to view notifications', 'error');
+        setLoading(false);
+        return;
+      }
+
+      const url = `${apiBase}/api/instructor/notifications?page=${page}&limit=20`;
+      console.log('Fetching notifications from:', url);
+      
+      const res = await fetch(url, {
+        method: 'GET',
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
       });
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = { message: errorText || `Server error: ${res.status} ${res.statusText}` };
+        }
+        throw new Error(errorData.message || `Failed to fetch: ${res.status} ${res.statusText}`);
+      }
+
       const data = await res.json();
       
       if (data.success) {
@@ -48,16 +75,35 @@ const InstructorNotifications = () => {
         setNotifications(filtered);
         setPagination(data.pagination || pagination);
         setUnreadCount(data.unreadCount || 0);
+      } else {
+        throw new Error(data.message || 'Failed to load notifications');
       }
     } catch (error) {
       console.error('Error fetching notifications:', error);
-      showToast('Failed to load notifications', 'error');
+      const errorMessage = error.message || 'Failed to load notifications. Please check if the backend server is running.';
+      showToast(errorMessage, 'error');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
+    // Check backend connectivity first
+    const checkBackendConnection = async () => {
+      try {
+        const healthCheck = await fetch(`${apiBase}/api/instructor/notifications/health`);
+        if (!healthCheck.ok) {
+          console.error('Backend health check failed:', healthCheck.status);
+          showToast('Backend server is not responding. Please check if the server is running.', 'error');
+        }
+      } catch (error) {
+        console.error('Cannot connect to backend:', error);
+        showToast('Cannot connect to backend server. Please ensure the server is running on http://localhost:5000', 'error');
+      }
+    };
+
+    checkBackendConnection();
+
     if (userEmail) {
       fetchNotifications(pagination.page);
     }
@@ -72,42 +118,82 @@ const InstructorNotifications = () => {
   const markAsRead = async (id) => {
     try {
       const token = getToken();
+      
+      if (!token) {
+        showToast('Please log in to mark notifications as read', 'error');
+        return;
+      }
+
       const res = await fetch(`${apiBase}/api/instructor/notifications/${id}/read`, {
         method: 'PATCH',
         headers: { 
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}` 
+          'Authorization': `Bearer ${token}` 
         }
       });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || `Failed to mark as read: ${res.status}`);
+      }
+
+      const data = await res.json();
       
-      if (res.ok) {
+      if (data.success) {
         setNotifications(prev => prev.map(n => n._id === id ? { ...n, read: true } : n));
         setUnreadCount(prev => Math.max(0, prev - 1));
       }
     } catch (error) {
       console.error('Error marking as read:', error);
+      showToast(error.message || 'Failed to mark notification as read', 'error');
     }
   };
 
   const markAllAsRead = async () => {
     try {
       const token = getToken();
+      
+      if (!token) {
+        showToast('Please log in to mark notifications as read', 'error');
+        return;
+      }
+
       const res = await fetch(`${apiBase}/api/instructor/notifications/read-all`, {
         method: 'PATCH',
         headers: { 
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}` 
+          'Authorization': `Bearer ${token}` 
         }
       });
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = { message: errorText || `Server error: ${res.status} ${res.statusText}` };
+        }
+        throw new Error(errorData.message || `Failed to mark all as read: ${res.status}`);
+      }
       
-      if (res.ok) {
+      const data = await res.json();
+      
+      if (data.success) {
+        // Update local state immediately for better UX
         setNotifications(prev => prev.map(n => ({ ...n, read: true })));
         setUnreadCount(0);
         showToast('All notifications marked as read', 'success');
+        
+        // Refresh notifications to get updated data from server
+        await fetchNotifications(pagination.page);
+      } else {
+        throw new Error(data.message || 'Failed to mark all as read');
       }
     } catch (error) {
       console.error('Error marking all as read:', error);
-      showToast('Failed to mark all as read', 'error');
+      const errorMessage = error.message || 'Failed to mark all as read. Please check if the backend server is running.';
+      showToast(errorMessage, 'error');
     }
   };
 

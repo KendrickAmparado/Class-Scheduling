@@ -7,7 +7,6 @@ import rateLimit from 'express-rate-limit';
 import axios from 'axios';
 import PasswordResetToken from '../models/PasswordResetToken.js';
 import Instructor from '../models/Instructor.js';
-import Admin from '../models/Admin.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -48,58 +47,93 @@ router.post('/forgot', resetLimiter, async (req, res) => {
       });
     }
 
-    if (!['instructor', 'admin'].includes(userType)) {
+    if (userType !== 'instructor') {
       return res.status(400).json({ 
         success: false, 
-        message: 'Invalid user type. Must be "instructor" or "admin".' 
+        message: 'Invalid user type. Password reset is only available for instructors.' 
       });
     }
 
     // Verify reCAPTCHA
     if (recaptchaToken) {
       try {
-        const secretKey = process.env.RECAPTCHA_SECRET_KEY || 'YOUR_SECRET_KEY_HERE';
-        const verify = await axios.post('https://www.google.com/recaptcha/api/siteverify', null, {
-          params: { secret: secretKey, response: recaptchaToken }
-        });
-        if (!verify.data.success) {
-          return res.status(400).json({ 
-            success: false, 
-            message: 'reCAPTCHA verification failed.' 
+        const secretKey = process.env.RECAPTCHA_SECRET_KEY;
+        
+        if (!secretKey || secretKey === 'YOUR_SECRET_KEY_HERE') {
+          console.warn('⚠️ RECAPTCHA_SECRET_KEY not configured or using default value');
+          // If reCAPTCHA is not configured, skip verification (for development)
+          // In production, you should require reCAPTCHA
+          if (process.env.NODE_ENV === 'production') {
+            return res.status(500).json({ 
+              success: false, 
+              message: 'reCAPTCHA is not properly configured. Please contact the system administrator.' 
+            });
+          }
+          console.log('⚠️ Skipping reCAPTCHA verification in development mode');
+        } else {
+          const verify = await axios.post('https://www.google.com/recaptcha/api/siteverify', null, {
+            params: { secret: secretKey, response: recaptchaToken }
           });
+          
+          console.log('reCAPTCHA verification response:', {
+            success: verify.data.success,
+            errorCodes: verify.data['error-codes']
+          });
+          
+          if (!verify.data.success) {
+            const errorCodes = verify.data['error-codes'] || [];
+            let errorMessage = 'reCAPTCHA verification failed.';
+            
+            // Provide specific error messages based on error codes
+            if (errorCodes.includes('missing-input-secret') || errorCodes.includes('invalid-input-secret')) {
+              errorMessage = 'reCAPTCHA configuration error. Please contact the system administrator.';
+            } else if (errorCodes.includes('missing-input-response') || errorCodes.includes('invalid-input-response')) {
+              errorMessage = 'reCAPTCHA token is invalid. Please try again.';
+            } else if (errorCodes.includes('timeout-or-duplicate')) {
+              errorMessage = 'reCAPTCHA token has expired. Please try again.';
+            }
+            
+            console.error('❌ reCAPTCHA verification failed:', errorCodes);
+            return res.status(400).json({ 
+              success: false, 
+              message: errorMessage 
+            });
+          }
+          
+          console.log('✅ reCAPTCHA verification successful');
         }
       } catch (err) {
-        console.error('reCAPTCHA verification error:', err);
-        return res.status(500).json({ 
+        console.error('❌ reCAPTCHA verification error:', err.message);
+        console.error('Error details:', err.response?.data);
+        
+        // If it's a network error and in development, allow it to proceed
+        if (process.env.NODE_ENV === 'development' && !process.env.RECAPTCHA_SECRET_KEY) {
+          console.warn('⚠️ Allowing request to proceed in development mode without reCAPTCHA');
+        } else {
+          return res.status(500).json({ 
+            success: false, 
+            message: 'Error during reCAPTCHA verification. Please try again.' 
+          });
+        }
+      }
+    } else {
+      // If no token provided but reCAPTCHA is required
+      if (process.env.RECAPTCHA_SECRET_KEY && process.env.RECAPTCHA_SECRET_KEY !== 'YOUR_SECRET_KEY_HERE') {
+        return res.status(400).json({ 
           success: false, 
-          message: 'Error during reCAPTCHA verification.' 
+          message: 'Please complete the reCAPTCHA verification.' 
         });
       }
     }
 
-    // Check if user exists
-    let user;
-    if (userType === 'instructor') {
-      user = await Instructor.findOne({ email: email.toLowerCase().trim() });
-      if (!user) {
-        // Don't reveal if email exists for security
-        return res.json({ 
-          success: true, 
-          message: 'If the email exists, a password reset link has been sent.' 
-        });
-      }
-    } else {
-      // Admin - check if email matches any admin (you may need to adjust this based on your Admin model)
-      const admin = await Admin.findOne();
-      if (!admin) {
-        return res.status(500).json({ 
-          success: false, 
-          message: 'System configuration error.' 
-        });
-      }
-      // For admin, we'll allow reset if email matches a configured admin email
-      // You may want to add an email field to Admin model
-      user = { email: admin.email || 'admin@example.com' }; // Adjust based on your Admin model
+    // Check if instructor exists
+    const instructor = await Instructor.findOne({ email: email.toLowerCase().trim() });
+    if (!instructor) {
+      // Don't reveal if email exists for security
+      return res.json({ 
+        success: true, 
+        message: 'If the email exists, a password reset link has been sent.' 
+      });
     }
 
     // Generate reset token
@@ -117,10 +151,10 @@ router.post('/forgot', resetLimiter, async (req, res) => {
 
     // Check if email service is configured
     if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-      console.error('Email service not configured');
+      console.error('⚠️ Email service not configured - EMAIL_USER or EMAIL_PASS missing');
       return res.status(500).json({ 
         success: false, 
-        message: 'Email service not configured. Please contact administrator.' 
+        message: 'Email service is not configured. Please contact the system administrator.' 
       });
     }
 
@@ -134,6 +168,18 @@ router.post('/forgot', resetLimiter, async (req, res) => {
         pass: process.env.EMAIL_PASS
       }
     });
+
+    // Verify SMTP connection before sending
+    try {
+      await transporter.verify();
+      console.log('✅ SMTP connection verified successfully');
+    } catch (verifyError) {
+      console.error('❌ SMTP verification failed:', verifyError.message);
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Email service configuration error. Please contact the system administrator.' 
+      });
+    }
 
     const resetLink = `http://localhost:3000/password-reset?token=${resetToken}&email=${encodeURIComponent(email)}&type=${userType}`;
     
@@ -169,17 +215,45 @@ router.post('/forgot', resetLimiter, async (req, res) => {
       `
     };
 
-    await transporter.sendMail(mailOptions);
-
-    res.json({ 
-      success: true, 
-      message: 'If the email exists, a password reset link has been sent.' 
-    });
+    try {
+      const info = await transporter.sendMail(mailOptions);
+      console.log('✅ Password reset email sent successfully:', info.messageId);
+      
+      res.json({ 
+        success: true, 
+        message: 'If the email exists, a password reset link has been sent.' 
+      });
+    } catch (sendError) {
+      console.error('❌ Error sending password reset email:', sendError.message);
+      console.error('Full error:', sendError);
+      
+      // Provide more specific error messages
+      let errorMessage = 'Failed to send reset email. Please try again.';
+      if (sendError.code === 'EAUTH') {
+        errorMessage = 'Email authentication failed. Please contact the system administrator.';
+      } else if (sendError.code === 'ECONNECTION') {
+        errorMessage = 'Could not connect to email server. Please try again later.';
+      } else if (sendError.responseCode === 535) {
+        errorMessage = 'Email authentication failed. Please check email credentials.';
+      }
+      
+      return res.status(500).json({ 
+        success: false, 
+        message: errorMessage 
+      });
+    }
   } catch (error) {
-    console.error('Password reset request error:', error);
+    console.error('❌ Password reset request error:', error);
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      responseCode: error.responseCode,
+      stack: error.stack
+    });
+    
     res.status(500).json({ 
       success: false, 
-      message: 'Error processing password reset request.' 
+      message: 'Error processing password reset request. Please try again later.' 
     });
   }
 });
@@ -230,29 +304,16 @@ router.post('/reset', resetPasswordLimiter, async (req, res) => {
     // Hash new password
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-    // Update user password
-    if (userType === 'instructor') {
-      const instructor = await Instructor.findOne({ email: email.toLowerCase().trim() });
-      if (!instructor) {
-        return res.status(404).json({ 
-          success: false, 
-          message: 'Instructor not found.' 
-        });
-      }
-      instructor.password = hashedPassword;
-      await instructor.save();
-    } else {
-      // Admin password reset
-      const admin = await Admin.findOne();
-      if (!admin) {
-        return res.status(500).json({ 
-          success: false, 
-          message: 'System configuration error.' 
-        });
-      }
-      admin.password = hashedPassword;
-      await admin.save();
+    // Update instructor password
+    const instructor = await Instructor.findOne({ email: email.toLowerCase().trim() });
+    if (!instructor) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Instructor not found.' 
+      });
     }
+    instructor.password = hashedPassword;
+    await instructor.save();
 
     // Mark token as used
     resetToken.used = true;
@@ -267,6 +328,58 @@ router.post('/reset', resetPasswordLimiter, async (req, res) => {
     res.status(500).json({ 
       success: false, 
       message: 'Error resetting password.' 
+    });
+  }
+});
+
+// GET /api/password-reset/test-email - Test email configuration (for debugging)
+router.get('/test-email', async (req, res) => {
+  try {
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+      return res.status(500).json({
+        success: false,
+        configured: false,
+        message: 'Email service not configured',
+        details: {
+          EMAIL_USER: process.env.EMAIL_USER ? 'Set' : 'Missing',
+          EMAIL_PASS: process.env.EMAIL_PASS ? 'Set' : 'Missing'
+        }
+      });
+    }
+
+    const transporter = nodemailer.createTransport({
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false,
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+      }
+    });
+
+    try {
+      await transporter.verify();
+      return res.json({
+        success: true,
+        configured: true,
+        message: 'Email service is configured and connection verified successfully',
+        email: process.env.EMAIL_USER
+      });
+    } catch (verifyError) {
+      return res.status(500).json({
+        success: false,
+        configured: true,
+        message: 'Email service configured but connection failed',
+        error: verifyError.message,
+        code: verifyError.code
+      });
+    }
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      configured: false,
+      message: 'Error testing email configuration',
+      error: error.message
     });
   }
 });
