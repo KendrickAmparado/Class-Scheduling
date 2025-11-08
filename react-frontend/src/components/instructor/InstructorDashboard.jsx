@@ -303,123 +303,30 @@ const InstructorDashboard = () => {
   };
 
   return (
-    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
+    <div className="dashboard-container" style={{ display: 'flex', height: '100vh' }}>
       <InstructorSidebar />
-      <main style={{ flex: 1, background: 'linear-gradient(to right, #0f2c63 0%, #f97316 100%)', overflowY: 'auto' }}>
+      <main className="main-content" style={{ flex: 1, padding: '1rem', overflowY: 'auto' }}>
         <InstructorHeader />
-
-        <div style={{ padding: '30px', background: 'linear-gradient(to right, #0f2c63 0%, #f97316 100%)', minHeight: 'calc(100vh - 80px)', overflowY: 'auto' }}>
-
-          {/* Instructor Profile Section */}
-          {/* Instructor Profile Section */}
-<div style={{
-  background: '#fff',
-  padding: '30px',
-  borderRadius: '15px',
-  boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)',
-  marginBottom: '30px',
-  borderLeft: '5px solid #f97316',
-}}>
-  <div style={{
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    flexWrap: 'wrap',
-    gap: '25px'
-  }}>
-    {/* Profile Image */}
-    <div style={{
-      display: 'flex',
-      alignItems: 'center',
-      gap: '25px',
-    }}>
-      <div style={{
-        width: '120px',
-        height: '120px',
-        borderRadius: '50%',
-        overflow: 'hidden',
-        border: '4px solid #f97316',
-        boxShadow: '0 4px 15px rgba(249, 115, 22, 0.3)',
-      }}>
-        <img
-          src={instructorData.image || '/images/tiger.png'}
-          alt={`${instructorData.firstname} ${instructorData.lastname}`}
-          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-        />
-      </div>
-
-      {/* Welcome Message */}
-      <div>
-        <h1 style={{
-          color: '#0f172a',
-          fontSize: '36px',
-          fontWeight: '800',
-          marginBottom: '10px',
-          letterSpacing: '0.5px',
-        }}>
-          Welcome!
-        </h1>
-        <h2 style={{
-          color: '#f97316',
-          fontSize: '28px',
-          fontWeight: '700',
-          marginBottom: '15px',
-          textShadow: '1px 1px 4px rgba(249, 115, 22, 0.3)',
-        }}>
-          {instructorData.firstname && instructorData.lastname 
-            ? `${instructorData.firstname} ${instructorData.lastname}`
-            : instructorData.firstname || instructorData.lastname || 'Loading instructor name...'}
-        </h2>
-        <p style={{
-          color: '#64748b',
-          fontSize: '16px',
-          marginTop: '5px',
-        }}>
-          Here's your dashboard overview and today's class schedule.
-        </p>
-        <div style={{
-          marginTop: '15px',
-          padding: '10px 15px',
-          backgroundColor: '#f8fafc',
-          borderRadius: '8px',
-          border: '1px solid #e2e8f0',
-          display: 'inline-block'
-        }}>
-          <span style={{
-            color: '#475569',
-            fontSize: '14px',
-            fontWeight: '500'
-          }}>
-            Instructor ID: 
-          </span>
-          <span style={{
-            color: '#0f172a',
-            fontSize: '14px',
-            fontWeight: '600',
-            marginLeft: '8px'
-          }}>
-            {instructorData.instructorId || 'Loading...'}
-          </span>
-        </div>
-      </div>
-    </div>
-
-    {/* Optional: Date display */}
-    <div style={{
-      textAlign: 'right',
-      color: '#475569',
-      fontSize: '15px',
-      fontWeight: '500'
-    }}>
-      {new Date().toLocaleDateString('en-US', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      })}
-    </div>
-  </div>
-</div>
+        <div className="dashboard-content">
+          {/* Welcome Section */}
+          <div className="welcome-section" style={{ marginBottom: '30px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '8px' }}>
+              <FontAwesomeIcon icon={faUser} style={{ fontSize: 32, color: '#f97316' }} />
+              <h2 style={{ margin: 0 }}>
+                Welcome, {instructorData.firstname && instructorData.lastname 
+                  ? `${instructorData.firstname} ${instructorData.lastname}`
+                  : instructorData.firstname || instructorData.lastname || 'Instructor'}!
+              </h2>
+            </div>
+            <p style={{ margin: 0 }}>
+              Here's your dashboard overview and today's class schedule.
+              {instructorData.instructorId && (
+                <span style={{ marginLeft: '12px', padding: '4px 10px', background: '#e0e7ff', borderRadius: '6px', fontSize: '13px', fontWeight: '600', color: '#4f46e5' }}>
+                  ID-{instructorData.instructorId}
+                </span>
+              )}
+            </p>
+          </div>
 
 
           {/* Schedule Section */}

@@ -9,7 +9,6 @@ import {
   faTimes, 
   faDoorOpen,
   faEdit,
-  faSearch,
   faCheckCircle,
   faExclamationTriangle,
   faTools
@@ -272,38 +271,8 @@ const RoomManagement = () => {
                 </div>
               </div>
 
-              {/* Search and Filter */}
+              {/* Filters */}
               <div style={{ display: 'flex', gap: '12px', marginTop: '20px', flexWrap: 'wrap' }}>
-                <div style={{ flex: 1, position: 'relative', minWidth: '250px' }}>
-                  <FontAwesomeIcon 
-                    icon={faSearch} 
-                    style={{ 
-                      position: 'absolute', 
-                      left: '14px', 
-                      top: '50%', 
-                      transform: 'translateY(-50%)',
-                      color: '#6b7280',
-                      fontSize: '16px'
-                    }} 
-                  />
-                  <input
-                    type="text"
-                    placeholder="Search rooms by name or area..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '12px 12px 12px 44px',
-                      border: '2px solid #e5e7eb',
-                      borderRadius: '10px',
-                      fontSize: '15px',
-                      outline: 'none',
-                      transition: 'border-color 0.2s',
-                    }}
-                    onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
-                    onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
-                  />
-                </div>
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}

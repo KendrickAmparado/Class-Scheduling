@@ -79,152 +79,188 @@ const InstructorHeader = () => {
   const unreadCount = notifications.filter(notification => !notification.read).length;
   return (
     <header className="top-header" style={{
-      background: 'linear-gradient(to right, #0f2c63 0%, #f97316 100%)',
+      background: 'linear-gradient(135deg, #0f2c63 0%, #1e3a72 20%, #2d4a81 40%, #ea580c 70%, #f97316 100%)',
       padding: '15px 25px',
       display: 'flex',
       justifyContent: 'space-between',
-      alignItems: 'center'
+      alignItems: 'center',
+      boxShadow: '0 4px 20px rgba(15, 44, 99, 0.25), 0 2px 8px rgba(249, 115, 22, 0.15)',
+      borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+      position: 'relative',
     }}>
-      <div className="header-left" style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '20px'
-      }}>
-      </div>
-
-      <div className="header-center" style={{
-        flex: 1,
-        maxWidth: '700px',
-        margin: '0 30px'
-      }}>
-        <div className="search-container" style={{
-          position: 'relative',
-          width: '100%'
-        }}>
-          <FontAwesomeIcon
-            icon={faSearch}
-            style={{
-              position: 'absolute',
-              left: '15px',
-              top: '50%',
-              transform: 'translateY(-50%)',
-              color: '#94a3b8',
-              fontSize: '16px'
-            }}
-          />
-          <input
-            type="text"
-            placeholder="Search schedules, instructors, rooms..."
-            style={{
-              width: '100%',
-              padding: '12px 45px',
-              border: 'none',
-              borderRadius: '12px',
-              fontSize: '14px',
-              background: '#f8fafc',
-              transition: 'all 0.3s ease'
-            }}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                const q = search.trim();
-                if (q) navigate(`/instructor/reports?q=${encodeURIComponent(q)}`);
-              }
-            }}
-            onFocus={(e) => {
-              e.target.style.outline = 'none';
-              e.target.style.background = 'white';
-              e.target.style.boxShadow = '0 0 0 3px rgba(15, 44, 99, 0.1)';
-            }}
-            onBlur={(e) => {
-              e.target.style.background = '#f8fafc';
-              e.target.style.boxShadow = 'none';
-            }}
-          />
-        </div>
-      </div>
-
-      <div className="header-right" style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '25px'
-      }}>
-        <div
-          className="notification-icon"
-          onClick={toggleNotifications}
-          style={{
-            position: 'relative',
-            cursor: 'pointer',
-            padding: '8px',
-            borderRadius: '8px',
-            transition: 'all 0.3s ease'
-          }}
-          onMouseEnter={(e) => {
-            e.target.style.background = '#979898';
-          }}
-          onMouseLeave={(e) => {
-            e.target.style.background = 'transparent';
-          }}
-        >
-          <FontAwesomeIcon
-            icon={faBell}
-            style={{
-              fontSize: '18px',
-              color: '#ffffff'
-            }}
-          />
-          {unreadCount > 0 && (
-            <span
-              className="notification-badge"
-              style={{
-                position: 'absolute',
-                top: '2px',
-                right: '2px',
-                background: '#ef4444',
-                color: 'white',
-                fontSize: '12px',
-                padding: '2px 6px',
-                borderRadius: '10px',
-                minWidth: '18px',
-                textAlign: 'center'
-              }}
-            >
-              {unreadCount}
-            </span>
-          )}
-        </div>
-
-        <div className="header-logos" style={{
+      <div style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: '100%',
+        background: 'radial-gradient(circle at 20% 50%, rgba(255, 255, 255, 0.05) 0%, transparent 50%)',
+        pointerEvents: 'none',
+        zIndex: 0,
+        overflow: 'hidden',
+      }} />
+      <div style={{ position: 'relative', zIndex: 1, display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className="header-left" style={{
           display: 'flex',
           alignItems: 'center',
-          gap: '8px',
-          padding: '8px 12px'
+          gap: '20px'
         }}>
-          <img
-            src="/images/COT-LOGO_T.png"
-            alt="COT Logo"
-            className="header-logo"
+        </div>
+
+        <div className="header-center" style={{
+          flex: 1,
+          maxWidth: '700px',
+          margin: '0 30px'
+        }}>
+          <div className="search-container" style={{
+            position: 'relative',
+            width: '100%'
+          }}>
+            <FontAwesomeIcon
+              icon={faSearch}
+              style={{
+                position: 'absolute',
+                left: '15px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                color: '#94a3b8',
+                fontSize: '16px',
+                zIndex: 2,
+              }}
+            />
+            <input
+              type="text"
+              placeholder="Search schedules, instructors, rooms..."
+              style={{
+                width: '100%',
+                padding: '12px 45px',
+                border: '2px solid rgba(255, 255, 255, 0.2)',
+                borderRadius: '12px',
+                fontSize: '14px',
+                background: 'rgba(255, 255, 255, 0.95)',
+                backdropFilter: 'blur(10px)',
+                transition: 'all 0.3s ease',
+                boxShadow: '0 2px 10px rgba(0, 0, 0, 0.1)',
+              }}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  const q = search.trim();
+                  if (q) navigate(`/instructor/reports?q=${encodeURIComponent(q)}`);
+                }
+              }}
+              onFocus={(e) => {
+                e.target.style.outline = 'none';
+                e.target.style.borderColor = 'rgba(255, 255, 255, 0.4)';
+                e.target.style.background = 'white';
+                e.target.style.boxShadow = '0 4px 20px rgba(15, 44, 99, 0.2), 0 0 0 3px rgba(249, 115, 22, 0.1)';
+                e.target.style.transform = 'scale(1.02)';
+              }}
+              onBlur={(e) => {
+                e.target.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+                e.target.style.background = 'rgba(255, 255, 255, 0.95)';
+                e.target.style.boxShadow = '0 2px 10px rgba(0, 0, 0, 0.1)';
+                e.target.style.transform = 'scale(1)';
+              }}
+            />
+          </div>
+        </div>
+
+        <div className="header-right" style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '25px'
+        }}>
+          <div
+            className="notification-icon"
+            onClick={toggleNotifications}
             style={{
-              width: '60px',
-              height: '60px',
-              objectFit: 'contain',
-              borderRadius: '8px',
-              padding: '4px'
+              position: 'relative',
+              cursor: 'pointer',
+              padding: '10px 12px',
+              borderRadius: '10px',
+              background: 'rgba(255, 255, 255, 0.1)',
+              backdropFilter: 'blur(5px)',
+              border: '1px solid rgba(255, 255, 255, 0.15)',
+              transition: 'all 0.3s ease'
             }}
-          />
-          <img
-            src="/images/buksuu.png"
-            alt="Buksu Logo"
-            className="header-logo"
-            style={{
-              width: '60px',
-              height: '60px',
-              objectFit: 'contain',
-              borderRadius: '8px',
-              padding: '4px'
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
+              e.currentTarget.style.transform = 'scale(1.05)';
             }}
-          />
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+              e.currentTarget.style.transform = 'scale(1)';
+            }}
+          >
+            <FontAwesomeIcon
+              icon={faBell}
+              style={{
+                fontSize: '18px',
+                color: '#ffffff'
+              }}
+            />
+            {unreadCount > 0 && (
+              <span
+                className="notification-badge"
+                style={{
+                  position: 'absolute',
+                  top: '4px',
+                  right: '4px',
+                  background: '#ef4444',
+                  color: 'white',
+                  fontSize: '11px',
+                  fontWeight: '700',
+                  padding: '2px 6px',
+                  borderRadius: '10px',
+                  minWidth: '18px',
+                  textAlign: 'center',
+                  boxShadow: '0 2px 6px rgba(239, 68, 68, 0.4)',
+                }}
+              >
+                {unreadCount}
+              </span>
+            )}
+          </div>
+
+          <div className="header-logos" style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '8px 12px',
+            background: 'rgba(255, 255, 255, 0.1)',
+            borderRadius: '12px',
+            backdropFilter: 'blur(5px)',
+            border: '1px solid rgba(255, 255, 255, 0.15)',
+          }}>
+            <img
+              src="/images/COT-LOGO_T.png"
+              alt="COT Logo"
+              className="header-logo"
+              style={{
+                width: '60px',
+                height: '60px',
+                objectFit: 'contain',
+                borderRadius: '8px',
+                padding: '4px',
+                filter: 'brightness(1.1)',
+              }}
+            />
+            <img
+              src="/images/buksuu.png"
+              alt="Buksu Logo"
+              className="header-logo"
+              style={{
+                width: '60px',
+                height: '60px',
+                objectFit: 'contain',
+                borderRadius: '8px',
+                padding: '4px',
+                filter: 'brightness(1.1)',
+              }}
+            />
+          </div>
         </div>
       </div>
 
@@ -239,10 +275,11 @@ const InstructorHeader = () => {
             width: '350px',
             background: 'white',
             borderRadius: '12px',
-            boxShadow: '0 10px 30px rgba(0, 0, 0, 0.2)',
+            boxShadow: '0 10px 40px rgba(15, 44, 99, 0.25), 0 4px 12px rgba(249, 115, 22, 0.15)',
             zIndex: 1000,
             maxHeight: '400px',
-            overflow: 'hidden'
+            overflow: 'hidden',
+            border: '1px solid rgba(15, 44, 99, 0.1)',
           }}
         >
           <div

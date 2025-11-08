@@ -192,28 +192,11 @@ const InstructorSettings = () => {
   };
 
   return (
-    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
+    <div className="dashboard-container" style={{ display: 'flex', height: '100vh' }}>
       <InstructorSidebar />
-      <main
-        style={{
-          flex: 1,
-          background: 'linear-gradient(to right, #0f2c63 0%, #f97316 100%)',
-          overflowY: 'auto',
-        }}
-      >
+      <main className="main-content" style={{ flex: 1, padding: '1rem', overflowY: 'auto' }}>
         <InstructorHeader />
-
-        <div
-          style={{
-            padding: '30px',
-            background: 'linear-gradient(to right, #0f2c63 0%, #f97316 100%)',
-            minHeight: 'calc(100vh - 80px)',
-            overflowY: 'auto',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'flex-start',
-          }}
-        >
+        <div className="dashboard-content" style={{ display: 'flex', justifyContent: 'center', alignItems: 'flex-start' }}>
           <div
             style={{
               background: '#fff',

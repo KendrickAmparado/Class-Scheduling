@@ -220,33 +220,21 @@ const InstructorNotifications = () => {
   });
 
   return (
-    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
+    <div className="dashboard-container" style={{ display: 'flex', height: '100vh' }}>
       <InstructorSidebar />
-      <main style={{ flex: 1, background: 'linear-gradient(to right, #0f2c63 0%, #f97316 100%)', overflowY: 'auto' }}>
+      <main className="main-content" style={{ flex: 1, padding: '1rem', overflowY: 'auto' }}>
         <InstructorHeader />
-        
-        <div style={{ padding: '30px', minHeight: 'calc(100vh - 80px)' }}>
-          {/* Header */}
-          <div style={{
-            background: '#fff',
-            padding: '30px',
-            borderRadius: '15px',
-            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)',
-            marginBottom: '30px',
-            borderLeft: '5px solid #f97316'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '20px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                <FontAwesomeIcon icon={faBell} style={{ color: '#f97316', fontSize: '28px' }} />
-                <div>
-                  <h1 style={{ color: '#1e293b', fontSize: '28px', fontWeight: '700', margin: 0 }}>
-                    Notifications
-                  </h1>
-                  <p style={{ color: '#64748b', fontSize: '14px', margin: '5px 0 0 0' }}>
-                    {unreadCount > 0 ? `${unreadCount} unread notification${unreadCount !== 1 ? 's' : ''}` : 'All caught up!'}
-                  </p>
-                </div>
-              </div>
+        <div className="dashboard-content">
+          {/* Welcome Section */}
+          <div className="welcome-section" style={{ marginBottom: '30px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '8px' }}>
+              <FontAwesomeIcon icon={faBell} style={{ fontSize: 32, color: '#f97316' }} />
+              <h2 style={{ margin: 0 }}>Notifications</h2>
+            </div>
+            <p style={{ margin: 0 }}>
+              {unreadCount > 0 ? `${unreadCount} unread notification${unreadCount !== 1 ? 's' : ''}` : 'All caught up!'}
+            </p>
+            <div style={{ marginTop: '16px' }}>
               
               {unreadCount > 0 && (
                 <button

@@ -7,7 +7,7 @@
 
 body {
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background: linear-gradient(135deg, #0f2c63 0%, #f97316 100%) fixed;
+  background: linear-gradient(135deg, #0f2c63 0%, #1e3a72 20%, #2d4a81 40%, #ea580c 70%, #f97316 100%) fixed;
   min-height: 100vh;
   color: #334155;
 }
@@ -15,7 +15,7 @@ body {
 /* Make sure html and #root also have the gradient or are transparent */
 html {
   min-height: 100vh;
-  background: linear-gradient(135deg, #0f2c63 0%, #f97316 100%) fixed;
+  background: linear-gradient(135deg, #0f2c63 0%, #1e3a72 20%, #2d4a81 40%, #ea580c 70%, #f97316 100%) fixed;
 }
 
 #root {
@@ -46,7 +46,7 @@ html {
 /* Main Content */
 .main-content {
   flex: 1;
-  background: linear-gradient(135deg, #0f2c63 0%, #f97316 100%);
+  background: linear-gradient(135deg, #0f2c63 0%, #1e3a72 20%, #2d4a81 40%, #ea580c 70%, #f97316 100%);
   overflow-y: auto;
 }
 
@@ -57,7 +57,7 @@ html {
 /* Dashboard Content */
 .dashboard-content {
   padding: 30px;
-  background: linear-gradient(135deg, #0f2c63 0%, #f97316 100%);
+  background: linear-gradient(135deg, #0f2c63 0%, #1e3a72 20%, #2d4a81 40%, #ea580c 70%, #f97316 100%);
   min-height: calc(100vh - 80px);
   overflow-y: auto;
 }

@@ -10,12 +10,12 @@ import {
   faCode,
   faFilter,
   faUser,
-  faPrint,
 } from '@fortawesome/free-solid-svg-icons';
 import axios from 'axios';
 import { generateTimeSlots, TIME_SLOT_CONFIGS } from '../../utils/timeUtils.js';
 
 import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 import XLSX from 'xlsx-js-style';
 
 const Reports = () => {
@@ -115,243 +115,159 @@ const Reports = () => {
     return schedules.filter((sched) => sched.section === sectionName);
   };
 
-  // PDF palette and dims for timeline
-  const TL_COLORS = {
-    brand: [30, 64, 175],
-    brandLight: [59, 130, 246],
-    textDark: [30, 41, 59],
-    textMid: [71, 85, 105],
-    textLite: [100, 116, 139],
-    band: [248, 250, 252],
-    grid: [229, 231, 235],
-    blockFill: [219, 234, 254],
-    blockBorder: [59, 130, 246],
-  };
-
-  // PDF Export: timeline-style blocks per day
-  const exportToPDFTimeline = () => {
+  // PDF Export: Professional table format schedule report
+  const exportToPDF = () => {
     if (!selectedSection) return;
 
-    const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
-    const totalPages = 1 + dayDisplayGroups.length;
+    const margin = 15;
+    
+    // Colors
+    const headerColor = [15, 44, 99]; // #0f2c63
+    const accentColor = [249, 115, 22]; // #f97316
 
-    // Global time bounds from config
-    const startHour = TIME_SLOT_CONFIGS.DETAILED.startHour;
-    const endHour = TIME_SLOT_CONFIGS.DETAILED.endHour;
-    const startMin = startHour * 60;
-    const endMin = endHour * 60;
-    const totalMinutes = endMin - startMin;
-
-    // Layout
-    const margin = 32;
-    const headerH = 80;
-    const footerH = 28;
-    const axisH = 28;
-    const contentTop = headerH + axisH + margin;
-    const contentBottom = pageHeight - footerH - margin;
-    const contentHeight = contentBottom - contentTop;
-    const leftX = margin + 8;
-    const rightX = pageWidth - margin - 8;
-    const contentWidth = rightX - leftX;
-
-    // Cover page
-    doc.setFillColor(...TL_COLORS.brand);
-    doc.rect(0, 0, pageWidth, 120, 'F');
+    // Report Header
+    doc.setFillColor(...headerColor);
+    doc.rect(0, 0, pageWidth, 35, 'F');
     doc.setTextColor(255, 255, 255);
-    doc.setFontSize(28);
-    doc.text('Class Schedule Timeline', margin, 72);
-    doc.setFontSize(14);
-    doc.text(`${selectedCourse.toUpperCase()} • ${selectedYear.toUpperCase()} • Section ${selectedSection.name}`, margin, 100);
-    doc.setTextColor(...TL_COLORS.textMid);
-    doc.setFontSize(12);
-    doc.text(`Generated: ${new Date().toLocaleString()}`, margin, 160);
-    // cover legend
-    const legY = 190;
-    doc.setFillColor(...TL_COLORS.blockFill);
-    doc.setDrawColor(...TL_COLORS.blockBorder);
-    doc.roundedRect(margin, legY, 22, 14, 3, 3, 'FD');
-    doc.setTextColor(...TL_COLORS.textMid);
-    doc.text('Class block', margin + 30, legY + 11);
+    doc.setFontSize(20);
+    doc.setFont(undefined, 'bold');
+    doc.text('CLASS SCHEDULE REPORT', margin, 18);
+    
+    doc.setFontSize(11);
+    doc.setFont(undefined, 'normal');
+    doc.text(
+      `${selectedCourse.toUpperCase()} • ${selectedYear.toUpperCase()} • Section ${selectedSection.name}`,
+      margin,
+      26
+    );
+    
+    doc.setFontSize(9);
+    doc.text(`Generated: ${new Date().toLocaleString()}`, pageWidth - margin, 26, { align: 'right' });
 
-    dayDisplayGroups.forEach((dayGroup, idx) => {
-      doc.addPage('a4', 'l');
-
-      // Header bar
-      doc.setFillColor(...TL_COLORS.brand);
-      doc.rect(0, 0, pageWidth, 64, 'F');
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(18);
-      doc.text(`${dayGroup.label}`, margin, 38);
-      const pg = `Page ${idx + 2} of ${totalPages}`;
-      doc.setFontSize(11);
-      doc.text(pg, pageWidth - margin - doc.getTextWidth(pg), 38);
-      // meta pill
-      doc.setFillColor(255, 255, 255);
-      doc.setDrawColor(255, 255, 255);
-      doc.roundedRect(pageWidth - margin - 320, 16, 300, 36, 8, 8, 'F');
-      doc.setTextColor(...TL_COLORS.textDark);
-      doc.text(`${selectedCourse.toUpperCase()} • ${selectedYear.toUpperCase()} • ${selectedSection.name}`, pageWidth - margin - 310, 38);
-
-      // Time axis (top)
-      doc.setDrawColor(...TL_COLORS.grid);
-      const axisY = headerH + margin;
-      doc.line(leftX, axisY, rightX, axisY);
-      doc.setFontSize(10);
-      doc.setTextColor(...TL_COLORS.textLite);
-      for (let h = startHour; h <= endHour; h++) {
-        const m = h * 60;
-        const x = leftX + (contentWidth * (m - startMin)) / totalMinutes;
-        doc.line(x, axisY - 4, x, axisY + 4);
-        const label = `${((h + 11) % 12) + 1}:00 ${h < 12 ? 'AM' : 'PM'}`;
-        const tw = doc.getTextWidth(label);
-        doc.text(label, x - tw / 2, axisY - 8);
-        // half-hour tick
-        if (h < endHour) {
-          const x30 = leftX + (contentWidth * (m + 30 - startMin)) / totalMinutes;
-          doc.setDrawColor(210);
-          doc.line(x30, axisY - 2, x30, axisY + 2);
-          doc.setDrawColor(...TL_COLORS.grid);
-        }
+    // Get and prepare section schedules
+    const sectionSchedules = getSectionSchedules(selectedSection.name);
+    
+    // Sort schedules by day and time for better organization
+    const dayOrder = { 'monday': 1, 'tuesday': 2, 'wednesday': 3, 'thursday': 4, 'friday': 5, 'saturday': 6 };
+    const sortedSchedules = [...sectionSchedules].sort((a, b) => {
+      const aDays = (a.day || '').toLowerCase().split('/');
+      const bDays = (b.day || '').toLowerCase().split('/');
+      const aDay = aDays[0]?.trim() || '';
+      const bDay = bDays[0]?.trim() || '';
+      const aDayOrder = dayOrder[aDay] || 99;
+      const bDayOrder = dayOrder[bDay] || 99;
+      
+      if (aDayOrder !== bDayOrder) {
+        return aDayOrder - bDayOrder;
       }
-
-      // Prepare day schedules for lanes
-      const daySchedules = schedules
-        .filter((s) => s.section === selectedSection.name)
-        .filter((s) => {
-          const schedDayStrs = String(s.day || '').toLowerCase().replace(/\s/g, '').split('/');
-          const daySet = new Set([dayGroup.day]);
-          return schedDayStrs.some((d) => daySet.has(d));
-        })
-        .map((s) => {
-          const [st, et] = String(s.time || '').split(' - ').map((x) => x.trim());
-          const sMin = timeStringToMinutes(st);
-          const eMin = timeStringToMinutes(et);
-          return { ...s, sMin, eMin };
-        })
-        .filter((s) => s.sMin >= 0 && s.eMin > s.sMin)
-        .sort((a, b) => a.sMin - b.sMin || a.eMin - b.eMin);
-
-      // Assign lanes (greedy non-overlap per lane)
-      const lanes = [];
-      daySchedules.forEach((item) => {
-        let placed = false;
-        for (let i = 0; i < lanes.length; i++) {
-          const last = lanes[i][lanes[i].length - 1];
-          if (last.eMin <= item.sMin) {
-            lanes[i].push(item);
-            placed = true;
-            break;
-          }
-        }
-        if (!placed) lanes.push([item]);
-      });
-
-      const laneCount = Math.max(lanes.length, 1);
-      const laneGap = 10;
-      const laneHeight = Math.max(44, Math.floor((contentHeight - laneGap * (laneCount - 1)) / laneCount));
-
-      // Draw grid rows and alternating hour bands
-      doc.setDrawColor(...TL_COLORS.grid);
-      for (let i = 0; i < laneCount; i++) {
-        const yTop = contentTop + i * (laneHeight + laneGap);
-        const yBottom = yTop + laneHeight;
-        doc.rect(leftX, yTop, contentWidth, laneHeight);
-        // hour bands
-        for (let h = startHour; h < endHour; h++) {
-          const m0 = h * 60;
-          const m1 = (h + 1) * 60;
-          const x0 = leftX + (contentWidth * (m0 - startMin)) / totalMinutes;
-          const w = (contentWidth * (m1 - m0)) / totalMinutes;
-          if ((h - startHour) % 2 === 0) {
-            doc.setFillColor(...TL_COLORS.band);
-            doc.rect(x0, yTop, w, laneHeight, 'F');
-          }
-        }
-        // vertical hour guides
-        doc.setDrawColor(240);
-        for (let h = startHour; h <= endHour; h++) {
-          const m = h * 60;
-          const x = leftX + (contentWidth * (m - startMin)) / totalMinutes;
-          doc.line(x, yTop, x, yBottom);
-        }
-        doc.setDrawColor(...TL_COLORS.grid);
-      }
-
-      // Draw blocks
-      lanes.forEach((laneItems, laneIdx) => {
-        const yTop = contentTop + laneIdx * (laneHeight + laneGap);
-        laneItems.forEach((item) => {
-          const blockX = leftX + (contentWidth * (item.sMin - startMin)) / totalMinutes;
-          const blockW = Math.max(20, (contentWidth * (item.eMin - item.sMin)) / totalMinutes);
-          const blockY = yTop + 4;
-          const blockH = laneHeight - 8;
-
-          // Block background
-          doc.setFillColor(...TL_COLORS.blockFill);
-          doc.setDrawColor(...TL_COLORS.blockBorder);
-          doc.setLineWidth(1);
-          doc.roundedRect(blockX, blockY, blockW, blockH, 4, 4, 'FD');
-
-          // Text inside block
-          doc.setTextColor(...TL_COLORS.textDark);
-          doc.setFontSize(11);
-          const padding = 8;
-          const tX = blockX + padding;
-          let tY = blockY + 16;
-          const lineGap = 14;
-          const maxTextWidth = Math.max(10, blockW - padding * 2);
-          const subject = String(item.subject || '');
-          const instructor = String(item.instructor || '');
-          const room = String(item.room || '');
-          const timeStr = String(item.time || '');
-
-          const wrapText = (txt) => doc.splitTextToSize(txt, maxTextWidth);
-          const drawLines = (lines) => {
-            lines.forEach((ln) => {
-              doc.text(ln, tX, tY);
-              tY += lineGap;
-            });
-          };
-
-          doc.setFont(undefined, 'bold');
-          drawLines(wrapText(subject));
-          doc.setFont(undefined, 'normal');
-          doc.setTextColor(...TL_COLORS.textMid);
-          drawLines(wrapText(`${instructor}`));
-          drawLines(wrapText(`Room: ${room}`));
-          doc.setTextColor(...TL_COLORS.textLite);
-          drawLines(wrapText(timeStr));
-        });
-      });
-
-      // Legend
-      const legendY = pageHeight - footerH - 30;
-      const legendX = pageWidth - margin - 180;
-      doc.setFillColor(255, 255, 255);
-      doc.setDrawColor(...TL_COLORS.grid);
-      doc.roundedRect(legendX, legendY - 20, 170, 28, 6, 6);
-      doc.setFillColor(...TL_COLORS.blockFill);
-      doc.setDrawColor(...TL_COLORS.blockBorder);
-      doc.roundedRect(legendX + 10, legendY - 14, 22, 14, 3, 3, 'FD');
-      doc.setTextColor(...TL_COLORS.textMid);
-      doc.setFontSize(10);
-      doc.text('Class Block', legendX + 40, legendY - 3);
-
-      // Footer
-      doc.setDrawColor(230);
-      doc.setLineWidth(0.5);
-      doc.line(margin, pageHeight - footerH, pageWidth - margin, pageHeight - footerH);
-      doc.setFontSize(10);
-      doc.setTextColor(120);
-      const footer = `${selectedCourse.toUpperCase()} ${selectedYear.toUpperCase()} • ${selectedSection.name}`;
-      doc.text(footer, margin, pageHeight - footerH + 16);
-      const p = `Page ${idx + 2} of ${totalPages}`;
-      doc.text(p, pageWidth - margin - doc.getTextWidth(p), pageHeight - footerH + 16);
+      
+      // Sort by time if same day
+      const aTime = timeStringToMinutes((a.time || '').split(' - ')[0]);
+      const bTime = timeStringToMinutes((b.time || '').split(' - ')[0]);
+      return aTime - bTime;
     });
 
-    doc.save(`Schedule_Timeline_${selectedSection.name}.pdf`);
+    // Prepare table data
+    const tableData = sortedSchedules.map(schedule => [
+      (schedule.day || '').replace(/\//g, ', '),
+      schedule.time || '',
+      schedule.subject || '',
+      schedule.instructor || '',
+      schedule.room || ''
+    ]);
+
+    // Summary Information Box
+    const summaryY = 45;
+    doc.setDrawColor(200, 200, 200);
+    doc.setFillColor(248, 250, 252);
+    doc.roundedRect(margin, summaryY, pageWidth - (margin * 2), 25, 3, 3, 'FD');
+    
+    doc.setTextColor(30, 41, 59);
+    doc.setFontSize(10);
+    doc.setFont(undefined, 'bold');
+    doc.text('Summary Information', margin + 3, summaryY + 8);
+    
+    doc.setFont(undefined, 'normal');
+    doc.setFontSize(9);
+    const summaryText = [
+      `Total Classes: ${sectionSchedules.length}`,
+      `• Unique Subjects: ${new Set(sectionSchedules.map(s => s.subject)).size}`,
+      `• Unique Instructors: ${new Set(sectionSchedules.map(s => s.instructor)).size}`,
+      `• Rooms Used: ${new Set(sectionSchedules.map(s => s.room)).size}`
+    ];
+    doc.text(summaryText.join('  '), margin + 3, summaryY + 16);
+
+    // Generate table using autoTable
+    const finalY = doc.autoTable({
+      startY: summaryY + 30,
+      head: [['Day', 'Time', 'Subject', 'Instructor', 'Room']],
+      body: tableData,
+      theme: 'striped',
+      headStyles: {
+        fillColor: headerColor,
+        textColor: [255, 255, 255],
+        fontStyle: 'bold',
+        fontSize: 10,
+        halign: 'left',
+        valign: 'middle',
+      },
+      bodyStyles: {
+        textColor: [30, 41, 59],
+        fontSize: 9,
+        halign: 'left',
+        valign: 'middle',
+      },
+      alternateRowStyles: {
+        fillColor: [248, 250, 252],
+      },
+      columnStyles: {
+        0: { cellWidth: 25 }, // Day
+        1: { cellWidth: 30 }, // Time
+        2: { cellWidth: 'auto' }, // Subject
+        3: { cellWidth: 35 }, // Instructor
+        4: { cellWidth: 25 }, // Room
+      },
+      margin: { left: margin, right: margin },
+      styles: {
+        lineColor: [229, 231, 235],
+        lineWidth: 0.5,
+        cellPadding: { top: 4, bottom: 4, left: 5, right: 5 },
+      },
+      didDrawPage: (data) => {
+        // Add header on each page (except first)
+        if (data.pageNumber > 1) {
+          doc.setFillColor(...headerColor);
+          doc.rect(0, 0, pageWidth, 20, 'F');
+          doc.setTextColor(255, 255, 255);
+          doc.setFontSize(10);
+          doc.setFont(undefined, 'bold');
+          doc.text(
+            `${selectedCourse.toUpperCase()} • ${selectedYear.toUpperCase()} • Section ${selectedSection.name}`,
+            margin,
+            12
+          );
+        }
+      },
+    });
+
+    // Add page numbers to all pages after table is drawn
+    const totalPages = doc.internal.pages.length - 1;
+    for (let i = 1; i <= totalPages; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);
+      doc.text(
+        `Page ${i} of ${totalPages}`,
+        pageWidth - margin,
+        doc.internal.pageSize.getHeight() - 10,
+        { align: 'right' }
+      );
+    }
+
+    // Save the PDF
+    doc.save(`Schedule_Report_${selectedSection.name}.pdf`);
   };
   
 
@@ -535,59 +451,6 @@ const Reports = () => {
     document.body.removeChild(link);
   };
 
-  const printReport = () => {
-    if (!selectedSection) return;
-    const schedules = getSectionSchedules(selectedSection.name);
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html>
-      <head><title>Schedule Report - ${selectedCourse.toUpperCase()} - ${selectedYear.toUpperCase()} - Section ${selectedSection.name}</title>
-      <style>
-        body { font-family: Arial, sans-serif; margin: 30px; }
-        h1 { color: #0f2c63; text-align: center; }
-        h2 { color: #64748b; text-align: center; margin-bottom: 30px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 22px; }
-        th, td { padding: 14px; text-align: left; border: 1px solid #ddd; }
-        th { background: linear-gradient(135deg,#0f2c63 0%,#f97316 100%); color: #fff; }
-        tr:nth-child(even) { background-color: #f8fafc; }
-        .summary { margin-top: 26px; text-align: center; }
-        .meta { background: #f9fafc; border-radius: 10px; padding: 11px; margin-bottom: 17px; text-align: center; font-size: 16px; color: #374151; font-weight: 500; }
-      </style>
-      </head>
-      <body>
-        <h1>Schedule Report</h1>
-        <div class="meta">Course: <b>${selectedCourse.toUpperCase()}</b> &nbsp; Year: <b>${selectedYear.toUpperCase()}</b> &nbsp; Section: <b>${selectedSection.name}</b></div>
-        <table>
-          <thead><tr>
-            <th>Day</th><th>Time</th><th>Subject</th><th>Instructor</th><th>Room</th>
-          </tr></thead>
-          <tbody>
-            ${schedules.map(s => `
-              <tr>
-                <td>${(s.day||'').replace(/\//g, ', ')}</td>
-                <td>${s.time||''}</td>
-                <td>${s.subject||''}</td>
-                <td>${s.instructor||''}</td>
-                <td>${s.room||''}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-        <div class="summary">
-          <p>Total Classes: ${schedules.length}</p>
-          <p>Unique Subjects: ${new Set(schedules.map(s=>s.subject)).size}</p>
-          <p>Unique Instructors: ${new Set(schedules.map(s=>s.instructor)).size}</p>
-          <p>Rooms Used: ${new Set(schedules.map(s=>s.room)).size}</p>
-          <p>Generated on: ${new Date().toLocaleDateString()}</p>
-        </div>
-      </body>
-      </html>
-    `;
-    const printWindow = window.open("", "_blank");
-    printWindow.document.write(htmlContent);
-    printWindow.document.close();
-    printWindow.print();
-  };
 
   const currentCourse = courses.find((c) => c.id === selectedCourse);
 
@@ -847,9 +710,9 @@ const Reports = () => {
                         <FontAwesomeIcon icon={faDownload} />
                         Excel
                       </button>
-                      <button onClick={exportToPDFTimeline} style={{
+                      <button onClick={exportToPDF} style={{
                         padding: '14px 20px',
-                        background: 'linear-gradient(135deg, #1e40af 0%, #3b82f6 100%)',
+                        background: 'linear-gradient(135deg, #dc2626 0%, #ef4444 100%)',
                         color: 'white',
                         border: 'none',
                         borderRadius: '10px',
@@ -859,22 +722,11 @@ const Reports = () => {
                         display: 'flex',
                         alignItems: 'center',
                         gap: '10px',
-                        boxShadow: '0 2px 10px #1e40af33',
-                      }}><FontAwesomeIcon icon={faDownload}/> Timeline PDF</button>
-                      <button onClick={printReport} style={{
-                        padding: '14px 20px',
-                        background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '10px',
-                        fontWeight: '600',
-                        cursor: 'pointer',
-                        fontSize: '16px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '10px',
-                        boxShadow: '0 2px 10px #22c55e30',
-                      }}><FontAwesomeIcon icon={faPrint}/> Print Report</button>
+                        boxShadow: '0 2px 10px rgba(220, 38, 38, 0.3)',
+                      }}>
+                        <FontAwesomeIcon icon={faDownload} />
+                        PDF
+                      </button>
                       <button onClick={downloadCSVReport} style={{
                         padding: '14px 20px',
                         background: 'linear-gradient(135deg, #0f2c63 0%, #1e40af 100%)',

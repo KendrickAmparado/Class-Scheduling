@@ -4,7 +4,7 @@ import InstructorHeader from "../common/InstructorHeader.jsx";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faDownload, faFileAlt, faCalendarAlt, faClock, faUser,
-  faSearch, faPrint, faDoorOpen, faGraduationCap, faTable,
+  faSearch, faDoorOpen, faGraduationCap, faTable,
 } from "@fortawesome/free-solid-svg-icons";
 import { AuthContext } from "../../context/AuthContext.jsx";
 import {
@@ -12,6 +12,9 @@ import {
   timeStringToMinutes,
   TIME_SLOT_CONFIGS,
 } from "../../utils/timeUtils.js";
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
+import XLSX from 'xlsx-js-style';
 
 const InstructorReports = () => {
   const { userEmail } = useContext(AuthContext);
@@ -322,9 +325,8 @@ const InstructorReports = () => {
     document.body.removeChild(link);
   };
 
-  // Print report
-  const printReport = () => {
-    const printWindow = window.open("", "_blank");
+  // Helper function to expand multi-day schedules
+  const expandScheduleDays = () => {
     const properLabel = {
       monday: "Monday",
       tuesday: "Tuesday",
@@ -343,70 +345,274 @@ const InstructorReports = () => {
         days.forEach((d) => expanded.push({ ...s, day: properLabel[d] || s.day }));
       }
     });
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html>
-      <head><title>Schedule Report - ${instructorData.firstname} ${instructorData.lastname}</title>
-      <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        h1 { color: #0f2c63; text-align: center; }
-        h2 { color: #64748b; text-align: center; margin-bottom: 30px; }
-        table {
-          width: 100%;
-          border-collapse: collapse;
-          margin-top: 20px;
+    return expanded;
+  };
+
+  // PDF Export: Professional table format schedule report
+  const exportToPDF = () => {
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 15;
+    
+    // Colors
+    const headerColor = [15, 44, 99]; // #0f2c63
+    const accentColor = [249, 115, 22]; // #f97316
+
+    // Report Header
+    doc.setFillColor(...headerColor);
+    doc.rect(0, 0, pageWidth, 35, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(20);
+    doc.setFont(undefined, 'bold');
+    doc.text('TEACHING SCHEDULE REPORT', margin, 18);
+    
+    doc.setFontSize(11);
+    doc.setFont(undefined, 'normal');
+    doc.text(
+      `${instructorData.firstname} ${instructorData.lastname} • ${instructorData.department || 'N/A'}`,
+      margin,
+      26
+    );
+    
+    if (instructorData.instructorId) {
+      doc.setFontSize(9);
+      doc.text(`Instructor ID: ${instructorData.instructorId}`, margin, 32);
+    }
+    
+    doc.setFontSize(9);
+    doc.text(`Generated: ${new Date().toLocaleString()}`, pageWidth - margin, 26, { align: 'right' });
+
+    // Get and prepare schedules
+    const expanded = expandScheduleDays();
+    
+    // Sort schedules by day and time for better organization
+    const dayOrder = { 'monday': 1, 'tuesday': 2, 'wednesday': 3, 'thursday': 4, 'friday': 5, 'saturday': 6, 'sunday': 7 };
+    const sortedSchedules = [...expanded].sort((a, b) => {
+      const aDay = (a.day || '').toLowerCase();
+      const bDay = (b.day || '').toLowerCase();
+      const aDayOrder = dayOrder[aDay] || 99;
+      const bDayOrder = dayOrder[bDay] || 99;
+      
+      if (aDayOrder !== bDayOrder) {
+        return aDayOrder - bDayOrder;
+      }
+      
+      // Sort by time if same day
+      const aTime = timeStringToMinutes((a.time || '').split(' - ')[0]);
+      const bTime = timeStringToMinutes((b.time || '').split(' - ')[0]);
+      return aTime - bTime;
+    });
+
+    // Prepare table data
+    const tableData = sortedSchedules.map(schedule => [
+      schedule.day || '',
+      schedule.timeDisplay || schedule.time || '',
+      schedule.subject || '',
+      `${schedule.course || ''} ${schedule.year || ''} - ${schedule.section || ''}`.trim(),
+      schedule.room || ''
+    ]);
+
+    // Summary Information Box
+    const summaryY = instructorData.instructorId ? 50 : 45;
+    doc.setDrawColor(200, 200, 200);
+    doc.setFillColor(248, 250, 252);
+    doc.roundedRect(margin, summaryY, pageWidth - (margin * 2), 25, 3, 3, 'FD');
+    
+    doc.setTextColor(30, 41, 59);
+    doc.setFontSize(10);
+    doc.setFont(undefined, 'bold');
+    doc.text('Summary Information', margin + 3, summaryY + 8);
+    
+    doc.setFont(undefined, 'normal');
+    doc.setFontSize(9);
+    const summaryText = [
+      `Total Classes: ${filteredSchedule.length}`,
+      `• Teaching Days: ${new Set(filteredSchedule.map(s => s.day)).size}`,
+      `• Unique Subjects: ${new Set(filteredSchedule.map(s => s.subject)).size}`,
+      `• Rooms Used: ${new Set(filteredSchedule.map(s => s.room)).size}`
+    ];
+    doc.text(summaryText.join('  '), margin + 3, summaryY + 16);
+
+    // Generate table using autoTable
+    doc.autoTable({
+      startY: summaryY + 30,
+      head: [['Day', 'Time', 'Subject', 'Course Section', 'Room']],
+      body: tableData,
+      theme: 'striped',
+      headStyles: {
+        fillColor: headerColor,
+        textColor: [255, 255, 255],
+        fontStyle: 'bold',
+        fontSize: 10,
+        halign: 'left',
+        valign: 'middle',
+      },
+      bodyStyles: {
+        textColor: [30, 41, 59],
+        fontSize: 9,
+        halign: 'left',
+        valign: 'middle',
+      },
+      alternateRowStyles: {
+        fillColor: [248, 250, 252],
+      },
+      columnStyles: {
+        0: { cellWidth: 25 }, // Day
+        1: { cellWidth: 30 }, // Time
+        2: { cellWidth: 'auto' }, // Subject
+        3: { cellWidth: 45 }, // Course Section
+        4: { cellWidth: 25 }, // Room
+      },
+      margin: { left: margin, right: margin },
+      styles: {
+        lineColor: [229, 231, 235],
+        lineWidth: 0.5,
+        cellPadding: { top: 4, bottom: 4, left: 5, right: 5 },
+      },
+      didDrawPage: (data) => {
+        // Add header on each page (except first)
+        if (data.pageNumber > 1) {
+          doc.setFillColor(...headerColor);
+          doc.rect(0, 0, pageWidth, 20, 'F');
+          doc.setTextColor(255, 255, 255);
+          doc.setFontSize(10);
+          doc.setFont(undefined, 'bold');
+          doc.text(
+            `${instructorData.firstname} ${instructorData.lastname} • ${instructorData.department || 'N/A'}`,
+            margin,
+            12
+          );
         }
-        th, td {
-          padding: 12px;
-          text-align: left;
-          border: 1px solid #ddd;
+      },
+    });
+
+    // Add page numbers to all pages after table is drawn
+    const totalPages = doc.internal.pages.length - 1;
+    for (let i = 1; i <= totalPages; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);
+      doc.text(
+        `Page ${i} of ${totalPages}`,
+        pageWidth - margin,
+        doc.internal.pageSize.getHeight() - 10,
+        { align: 'right' }
+      );
+    }
+
+    // Save the PDF
+    doc.save(`Teaching_Schedule_${instructorData.firstname}_${instructorData.lastname}.pdf`);
+  };
+
+  // Excel Export
+  const exportToExcel = () => {
+    const wb = XLSX.utils.book_new();
+    
+    // Prepare data
+    const expanded = expandScheduleDays();
+    const sortedSchedules = [...expanded].sort((a, b) => {
+      const dayOrder = { 'monday': 1, 'tuesday': 2, 'wednesday': 3, 'thursday': 4, 'friday': 5, 'saturday': 6, 'sunday': 7 };
+      const aDay = (a.day || '').toLowerCase();
+      const bDay = (b.day || '').toLowerCase();
+      const aDayOrder = dayOrder[aDay] || 99;
+      const bDayOrder = dayOrder[bDay] || 99;
+      
+      if (aDayOrder !== bDayOrder) {
+        return aDayOrder - bDayOrder;
+      }
+      
+      const aTime = timeStringToMinutes((a.time || '').split(' - ')[0]);
+      const bTime = timeStringToMinutes((b.time || '').split(' - ')[0]);
+      return aTime - bTime;
+    });
+
+    // Summary sheet
+    const summaryData = [
+      ['Teaching Schedule Report'],
+      ['Instructor Name', `${instructorData.firstname} ${instructorData.lastname}`],
+      ['Instructor ID', instructorData.instructorId || 'N/A'],
+      ['Department', instructorData.department || 'N/A'],
+      ['Email', instructorData.email || 'N/A'],
+      ['Generated', new Date().toLocaleString()],
+      [],
+      ['Summary'],
+      ['Total Classes', filteredSchedule.length],
+      ['Teaching Days', new Set(filteredSchedule.map(s => s.day)).size],
+      ['Unique Subjects', new Set(filteredSchedule.map(s => s.subject)).size],
+      ['Rooms Used', new Set(filteredSchedule.map(s => s.room)).size],
+    ];
+    const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
+    wsSummary['!merges'] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: 1 } },
+      { s: { r: 7, c: 0 }, e: { r: 7, c: 1 } },
+    ];
+    wsSummary['A1'].s = { font: { bold: true, sz: 18 }, alignment: { horizontal: 'center' } };
+    wsSummary['A8'].s = { font: { bold: true, sz: 14 }, alignment: { horizontal: 'center' } };
+    wsSummary['!cols'] = [{ wch: 20 }, { wch: 40 }];
+    XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
+
+    // Schedule sheet
+    const scheduleData = [
+      ['Day', 'Time', 'Subject', 'Course', 'Year', 'Section', 'Room'],
+      ...sortedSchedules.map(s => [
+        s.day || '',
+        s.timeDisplay || s.time || '',
+        s.subject || '',
+        s.course || '',
+        s.year || '',
+        s.section || '',
+        s.room || ''
+      ]),
+    ];
+    const wsSchedule = XLSX.utils.aoa_to_sheet(scheduleData);
+    wsSchedule['!cols'] = [
+      { wch: 15 }, // Day
+      { wch: 20 }, // Time
+      { wch: 40 }, // Subject
+      { wch: 20 }, // Course
+      { wch: 12 }, // Year
+      { wch: 15 }, // Section
+      { wch: 15 }, // Room
+    ];
+    
+    // Style header row
+    const headerRange = XLSX.utils.decode_range(wsSchedule['!ref']);
+    for (let col = headerRange.s.c; col <= headerRange.e.c; col++) {
+      const cellAddress = XLSX.utils.encode_cell({ r: 0, c: col });
+      if (!wsSchedule[cellAddress]) continue;
+      wsSchedule[cellAddress].s = {
+        fill: { fgColor: { rgb: "0f2c63" } },
+        font: { bold: true, color: { rgb: "FFFFFF" } },
+        alignment: { horizontal: "center", vertical: "center" },
+      };
+    }
+
+    // Style data rows (zebra striping)
+    for (let r = 1; r <= sortedSchedules.length; r++) {
+      const even = (r % 2) === 0;
+      for (let col = headerRange.s.c; col <= headerRange.e.c; col++) {
+        const cellAddress = XLSX.utils.encode_cell({ r, c: col });
+        if (wsSchedule[cellAddress]) {
+          wsSchedule[cellAddress].s = {
+            fill: { fgColor: { rgb: even ? "FFFFFF" : "F8FAFC" } },
+            border: {
+              left: { style: 'thin', color: { rgb: "E5E7EB" } },
+              right: { style: 'thin', color: { rgb: "E5E7EB" } },
+              top: { style: 'thin', color: { rgb: "E5E7EB" } },
+              bottom: { style: 'thin', color: { rgb: "E5E7EB" } },
+            },
+            alignment: { vertical: "center" },
+          };
         }
-        th {
-          background-color: #0f2c63;
-          color: white;
-        }
-        tr:nth-child(even) {
-          background-color: #f8fafc;
-        }
-        .summary {
-          margin-top: 30px;
-          text-align: center;
-        }
-      </style>
-      </head>
-      <body>
-        <h1>Teaching Schedule Report</h1>
-        <h2>${instructorData.firstname} ${instructorData.lastname} - ${instructorData.department}</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Day</th><th>Time</th><th>Subject</th><th>Course Section</th><th>Room</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${expanded.map((schedule) => `
-              <tr>
-                <td>${schedule.day}</td>
-                <td>${schedule.timeDisplay || schedule.time}</td>
-                <td>${schedule.subject}</td>
-                <td>${schedule.course} ${schedule.year} - ${schedule.section}</td>
-                <td>${schedule.room}</td>
-              </tr>`).join("")}
-          </tbody>
-        </table>
-        <div class="summary">
-          <p>Total Classes: ${filteredSchedule.length}</p>
-          <p>Teaching Days: ${new Set(filteredSchedule.map(s => s.day)).size}</p>
-          <p>Unique Subjects: ${new Set(filteredSchedule.map(s => s.subject)).size}</p>
-          <p>Rooms Used: ${new Set(filteredSchedule.map(s => s.room)).size}</p>
-          <p>Generated on: ${new Date().toLocaleDateString()}</p>
-        </div>
-      </body>
-      </html>
-    `;
-    printWindow.document.write(htmlContent);
-    printWindow.document.close();
-    printWindow.print();
+      }
+    }
+
+    wsSchedule['!freeze'] = { xSplit: 0, ySplit: 1 };
+    wsSchedule['!autofilter'] = { ref: `A1:G${sortedSchedules.length + 1}` };
+    XLSX.utils.book_append_sheet(wb, wsSchedule, 'Schedule');
+
+    // Save file
+    XLSX.writeFile(wb, `Teaching_Schedule_${instructorData.firstname}_${instructorData.lastname}.xlsx`);
   };
 
   const displayedWeekdays = filterDay !== "All Days"
@@ -417,42 +623,37 @@ const InstructorReports = () => {
   displayedWeekdays.forEach(day => { skipSlots[day.key] = {}; });
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh", background: "linear-gradient(135deg, #0f2c63 0%, #f97316 100%)" }}>
+    <div className="dashboard-container" style={{ display: "flex", height: "100vh" }}>
       <InstructorSidebar />
-      <main style={{ flex: 1, background: "#f9fafc", overflowY: "auto", padding: 0, minHeight: "100vh" }}>
+      <main className="main-content" style={{ flex: 1, padding: '1rem', overflowY: 'auto' }}>
         <InstructorHeader />
-
-        {/* === 2. Heading and Profile Section === */}
-        <div style={{ maxWidth: 1160, margin: "40px auto 0 auto", padding: 0, borderRadius: 26, background: "#fff", boxShadow: "0 4px 40px rgba(15,44,99,0.04)", border: "2px solid #e2e8f0" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 24, borderBottom: "1.5px solid #e2e8f0", padding: "32px 40px 20px 40px", flexWrap: "wrap" }}>
-            <div style={{ background: "#f3f4f6", borderRadius: 16, width: 64, height: 64, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <FontAwesomeIcon icon={faFileAlt} style={{ fontSize: 40, color: "#f97316" }} />
+        <div className="dashboard-content">
+          {/* Welcome Section */}
+          <div className="welcome-section" style={{ marginBottom: '30px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '8px' }}>
+              <FontAwesomeIcon icon={faFileAlt} style={{ fontSize: 32, color: '#f97316' }} />
+              <h2 style={{ margin: 0 }}>Class Reports</h2>
             </div>
-            <div>
-              <h2 style={{ color: "#1e293b", fontSize: 32, fontWeight: 800, margin: 0 }}>Class Reports</h2>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 15, color: "#64748b" }}>
-                <span>Teaching Reports & Schedules</span>
-              </div>
-            </div>
-            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
+            <p style={{ margin: 0 }}>Teaching Reports & Schedules</p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '16px', flexWrap: 'wrap' }}>
               <div style={{
-                display: 'flex', alignItems: 'center', gap: 10,
-                padding: '7px 22px', background: 'linear-gradient(90deg,#0f2c63 40%,#f97316 100%)', borderRadius: 14, color: "#fff", fontWeight: 600, fontSize: 15, boxShadow: "0 2px 10px #f9731633"
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '6px 16px', background: 'linear-gradient(90deg,#0f2c63 40%,#f97316 100%)', borderRadius: 8, color: "#fff", fontWeight: 600, fontSize: 14, boxShadow: "0 2px 8px rgba(249, 115, 22, 0.2)"
               }}>
-                <FontAwesomeIcon icon={faUser} />
+                <FontAwesomeIcon icon={faUser} style={{ fontSize: 14 }} />
                 {instructorData.firstname} {instructorData.lastname}
-            </div>
-            {instructorData.department && (
-                <div style={{ padding: '7px 14px', background: '#f3f4f6', borderRadius: 12, color: '#854d0e', fontWeight: 700, fontSize: 13, border: '1.5px solid #f97316' }}>{instructorData.department}</div>
+              </div>
+              {instructorData.department && (
+                <div style={{ padding: '6px 12px', background: '#f3f4f6', borderRadius: 8, color: '#854d0e', fontWeight: 700, fontSize: 12, border: '1.5px solid #f97316' }}>{instructorData.department}</div>
               )}
               {instructorData.instructorId && (
-                <span style={{ padding: "7px 13px", background: "#0f2c63", color: "#fff", borderRadius: 12, fontSize: 13, fontWeight: 700 }}> ID-{instructorData.instructorId}</span>
-            )}
+                <span style={{ padding: "6px 12px", background: "#0f2c63", color: "#fff", borderRadius: 8, fontSize: 12, fontWeight: 700 }}>ID-{instructorData.instructorId}</span>
+              )}
+            </div>
           </div>
-        </div>
 
-          {/* === 3. Action/Search Bar === */}
-          <div style={{ display: 'flex', gap: 18, alignItems: 'center', background: '#f9fafc', boxShadow: '0 6px 24px rgba(237,137,54,0.060)', borderRadius: 16, padding: '20px 40px 18px 40px', position: 'relative', top: -24, marginBottom: 5, flexWrap: 'wrap' }}>
+          {/* Action/Search Bar */}
+          <div style={{ display: 'flex', gap: 18, alignItems: 'center', background: '#fff', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.06)', borderRadius: 12, padding: '16px 20px', marginBottom: '20px', flexWrap: 'wrap' }}>
             <div style={{ display: "flex", gap: 8 }}>
               <button onClick={() => setViewMode("cards")} style={{ padding: '10px 20px', borderRadius: 10, fontWeight: 700, border: 'none', background: viewMode==="cards" ? 'linear-gradient(100deg,#0f2c63,#f97316)' : '#e5e7eb', color: viewMode==="cards" ? 'white' : '#64748b', cursor: 'pointer', boxShadow: '0 2px 8px #0f2c6321', fontSize: 14, display: 'flex', gap: 6, alignItems: 'center' }}>
                 <FontAwesomeIcon icon={faCalendarAlt}/> Card View
@@ -462,9 +663,13 @@ const InstructorReports = () => {
                 Table View
           </button>
             </div>
-            <button onClick={printReport} style={{ padding: '10px 17px', borderRadius: 10, fontWeight: 700, border: 'none', background: 'linear-gradient(100deg,#059669,#10b981)', color: 'white', cursor: 'pointer', fontSize: 14, display: 'flex', gap: 8, alignItems: 'center', boxShadow: '0 2px 10px #22c55e30' }}>
-              <FontAwesomeIcon icon={faPrint}/>
-              Print
+            <button onClick={exportToPDF} style={{ padding: '10px 17px', borderRadius: 10, fontWeight: 700, border: 'none', background: 'linear-gradient(100deg,#dc2626,#ef4444)', color: 'white', cursor: 'pointer', fontSize: 14, display: 'flex', gap: 8, alignItems: 'center', boxShadow: '0 2px 10px rgba(220, 38, 38, 0.3)' }}>
+              <FontAwesomeIcon icon={faDownload}/>
+              PDF
+          </button>
+            <button onClick={exportToExcel} style={{ padding: '10px 17px', borderRadius: 10, fontWeight: 700, border: 'none', background: 'linear-gradient(100deg,#22d3ee,#0e7490)', color: 'white', cursor: 'pointer', fontSize: 14, display: 'flex', gap: 8, alignItems: 'center', boxShadow: '0 2px 10px rgba(34, 211, 238, 0.3)' }}>
+              <FontAwesomeIcon icon={faDownload}/>
+              Excel
           </button>
             <button onClick={downloadReport} style={{ padding: '10px 19px', borderRadius: 10, fontWeight: 700, border: 'none', background: 'linear-gradient(100deg,#0f2c63,#1e40af)', color: 'white', cursor: 'pointer', fontSize: 14, display: 'flex', gap: 8, alignItems: 'center', boxShadow: '0 2px 10px #1e40af33' }}>
               <FontAwesomeIcon icon={faDownload}/>

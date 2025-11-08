@@ -11,9 +11,8 @@ import {
   faCheckSquare,
   faSquare,
   faListCheck,
-  faSearch,
-  faFilter,
   faDownload,
+  faChalkboardTeacher,
 } from "@fortawesome/free-solid-svg-icons";
 import TableSortHeader from '../common/TableSortHeader.jsx';
 import XLSX from 'xlsx-js-style';
@@ -495,16 +494,22 @@ const FacultyManagement = () => {
   return (
     <div className="dashboard-container" style={{ display: "flex", height: "100vh" }}>
       <Sidebar />
-      <main className="main-content" style={{ flex: 1, overflowY: "auto" }}>
+      <main className="main-content" style={{ flex: 1, padding: '1rem', overflowY: 'auto' }}>
         <Header title="Faculty Management" />
-        <div
-          style={{
-            padding: 30,
-            background: "linear-gradient(135deg, #0f2c63 0%, #f97316 100%)",
-            minHeight: "calc(100vh - 80px)",
-          }}
-        >
-          {/* Search and Filters */}
+        <div className="dashboard-content">
+          {/* Welcome Section */}
+          <div className="welcome-section" style={{ marginBottom: '30px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '8px' }}>
+              <FontAwesomeIcon 
+                icon={faChalkboardTeacher} 
+                style={{ fontSize: 32, color: '#f97316' }}
+              />
+              <h2 style={{ margin: 0 }}>Faculty Management</h2>
+            </div>
+            <p style={{ margin: 0 }}>Manage instructors and faculty members</p>
+          </div>
+
+          {/* Filters */}
           <div style={{
             background: '#fff',
             padding: '16px',
@@ -513,33 +518,6 @@ const FacultyManagement = () => {
             marginBottom: '20px'
           }}>
             <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-              <div style={{ position: 'relative', flex: 1, minWidth: '250px' }}>
-                <FontAwesomeIcon
-                  icon={faSearch}
-                  style={{
-                    position: 'absolute',
-                    left: '12px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    color: '#9ca3af',
-                    fontSize: '14px'
-                  }}
-                />
-                <input
-                  type="text"
-                  placeholder="Search by name, email, ID, department..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '10px 10px 10px 36px',
-                    border: '2px solid #e5e7eb',
-                    borderRadius: '8px',
-                    fontSize: '14px',
-                    outline: 'none'
-                  }}
-                />
-              </div>
               <select
                 value={departmentFilter}
                 onChange={(e) => setDepartmentFilter(e.target.value)}
