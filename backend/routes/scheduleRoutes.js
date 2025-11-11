@@ -5,6 +5,8 @@ import InstructorNotification from "../models/InstructorNotification.js";
 import Alert from '../models/Alert.js';
 import validator from 'validator';
 import { createCalendarEvent, updateCalendarEvent, deleteCalendarEvent, isGoogleCalendarConfigured } from '../services/googleCalendarService.js';
+import { logActivity } from '../utils/activityLogger.js';
+import { verifyToken } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
@@ -204,14 +206,14 @@ router.post("/create", async (req, res) => {
     }
 
     // Create and emit alert
-    const alert = await Alert.create({
+    await logActivity({
       type: 'schedule-created',
-      message: `New schedule created for ${course} ${year} - Section ${section} (${subject})`,
+      message: `New schedule created: ${subject} - ${course} ${year} Section ${section} (${instructorNameFinal}, ${day} ${time}, ${room})`,
+      source: 'admin',
       link: `/admin/schedule/${course}/${year}`,
+      meta: { course, year, section, subject, instructor: instructorNameFinal, day, time, room },
+      io: req.io
     });
-    if (req.io) {
-      req.io.emit('new-alert', alert);
-    }
 
     res.json({ success: true, message: "Schedule created successfully!" });
   } catch (err) {
@@ -232,17 +234,32 @@ router.get('/', async (req, res) => {
   }
 });
 
-// ENHANCED: GET schedules filtered by instructor's email with comprehensive debugging
-router.get('/instructor/:instructorEmail', async (req, res) => {
+// SECURITY FIX: GET schedules filtered by authenticated instructor's email
+// Only returns schedules for the logged-in instructor (from JWT token)
+router.get('/instructor/:instructorEmail', verifyToken, async (req, res) => {
   try {
-    const { instructorEmail } = req.params;
-    console.log('🔍 Backend: Searching for instructor email:', instructorEmail);
+    // SECURITY: Use email from JWT token, not URL parameter
+    const authenticatedEmail = req.userEmail?.toLowerCase().trim();
+    const requestedEmail = req.params.instructorEmail?.toLowerCase().trim();
+    
+    // Verify that the requested email matches the authenticated user's email
+    if (authenticatedEmail !== requestedEmail) {
+      console.log('🚫 Security: Unauthorized schedule access attempt');
+      console.log('   Authenticated:', authenticatedEmail);
+      console.log('   Requested:', requestedEmail);
+      return res.status(403).json({ 
+        success: false,
+        message: 'Unauthorized: You can only access your own schedules' 
+      });
+    }
+    
+    console.log('🔍 Backend: Fetching schedules for authenticated instructor:', authenticatedEmail);
     
     // Import Instructor model
     const Instructor = (await import('../models/Instructor.js')).default;
     
     // Step 1: Verify instructor exists (case-insensitive email)
-    const instructor = await Instructor.findOne({ email: { $regex: new RegExp(`^${instructorEmail}$`, 'i') } });
+    const instructor = await Instructor.findOne({ email: { $regex: new RegExp(`^${authenticatedEmail}$`, 'i') } });
     console.log('🔍 Backend: Instructor profile found:', instructor ? 'Yes' : 'No');
     
     const instructorName = instructor ? `${instructor.firstname} ${instructor.lastname}` : null;
@@ -256,7 +273,7 @@ router.get('/instructor/:instructorEmail', async (req, res) => {
     let searchMethod = '';
     
     // Strategy 1: Search by email (case-insensitive)
-    schedules = await Schedule.find({ instructorEmail: { $regex: new RegExp(`^${instructorEmail}$`, 'i') } });
+    schedules = await Schedule.find({ instructorEmail: { $regex: new RegExp(`^${authenticatedEmail}$`, 'i') } });
     console.log('🔍 Backend: Strategy 1 (case-insensitive email):', schedules.length, 'schedules');
     
     if (schedules.length > 0) {
@@ -285,30 +302,9 @@ router.get('/instructor/:instructorEmail', async (req, res) => {
     if (schedules.length === 0) {
       console.log('❌ Backend: No schedules found for instructor');
       
-      // Get all schedules for debugging
-      const allSchedules = await Schedule.find({}).limit(10);
-      console.log('🔍 Backend: Sample schedules in database:');
-      allSchedules.forEach((schedule, index) => {
-        console.log(`  ${index + 1}. Instructor: "${schedule.instructor}" | Email: "${schedule.instructorEmail || 'N/A'}"`);
-      });
-      
-      // Get all instructor variations
-      const allInstructorNames = await Schedule.distinct('instructor');
-      console.log('🔍 Backend: All instructor names in schedules:', allInstructorNames);
-      
-      // Return detailed debug info
+      // Return empty result (removed debug info for security)
       return res.json({
-        schedules: [],
-        debug: {
-          requestedEmail: instructorEmail,
-          instructorFound: !!instructor,
-          instructorName: instructorName,
-          instructorStatus: instructor?.status,
-          searchStrategiesUsed: ['case-insensitive-email', 'case-insensitive-name', 'partial-name'],
-          totalSchedulesInDB: await Schedule.countDocuments(),
-          sampleScheduleInstructors: allInstructorNames.slice(0, 5),
-          suggestion: 'Check if schedules were created with correct instructor information'
-        }
+        schedules: []
       });
     }
     
@@ -333,14 +329,54 @@ router.get('/instructor/:instructorEmail', async (req, res) => {
   }
 });
 
-// GET schedules by instructor name (case-insensitive, partial match)
-router.get('/instructor/by-name/:name', async (req, res) => {
+// SECURITY FIX: GET schedules by instructor name - only for authenticated instructor
+router.get('/instructor/by-name/:name', verifyToken, async (req, res) => {
   try {
-    const { name } = req.params;
-    if (!name || !name.trim()) return res.json([]);
-    const regex = new RegExp(name.trim(), 'i');
+    // SECURITY: Verify the requested name matches the authenticated instructor
+    const authenticatedEmail = req.userEmail?.toLowerCase().trim();
+    const requestedName = req.params.name?.trim();
+    
+    if (!requestedName) {
+      return res.json({ schedules: [] });
+    }
+    
+    // Import Instructor model to verify name matches authenticated user
+    const Instructor = (await import('../models/Instructor.js')).default;
+    const instructor = await Instructor.findOne({ 
+      email: { $regex: new RegExp(`^${authenticatedEmail}$`, 'i') } 
+    });
+    
+    if (!instructor) {
+      return res.status(404).json({ message: 'Instructor not found' });
+    }
+    
+    // Build full name from instructor record
+    const instructorFullName = `${instructor.firstname} ${instructor.lastname}`.trim();
+    
+    // Verify requested name matches authenticated instructor's name
+    if (!instructorFullName.toLowerCase().includes(requestedName.toLowerCase()) && 
+        !requestedName.toLowerCase().includes(instructorFullName.toLowerCase())) {
+      console.log('🚫 Security: Unauthorized schedule access by name');
+      console.log('   Authenticated:', instructorFullName, `(${authenticatedEmail})`);
+      console.log('   Requested:', requestedName);
+      return res.status(403).json({ 
+        success: false,
+        message: 'Unauthorized: You can only access your own schedules' 
+      });
+    }
+    
+    // Search schedules by instructor name (case-insensitive)
+    const regex = new RegExp(requestedName, 'i');
     const schedules = await Schedule.find({ instructor: regex });
-    res.json({ schedules });
+    
+    // Additional security: Filter to ensure all schedules belong to authenticated instructor
+    const filteredSchedules = schedules.filter(schedule => {
+      const scheduleEmail = schedule.instructorEmail?.toLowerCase().trim();
+      return scheduleEmail === authenticatedEmail || 
+             schedule.instructor?.toLowerCase().includes(instructorFullName.toLowerCase());
+    });
+    
+    res.json({ schedules: filteredSchedules });
   } catch (err) {
     console.error('Error fetching schedules by instructor name:', err);
     res.status(500).json({ message: 'Server error fetching schedules by name' });
@@ -540,14 +576,24 @@ router.put('/:id', async (req, res) => {
     }
 
     // Create activity log
-    const alert = await Alert.create({
+    const changes = [];
+    if (existingSchedule.course !== course) changes.push(`course: ${existingSchedule.course} → ${course}`);
+    if (existingSchedule.year !== year) changes.push(`year: ${existingSchedule.year} → ${year}`);
+    if (existingSchedule.section !== section) changes.push(`section: ${existingSchedule.section} → ${section}`);
+    if (existingSchedule.subject !== subject) changes.push(`subject: ${existingSchedule.subject} → ${subject}`);
+    if (existingSchedule.instructor !== instructorNameFinal) changes.push(`instructor: ${existingSchedule.instructor} → ${instructorNameFinal}`);
+    if (existingSchedule.day !== day) changes.push(`day: ${existingSchedule.day} → ${day}`);
+    if (existingSchedule.time !== time) changes.push(`time: ${existingSchedule.time} → ${time}`);
+    if (existingSchedule.room !== room) changes.push(`room: ${existingSchedule.room} → ${room}`);
+    
+    await logActivity({
       type: 'schedule-updated',
-      message: `Schedule updated for ${course} ${year} - Section ${section} (${subject})`,
+      message: `Schedule updated: ${subject} - ${course} ${year} Section ${section}${changes.length > 0 ? ` (${changes.join(', ')})` : ''}`,
+      source: 'admin',
       link: `/admin/schedule/${course}/${year}`,
+      meta: { scheduleId: scheduleId, changes, course, year, section, subject },
+      io: req.io
     });
-    if (req.io) {
-      req.io.emit('new-alert', alert);
-    }
 
     res.json({ success: true, message: "Schedule updated successfully!" });
   } catch (err) {
@@ -588,14 +634,23 @@ router.delete('/:id', async (req, res) => {
     // Delete the schedule
     await Schedule.findByIdAndDelete(scheduleId);
     
-    const alert = await Alert.create({
+    await logActivity({
       type: 'schedule-deleted',
-      message: `Schedule for Section ${scheduleToDelete.section} (${scheduleToDelete.subject}) was deleted.`,
+      message: `Schedule deleted: ${scheduleToDelete.subject} - ${scheduleToDelete.course} ${scheduleToDelete.year} Section ${scheduleToDelete.section} (${scheduleToDelete.instructor}, ${scheduleToDelete.day} ${scheduleToDelete.time}, ${scheduleToDelete.room})`,
+      source: 'admin',
       link: `/admin/schedule/${scheduleToDelete.course || ''}/${scheduleToDelete.year || ''}`,
+      meta: { 
+        course: scheduleToDelete.course, 
+        year: scheduleToDelete.year, 
+        section: scheduleToDelete.section, 
+        subject: scheduleToDelete.subject,
+        instructor: scheduleToDelete.instructor,
+        day: scheduleToDelete.day,
+        time: scheduleToDelete.time,
+        room: scheduleToDelete.room
+      },
+      io: req.io
     });
-    if (req.io) {
-      req.io.emit('new-alert', alert);
-    }
     res.json({ success: true, message: "Schedule deleted successfully." });
   } catch (err) {
     console.error("Error deleting schedule:", err);

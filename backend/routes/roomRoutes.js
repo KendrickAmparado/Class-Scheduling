@@ -1,6 +1,7 @@
 import express from 'express';
 import Room from '../models/Room.js';
 import Alert from '../models/Alert.js';
+import { logActivity } from '../utils/activityLogger.js';
 
 const router = express.Router();
 
@@ -31,12 +32,14 @@ router.post('/', async (req, res) => {
 
     await newRoom.save();
 
-    const alert = await Alert.create({
+    await logActivity({
       type: 'room-added',
-      message: `Room ${newRoom.room} added.`,
-      link: '/admin/room-management'
+      message: `Room ${newRoom.room} (${newRoom.area}) added`,
+      source: 'admin',
+      link: '/admin/room-management',
+      meta: { room: newRoom.room, area: newRoom.area, status: newRoom.status },
+      io: req.io
     });
-    req.io?.emit('new-alert', alert);
 
     res.status(201).json({ success: true, message: 'Room added successfully', room: newRoom });
   } catch (err) {
@@ -53,12 +56,14 @@ router.put('/:id', async (req, res) => {
       return res.status(404).json({ success: false, message: 'Room not found.' });
     }
 
-    const alert = await Alert.create({
+    await logActivity({
       type: 'room-updated',
-      message: `Room ${updatedRoom.room} updated.`,
-      link: '/admin/room-management'
+      message: `Room ${updatedRoom.room} updated`,
+      source: 'admin',
+      link: '/admin/room-management',
+      meta: { room: updatedRoom.room, area: updatedRoom.area, status: updatedRoom.status },
+      io: req.io
     });
-    req.io?.emit('new-alert', alert);
 
     res.json({ success: true, room: updatedRoom });
   } catch (error) {
@@ -75,12 +80,14 @@ router.delete('/:id', async (req, res) => {
       return res.status(404).json({ success: false, message: 'Room not found.' });
     }
 
-    const alert = await Alert.create({
+    await logActivity({
       type: 'room-deleted',
-      message: `Room ${deletedRoom.room} deleted.`,
-      link: '/admin/room-management'
+      message: `Room ${deletedRoom.room} (${deletedRoom.area}) deleted`,
+      source: 'admin',
+      link: '/admin/room-management',
+      meta: { room: deletedRoom.room, area: deletedRoom.area },
+      io: req.io
     });
-    req.io?.emit('new-alert', alert);
 
     res.json({ success: true, message: 'Room deleted successfully.' });
   } catch (error) {

@@ -37,10 +37,12 @@ const Modal = ({ show, onClose, title, children, actions }) => {
         left: 0,
         width: "100vw",
         height: "100vh",
-        background: "rgba(0,0,0,0.5)",
+        background: "rgba(0,0,0,0.6)",
         display: "flex",
         justifyContent: "center",
         alignItems: "center",
+        animation: 'fadeIn 0.2s ease-out',
+        backdropFilter: 'blur(4px)',
       }}
       onClick={onClose}
     >
@@ -49,17 +51,26 @@ const Modal = ({ show, onClose, title, children, actions }) => {
           position: "relative",
           background: "white",
           padding: 32,
-          borderRadius: 14,
+          borderRadius: 16,
           minWidth: 360,
           maxWidth: "90vw",
           maxHeight: "90vh",
           overflowY: "auto",
-          boxShadow: "0 20px 40px rgba(0,0,0,0.25)",
+          boxShadow: "0 20px 60px rgba(0,0,0,0.4), 0 0 0 1px rgba(255, 255, 255, 0.1)",
           fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+          animation: 'scaleIn 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          transform: 'scale(1)',
+          transition: 'transform 0.2s ease',
         }}
         onClick={(e) => e.stopPropagation()}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.transform = 'scale(1.01)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.transform = 'scale(1)';
+        }}
       >
-        {title && <h2 style={{ marginBottom: 16 }}>{title}</h2>}
+        {title && <h2 style={{ marginBottom: 16, color: '#1e293b', fontSize: '24px', fontWeight: '700' }}>{title}</h2>}
         <div style={{ marginBottom: 16 }}>{children}</div>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>
           {actions}
@@ -122,6 +133,13 @@ const FacultyManagement = () => {
         showToast("Error loading instructors.", 'error');
       });
   }, [showToast]);
+
+  // Initialize search from URL query (?q=)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const q = params.get('q');
+    if (q) setSearchQuery(q);
+  }, []);
 
   useEffect(() => {
     fetchInstructors();
@@ -496,7 +514,7 @@ const FacultyManagement = () => {
       <Sidebar />
       <main className="main-content" style={{ flex: 1, padding: '1rem', overflowY: 'auto' }}>
         <Header title="Faculty Management" />
-        <div className="dashboard-content">
+        <div className="dashboard-content" style={{ marginTop: '140px' }}>
           {/* Welcome Section */}
           <div className="welcome-section" style={{ marginBottom: '30px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '8px' }}>
@@ -522,14 +540,25 @@ const FacultyManagement = () => {
                 value={departmentFilter}
                 onChange={(e) => setDepartmentFilter(e.target.value)}
                 style={{
-                  padding: '10px 16px',
+                  padding: '12px 16px',
                   border: '2px solid #e5e7eb',
-                  borderRadius: '8px',
+                  borderRadius: '10px',
                   fontSize: '14px',
                   fontWeight: '500',
                   cursor: 'pointer',
                   minWidth: '180px',
-                  background: '#fff'
+                  background: '#fff',
+                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                  boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
+                  outline: 'none',
+                }}
+                onFocus={(e) => {
+                  e.target.style.borderColor = '#2563eb';
+                  e.target.style.boxShadow = '0 0 0 3px rgba(37, 99, 235, 0.1), 0 2px 8px rgba(0, 0, 0, 0.1)';
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = '#e5e7eb';
+                  e.target.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.05)';
                 }}
               >
                 <option value="all">All Departments</option>
@@ -811,19 +840,29 @@ const FacultyManagement = () => {
                       </td>
                     </tr>
                   ) : (
-                    filteredInstructors.map((inst) => (
+                    filteredInstructors.map((inst, index) => (
                       <tr
                         key={inst._id}
                         style={{ 
                           borderBottom: "1px solid #f1f5f9", 
-                          transition: "background 0.2s ease",
-                          background: selectedIds.has(inst._id) ? "#eff6ff" : "white"
+                          transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+                          background: selectedIds.has(inst._id) ? "#eff6ff" : index % 2 === 0 ? "white" : "#fafafa",
+                          cursor: "default",
+                          animation: `fadeInUp 0.4s ease-out ${index * 0.03}s both`
                         }}
                         onMouseEnter={(e) => {
-                          if (!selectedIds.has(inst._id)) e.currentTarget.style.background = "#f9fafb";
+                          if (!selectedIds.has(inst._id)) {
+                            e.currentTarget.style.background = "#f0f9ff";
+                            e.currentTarget.style.transform = "scale(1.01)";
+                            e.currentTarget.style.boxShadow = "0 2px 8px rgba(15, 44, 99, 0.1)";
+                          }
                         }}
                         onMouseLeave={(e) => {
-                          if (!selectedIds.has(inst._id)) e.currentTarget.style.background = "white";
+                          if (!selectedIds.has(inst._id)) {
+                            e.currentTarget.style.background = index % 2 === 0 ? "white" : "#fafafa";
+                            e.currentTarget.style.transform = "scale(1)";
+                            e.currentTarget.style.boxShadow = "none";
+                          }
                         }}
                       >
                         {isSelectMode && (
@@ -1010,15 +1049,25 @@ const FacultyManagement = () => {
               disabled={addLoading}
               style={{
                 width: "100%",
-                padding: "10px 12px",
+                padding: "12px 16px",
                 border: "2px solid #e5e7eb",
-                borderRadius: 8,
+                borderRadius: 10,
                 fontSize: 14,
                 outline: "none",
-                transition: "border-color 0.2s ease",
+                transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+                background: "#fff",
+                boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
               }}
-              onFocus={(e) => (e.target.style.borderColor = "#2563eb")}
-              onBlur={(e) => (e.target.style.borderColor = "#e5e7eb")}
+              onFocus={(e) => {
+                e.target.style.borderColor = "#2563eb";
+                e.target.style.boxShadow = "0 0 0 3px rgba(37, 99, 235, 0.1), 0 2px 8px rgba(0, 0, 0, 0.1)";
+                e.target.style.transform = "translateY(-1px)";
+              }}
+              onBlur={(e) => {
+                e.target.style.borderColor = "#e5e7eb";
+                e.target.style.boxShadow = "0 1px 3px rgba(0, 0, 0, 0.05)";
+                e.target.style.transform = "translateY(0)";
+              }}
             />
           </div>
 
@@ -1035,15 +1084,25 @@ const FacultyManagement = () => {
               disabled={addLoading}
               style={{
                 width: "100%",
-                padding: "10px 12px",
+                padding: "12px 16px",
                 border: "2px solid #e5e7eb",
-                borderRadius: 8,
+                borderRadius: 10,
                 fontSize: 14,
                 outline: "none",
-                transition: "border-color 0.2s ease",
+                transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+                background: "#fff",
+                boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
               }}
-              onFocus={(e) => (e.target.style.borderColor = "#2563eb")}
-              onBlur={(e) => (e.target.style.borderColor = "#e5e7eb")}
+              onFocus={(e) => {
+                e.target.style.borderColor = "#2563eb";
+                e.target.style.boxShadow = "0 0 0 3px rgba(37, 99, 235, 0.1), 0 2px 8px rgba(0, 0, 0, 0.1)";
+                e.target.style.transform = "translateY(-1px)";
+              }}
+              onBlur={(e) => {
+                e.target.style.borderColor = "#e5e7eb";
+                e.target.style.boxShadow = "0 1px 3px rgba(0, 0, 0, 0.05)";
+                e.target.style.transform = "translateY(0)";
+              }}
             />
           </div>
         </form>
@@ -1071,12 +1130,40 @@ const FacultyManagement = () => {
         }
       >
         <form id="completeRegForm" onSubmit={handleCompleteRegSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <input type="email" name="email" placeholder="Email" value={completeRegData.email} onChange={handleCompleteRegChange} required disabled={completeRegLoading} />
-          <input type="text" name="firstname" placeholder="First Name" value={completeRegData.firstname} onChange={handleCompleteRegChange} required disabled={completeRegLoading} />
-          <input type="text" name="lastname" placeholder="Last Name" value={completeRegData.lastname} onChange={handleCompleteRegChange} required disabled={completeRegLoading} />
-          <input type="text" name="contact" placeholder="Contact" value={completeRegData.contact} onChange={handleCompleteRegChange} required disabled={completeRegLoading} />
-          <input type="text" name="department" placeholder="Department" value={completeRegData.department} onChange={handleCompleteRegChange} required disabled={completeRegLoading} />
-          <input type="password" name="password" placeholder="Password" value={completeRegData.password} onChange={handleCompleteRegChange} required disabled={completeRegLoading} minLength={6} />
+          {['email', 'firstname', 'lastname', 'contact', 'department', 'password'].map((field) => (
+            <input
+              key={field}
+              type={field === 'email' ? 'email' : field === 'password' ? 'password' : 'text'}
+              name={field}
+              placeholder={field.charAt(0).toUpperCase() + field.slice(1).replace(/([A-Z])/g, ' $1')}
+              value={completeRegData[field]}
+              onChange={handleCompleteRegChange}
+              required
+              disabled={completeRegLoading}
+              minLength={field === 'password' ? 6 : undefined}
+              style={{
+                width: "100%",
+                padding: "12px 16px",
+                border: "2px solid #e5e7eb",
+                borderRadius: 10,
+                fontSize: 14,
+                outline: "none",
+                transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+                background: "#fff",
+                boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
+              }}
+              onFocus={(e) => {
+                e.target.style.borderColor = "#2563eb";
+                e.target.style.boxShadow = "0 0 0 3px rgba(37, 99, 235, 0.1), 0 2px 8px rgba(0, 0, 0, 0.1)";
+                e.target.style.transform = "translateY(-1px)";
+              }}
+              onBlur={(e) => {
+                e.target.style.borderColor = "#e5e7eb";
+                e.target.style.boxShadow = "0 1px 3px rgba(0, 0, 0, 0.05)";
+                e.target.style.transform = "translateY(0)";
+              }}
+            />
+          ))}
         </form>
       </Modal>
 

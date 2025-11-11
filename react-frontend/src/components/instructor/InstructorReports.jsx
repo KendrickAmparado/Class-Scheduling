@@ -141,19 +141,31 @@ const InstructorReports = () => {
         const instructorEmail = profileData.email;
         let merged = [];
         const normalize = (data) => Array.isArray(data) ? data : (data?.schedules || []);
+        const token = localStorage.getItem('token');
 
         if (instructorEmail && instructorEmail.trim()) {
-          const scheduleResponse = await fetch(`/api/schedule/instructor/${encodeURIComponent(instructorEmail)}`);
+          const scheduleResponse = await fetch(`/api/schedule/instructor/${encodeURIComponent(instructorEmail)}`, {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          });
           if (scheduleResponse.ok) {
             const scheduleData = await scheduleResponse.json();
             merged = normalize(scheduleData);
+          } else {
+            const errorData = await scheduleResponse.json().catch(() => ({}));
+            console.error('Failed to fetch schedules:', errorData.message || scheduleResponse.statusText);
           }
         }
 
         const fullName = `${profileData.firstname || ''} ${profileData.lastname || ''}`.trim();
         if (fullName.length > 0) {
           try {
-            const byNameRes = await fetch(`/api/schedule/instructor/by-name/${encodeURIComponent(fullName)}`);
+            const byNameRes = await fetch(`/api/schedule/instructor/by-name/${encodeURIComponent(fullName)}`, {
+              headers: {
+                'Authorization': `Bearer ${token}`
+              }
+            });
             if (byNameRes.ok) {
               const byNameData = await byNameRes.json();
               const byName = normalize(byNameData);
@@ -356,7 +368,6 @@ const InstructorReports = () => {
     
     // Colors
     const headerColor = [15, 44, 99]; // #0f2c63
-    const accentColor = [249, 115, 22]; // #f97316
 
     // Report Header
     doc.setFillColor(...headerColor);
@@ -627,7 +638,7 @@ const InstructorReports = () => {
       <InstructorSidebar />
       <main className="main-content" style={{ flex: 1, padding: '1rem', overflowY: 'auto' }}>
         <InstructorHeader />
-        <div className="dashboard-content">
+        <div className="dashboard-content" style={{ marginTop: '140px' }}>
           {/* Welcome Section */}
           <div className="welcome-section" style={{ marginBottom: '30px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '8px' }}>

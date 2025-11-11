@@ -9,7 +9,7 @@ import {
   faGraduationCap,
   faCode,
   faFilter,
-  faUser,
+  faClock,
 } from '@fortawesome/free-solid-svg-icons';
 import axios from 'axios';
 import { generateTimeSlots, TIME_SLOT_CONFIGS } from '../../utils/timeUtils.js';
@@ -125,7 +125,6 @@ const Reports = () => {
     
     // Colors
     const headerColor = [15, 44, 99]; // #0f2c63
-    const accentColor = [249, 115, 22]; // #f97316
 
     // Report Header
     doc.setFillColor(...headerColor);
@@ -200,7 +199,7 @@ const Reports = () => {
     doc.text(summaryText.join('  '), margin + 3, summaryY + 16);
 
     // Generate table using autoTable
-    const finalY = doc.autoTable({
+    doc.autoTable({
       startY: summaryY + 30,
       head: [['Day', 'Time', 'Subject', 'Instructor', 'Room']],
       body: tableData,
@@ -459,7 +458,7 @@ const Reports = () => {
       <Sidebar />
       <main className="main-content" style={{ flex: 1, padding: '1rem', overflowY: 'auto' }}>
         <Header title="Reports" />
-        <div className="dashboard-content">
+        <div className="dashboard-content" style={{ marginTop: '140px' }}>
           {/* Course and Year Selection */}
           <div className="welcome-section" style={{ marginBottom: '30px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '8px' }}>
@@ -768,253 +767,210 @@ const Reports = () => {
                     </select>
                   </div>
 
-                  {/* Scrollable Table Container */}
+                  {/* Grid Table Container - Matching InstructorReports style */}
                   <div
                     style={{
-                      width: '100%',
-                      maxHeight: '600px',
-                      overflowY: 'auto',
+                      padding: '36px 24px 24px 24px',
+                      maxWidth: '100%',
+                      margin: '0 auto',
+                      background: '#fff',
+                      borderRadius: '22px',
+                      boxShadow: '0 8px 32px rgba(15, 44, 99, 0.12)',
                       overflowX: 'auto',
-                      border: '2px solid #e5e7eb',
-                      borderRadius: '14px',
                     }}
                   >
-                    <table
-                      style={{
-                        width: '100%',
-                        borderCollapse: 'collapse',
-                        tableLayout: 'fixed',
-                        fontSize: '17px',
-                      }}
-                    >
-                      <colgroup>
-                        <col style={{ width: '20%' }} />
-                        <col style={{ width: '25%' }} />
-                        <col style={{ width: '55%' }} />
-                      </colgroup>
-                      <thead
+                    {getSectionSchedules(selectedSection.name).length === 0 ? (
+                      <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280', fontSize: '17px' }}>
+                        No schedules for this section yet
+                      </div>
+                    ) : (
+                      <div
                         style={{
-                          position: 'sticky',
-                          top: 0,
-                          zIndex: 10,
-                          background: currentCourse.gradient,
-                          color: 'white',
+                          display: 'grid',
+                          gridTemplateColumns: `120px repeat(${
+                            dayDisplayGroups.filter((dayGroup) => dayFilter === 'all' || dayFilter === dayGroup.group).length
+                          }, 1fr)`,
+                          minWidth: 900,
                         }}
                       >
-                        <tr>
-                          <th
-                            style={{
-                              padding: '22px 28px',
-                              textAlign: 'left',
-                              fontWeight: '700',
-                              fontSize: '16px',
-                              textTransform: 'uppercase',
-                              letterSpacing: '0.5px',
-                            }}
-                          >
-                            Day
-                          </th>
-                          <th
-                            style={{
-                              padding: '22px 28px',
-                              textAlign: 'left',
-                              fontWeight: '700',
-                              fontSize: '16px',
-                              textTransform: 'uppercase',
-                              letterSpacing: '0.5px',
-                            }}
-                          >
-                            Time
-                          </th>
-                          <th
-                            style={{
-                              padding: '22px 28px',
-                              textAlign: 'left',
-                              fontWeight: '700',
-                              fontSize: '16px',
-                              textTransform: 'uppercase',
-                              letterSpacing: '0.5px',
-                            }}
-                          >
-                            {selectedCourse.toUpperCase()}-{selectedYear.charAt(0).toUpperCase()}
-                            {selectedSection.name}
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                          {dayDisplayGroups
-                            .filter((dayGroup) => dayFilter === 'all' || dayFilter === dayGroup.group)
-                            .map((dayGroup) =>
-                            timeSlots.map((time, timeIndex) => {
-                              const schedule = schedules.find((sched) => {
+                        {/* Grid Header */}
+                        <div
+                          style={{
+                            background: 'linear-gradient(120deg, #0f2c63, #f97316 85%)',
+                            color: '#fff',
+                            fontWeight: 800,
+                            fontSize: 16,
+                            textAlign: 'center',
+                            padding: '18px 0',
+                            letterSpacing: '0.7px',
+                            borderTopLeftRadius: 14,
+                          }}
+                        >
+                          Time
+                        </div>
+                        {dayDisplayGroups
+                          .filter((dayGroup) => dayFilter === 'all' || dayFilter === dayGroup.group)
+                          .map((day, idx) => (
+                            <div
+                              key={day.day}
+                              style={{
+                                background: 'linear-gradient(120deg, #0f2c63, #f97316 85%)',
+                                color: '#fff',
+                                fontWeight: 800,
+                                fontSize: 16,
+                                textAlign: 'center',
+                                padding: '18px 0',
+                                borderTopRightRadius:
+                                  idx ===
+                                  dayDisplayGroups.filter((dayGroup) => dayFilter === 'all' || dayFilter === dayGroup.group).length - 1
+                                    ? 14
+                                    : 0,
+                              }}
+                            >
+                              {day.label}
+                            </div>
+                          ))}
+                        {/* Grid Body */}
+                        {(() => {
+                          const displayedDays = dayDisplayGroups.filter(
+                            (dayGroup) => dayFilter === 'all' || dayFilter === dayGroup.group
+                          );
+                          const skipSlots = {};
+                          displayedDays.forEach((day) => {
+                            skipSlots[day.day] = {};
+                          });
+
+                          return timeSlots.map((slot, slotIndex) => {
+                            const rowCells = [
+                              <div
+                                key={'time-' + slotIndex}
+                                style={{
+                                  padding: '13px 7px',
+                                  fontWeight: 700,
+                                  fontSize: 15,
+                                  borderLeft: '3px solid #f97316',
+                                  background: slotIndex % 2 === 0 ? '#fff' : '#f3f4f6',
+                                  color: '#64748b',
+                                  textAlign: 'center',
+                                  minHeight: 44,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                }}
+                              >
+                                <FontAwesomeIcon icon={faClock} style={{ marginRight: 6, fontSize: 13 }} /> {slot}
+                              </div>,
+                            ];
+
+                            displayedDays.forEach((day) => {
+                              if (skipSlots[day.day][slotIndex]) {
+                                return;
+                              }
+
+                              const dayToken = day.day.toLowerCase();
+                              const scheduleStartHere = schedules.find((sched) => {
                                 if (sched.section !== selectedSection.name) return false;
-                                  const schedDayStrs = sched.day.toLowerCase().replace(/\s/g, '').split('/');
-                                  const matchesDay = schedDayStrs.includes(dayGroup.day);
-                                  if (!matchesDay) return false;
+                                const schedDayStrs = sched.day.toLowerCase().replace(/\s/g, '').split('/');
+                                if (!schedDayStrs.includes(dayToken)) return false;
+
                                 const [schedStart, schedEnd] = sched.time.split(' - ').map((x) => x.trim());
                                 const schedStartMin = timeStringToMinutes(schedStart);
                                 const schedEndMin = timeStringToMinutes(schedEnd);
-                                const [slotStart, slotEnd] = time.split(' - ').map((x) => x.trim());
+                                const [slotStart] = slot.split(' - ').map((x) => x.trim());
                                 const slotStartMin = timeStringToMinutes(slotStart);
-                                const slotEndMin = timeStringToMinutes(slotEnd);
-                                return schedStartMin <= slotStartMin && slotEndMin <= schedEndMin;
+
+                                return schedStartMin <= slotStartMin && slotStartMin < schedEndMin;
                               });
 
-                              if (schedule) {
-                                const [schedStartStr, schedEndStr] = schedule.time.split(' - ').map((s) => s.trim());
-                                const schedStartMin = timeStringToMinutes(schedStartStr);
-                                const schedEndMin = timeStringToMinutes(schedEndStr);
+                              if (scheduleStartHere) {
+                                const [schedStart, schedEnd] = scheduleStartHere.time.split(' - ').map((x) => x.trim());
+                                const schedStartMin = timeStringToMinutes(schedStart);
+                                const schedEndMin = timeStringToMinutes(schedEnd);
+                                const step = TIME_SLOT_CONFIGS.DETAILED.duration || 30;
+                                const startRounded = Math.floor(schedStartMin / step) * step;
+                                const endRounded = Math.ceil(schedEndMin / step) * step;
+                                const rowSpan = Math.max(1, Math.ceil((endRounded - startRounded) / step));
 
-                                let firstMatchingSlotIndex = -1;
-                                for (let i = 0; i < timeSlots.length; i++) {
-                                  const [slotStart, slotEnd] = timeSlots[i].split(' - ').map((s) => s.trim());
-                                  const slotStartMin = timeStringToMinutes(slotStart);
-                                  const slotEndMin = timeStringToMinutes(slotEnd);
-
-                                  if (schedStartMin <= slotStartMin && slotEndMin <= schedEndMin) {
-                                    if (firstMatchingSlotIndex === -1) {
-                                      firstMatchingSlotIndex = i;
-                                    }
-                                  }
+                                for (let skip = 1; skip < rowSpan; ++skip) {
+                                  skipSlots[day.day][slotIndex + skip] = true;
                                 }
 
-                                const isFirstSlot = firstMatchingSlotIndex === timeIndex;
-
-                                if (!isFirstSlot) {
-                                  return (
-                                    <tr key={`${dayGroup.label}-${timeIndex}`} style={{ borderBottom: '1px solid #e5e7eb' }}>
-                                      <td
+                                rowCells.push(
+                                  <div
+                                    key={day.day + '-' + slotIndex}
+                                    style={{
+                                      gridRow: `span ${rowSpan}`,
+                                      minHeight: 44 * rowSpan,
+                                      display: 'flex',
+                                      flexDirection: 'column',
+                                      justifyContent: 'center',
+                                      alignItems: 'center',
+                                      padding: '0px 4px',
+                                      background: 'linear-gradient(120deg, #0f2c63 60%, #f97316 100%)',
+                                      borderRadius: 11,
+                                      color: '#fff',
+                                      fontWeight: 800,
+                                      fontSize: 15,
+                                      boxShadow: '0 4px 16px rgba(15, 44, 99, 0.21)',
+                                      position: 'relative',
+                                      border: '2px solid #f97316',
+                                      margin: '2px 3px',
+                                    }}
+                                  >
+                                    <div style={{ fontWeight: 900, fontSize: 15, marginBottom: 2 }}>
+                                      {scheduleStartHere.subject}
+                                    </div>
+                                    <div style={{ fontSize: 13, opacity: 0.94, fontWeight: 500 }}>
+                                      {scheduleStartHere.time}
+                                    </div>
+                                    <div
+                                      style={{
+                                        marginTop: 4,
+                                        fontSize: 12,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 7,
+                                        flexWrap: 'wrap',
+                                        justifyContent: 'center',
+                                      }}
+                                    >
+                                      <span
                                         style={{
-                                          padding: '20px 28px',
-                                          color: '#374151',
-                                          fontWeight: '500',
-                                          fontSize: '16px',
+                                          background: 'rgba(255, 255, 255, 0.2)',
+                                          borderRadius: 7,
+                                          padding: '2.5px 8px',
+                                          color: '#fff',
+                                          fontWeight: 700,
                                         }}
                                       >
-                                        {dayGroup.label}
-                                      </td>
-                                      <td style={{ padding: '20px 28px', color: '#374151', fontSize: '16px' }}>{time}</td>
-                                    </tr>
-                                  );
-                                }
-
-                                let rowSpan = 0;
-                                for (let i = timeIndex; i < timeSlots.length; i++) {
-                                  const [slotStart, slotEnd] = timeSlots[i].split(' - ').map((s) => s.trim());
-                                  const slotStartMin = timeStringToMinutes(slotStart);
-                                  const slotEndMin = timeStringToMinutes(slotEnd);
-
-                                  if (slotStartMin >= schedStartMin && slotEndMin <= schedEndMin) {
-                                    rowSpan++;
-                                  } else {
-                                    break;
-                                  }
-                                }
-
-                                return (
-                                  <tr key={`${dayGroup.label}-${timeIndex}`} style={{ borderBottom: '1px solid #e5e7eb' }}>
-                                    <td
-                                      style={{
-                                        padding: '20px 28px',
-                                        color: '#374151',
-                                        fontWeight: '500',
-                                        fontSize: '16px',
-                                      }}
-                                    >
-                                      {dayGroup.label}
-                                    </td>
-                                    <td style={{ padding: '20px 28px', color: '#374151', fontSize: '16px' }}>{time}</td>
-                                    <td
-                                      rowSpan={rowSpan}
-                                      style={{
-                                        background: 'linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%)',
-                                        borderLeft: '5px solid #3b82f6',
-                                        color: '#1e40af',
-                                        padding: '24px 28px',
-                                        verticalAlign: 'top',
-                                      }}
-                                    >
-                                      <div style={{ textAlign: 'left' }}>
-                                        <div
-                                          style={{
-                                            fontWeight: '700',
-                                            fontSize: '18px',
-                                            marginBottom: '14px',
-                                            color: '#1e40af',
-                                          }}
-                                        >
-                                          {schedule.subject}
-                                        </div>
-                                        <div
-                                          style={{
-                                            fontSize: '16px',
-                                            marginBottom: '10px',
-                                            color: '#1e40af',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '12px',
-                                          }}
-                                        >
-                                          <FontAwesomeIcon icon={faUser} style={{ fontSize: 16 }} />
-                                          <span>{schedule.instructor}</span>
-                                        </div>
-                                        <div
-                                          style={{
-                                            fontSize: '16px',
-                                            color: '#1e40af',
-                                            fontStyle: 'italic',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '12px',
-                                          }}
-                                        >
-                                          <FontAwesomeIcon icon={faDoorOpen} style={{ fontSize: 16 }} />
-                                          <span>Room: {schedule.room}</span>
-                                        </div>
-                                      </div>
-                                    </td>
-                                  </tr>
+                                        {scheduleStartHere.instructor}
+                                      </span>
+                                      <span style={{ fontStyle: 'italic', marginLeft: 6 }}>
+                                        <FontAwesomeIcon icon={faDoorOpen} /> {scheduleStartHere.room}
+                                      </span>
+                                    </div>
+                                  </div>
                                 );
                               } else {
-                                return (
-                                  <tr key={`${dayGroup.label}-${timeIndex}`} style={{ borderBottom: '1px solid #e5e7eb' }}>
-                                    <td
-                                      style={{
-                                        padding: '20px 28px',
-                                        color: '#374151',
-                                        fontWeight: '500',
-                                        fontSize: '16px',
-                                      }}
-                                    >
-                                      {dayGroup.label}
-                                    </td>
-                                    <td style={{ padding: '20px 28px', color: '#374151', fontSize: '16px' }}>{time}</td>
-                                    <td
-                                      style={{
-                                        background: '#ffffff',
-                                        padding: '20px 28px',
-                                        border: '1px solid #f1f5f9',
-                                      }}
-                                    >
-                                      {/* Empty cell */}
-                                    </td>
-                                  </tr>
+                                rowCells.push(
+                                  <div
+                                    key={day.day + '-' + slotIndex}
+                                    style={{
+                                      minHeight: 44,
+                                      background: slotIndex % 2 === 0 ? '#fff' : '#f3f4f6',
+                                      borderBottom: '1.5px solid #e5e7eb',
+                                      borderRight: '1.5px solid #e5e7eb',
+                                    }}
+                                  />
                                 );
                               }
-                            })
-                          )}
-                        {getSectionSchedules(selectedSection.name).length === 0 && (
-                          <tr>
-                            <td
-                              colSpan="3"
-                              style={{ padding: '40px', textAlign: 'center', color: '#6b7280', fontSize: '17px' }}
-                            >
-                              No schedules for this section yet
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
+                            });
+
+                            return rowCells;
+                          });
+                        })()}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

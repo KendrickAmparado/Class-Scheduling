@@ -196,7 +196,7 @@ const InstructorSettings = () => {
       <InstructorSidebar />
       <main className="main-content" style={{ flex: 1, padding: '1rem', overflowY: 'auto' }}>
         <InstructorHeader />
-        <div className="dashboard-content" style={{ display: 'flex', justifyContent: 'center', alignItems: 'flex-start' }}>
+        <div className="dashboard-content" style={{ display: 'flex', justifyContent: 'center', alignItems: 'flex-start', marginTop: '140px' }}>
           <div
             style={{
               background: '#fff',
@@ -372,18 +372,17 @@ const InstructorSettings = () => {
                   </div>
                 </div>
 
-                {/* Department */}
+                {/* Department (read-only) */}
                 <div>
                   <label style={{ display: 'block', color: '#374151', fontSize: '14px', fontWeight: '600', marginBottom: '5px' }}>
                     <FontAwesomeIcon icon={faUser} style={{ marginRight: '8px', color: '#f97316' }} />
                     Department
                   </label>
-                  <input
-                    type="text"
-                    value={profileData.department || ''}
-                    onChange={handleChange('department')}
-                    style={{ width: '100%', padding: '10px 15px', borderRadius: '10px', border: '1px solid #e2e8f0', fontSize: '16px', background: 'white' }}
-                  />
+                  <div
+                    style={{ background: '#f9fafb', color: '#1e293b', padding: '10px 15px', borderRadius: '10px', border: '1px solid #e2e8f0', fontSize: '16px', fontWeight: '500' }}
+                  >
+                    {profileData.department || 'Not available'}
+                  </div>
                 </div>
               </div>
               {/* Save Button */}

@@ -84,8 +84,19 @@ async function setupIndexes() {
 // Connect to MongoDB and then setup indexes and start server
 mongoose
   .connect(mongoURI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
+    serverSelectionTimeoutMS: 60000, // Increase timeout to 60 seconds
+    socketTimeoutMS: 45000, // Close sockets after 45 seconds of inactivity
+    connectTimeoutMS: 60000, // Increase connection timeout to 60 seconds
+    maxPoolSize: 10, // Maintain up to 10 socket connections
+    minPoolSize: 1, // Reduce min pool size to avoid connection issues
+    retryWrites: true,
+    w: 'majority',
+    // Additional options for better connection handling
+    tls: true, // Enable TLS for Atlas connections
+    tlsAllowInvalidCertificates: false, // Ensure valid certificates
+    tlsAllowInvalidHostnames: false, // Ensure valid hostnames
+    // Retry connection on failure
+    retryReads: true,
   })
   .then(async () => {
     console.log('✅ MongoDB connected successfully');
@@ -166,6 +177,30 @@ mongoose
   })
   .catch((err) => {
     console.error('❌ MongoDB connection failed:', err);
+    console.error('\n💡 Troubleshooting tips:');
+    console.error('1. Check if your IP address is whitelisted in MongoDB Atlas');
+    console.error('   - Go to MongoDB Atlas → Network Access → Add IP Address');
+    console.error('   - Add your current IP or use 0.0.0.0/0 (less secure, for testing)');
+    console.error('2. Verify your MONGO_URI in .env file is correct');
+    console.error('   - Format: mongodb+srv://username:password@cluster.mongodb.net/database?retryWrites=true&w=majority');
+    console.error('   - Make sure username and password are URL-encoded if they contain special characters');
+    console.error('3. Check your internet connection');
+    console.error('   - Try pinging: ping cluster0.xxxxx.mongodb.net');
+    console.error('4. Ensure MongoDB Atlas cluster is running');
+    console.error('   - Go to MongoDB Atlas → Clusters → Check if cluster is active (not paused)');
+    console.error('5. Try connecting with MongoDB Compass to verify credentials');
+    console.error('   - Use the same connection string from your .env file');
+    console.error('6. Check firewall/antivirus settings');
+    console.error('   - Some firewalls block MongoDB Atlas connections');
+    console.error('7. Verify database user credentials');
+    console.error('   - Go to MongoDB Atlas → Database Access → Verify username and password');
+    console.error('\n🔍 Connection Details:');
+    console.error(`   - URI Format: ${mongoURI ? (mongoURI.includes('@') ? 'mongodb+srv://user:***@cluster' : 'mongodb://...') : 'NOT SET'}`);
+    console.error(`   - Connection Timeout: 60 seconds`);
+    console.error(`   - Error Type: ${err.name || 'Unknown'}`);
+    if (err.message) {
+      console.error(`   - Error Message: ${err.message}`);
+    }
     process.exit(1);
   });
 

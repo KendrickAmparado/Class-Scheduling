@@ -1,18 +1,37 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
 import Sidebar from '../common/Sidebar.jsx';
 import Header from '../common/Header.jsx';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
   faGraduationCap, 
   faCode, 
-  faCalendarAlt,
-  faChevronRight 
+  faPlus,
+  faTrash,
+  faTimes,
+  faUsers,
+  faExclamationCircle
 } from '@fortawesome/free-solid-svg-icons';
+import axios from 'axios';
+import { useToast } from '../common/ToastProvider.jsx';
+import ConfirmationDialog from '../common/ConfirmationDialog.jsx';
 
-const ManageSchedule = () => {
-  const navigate = useNavigate();
+const SectionManagement = () => {
+  const { showToast } = useToast();
   const [selectedCourse, setSelectedCourse] = useState(null);
+  const [selectedYear, setSelectedYear] = useState(null);
+  const [sections, setSections] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [showAddSectionPopup, setShowAddSectionPopup] = useState(false);
+  const [newSectionName, setNewSectionName] = useState('');
+  const [addingSection, setAddingSection] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState({ 
+    show: false, 
+    title: '', 
+    message: '', 
+    onConfirm: null, 
+    destructive: false 
+  });
 
   const courses = [
     {
@@ -27,19 +46,115 @@ const ManageSchedule = () => {
       name: 'Bachelor of Science in Entertainment and Multimedia Computing',
       shortName: 'BSEMC-DAT',
       icon: faCode,
-      gradient: 'linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%)',
+      gradient: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
     }
   ];
 
   const yearLevels = [
-    { id: '1st year', label: '1st Year', subtitle: 'First Year Students' },
-    { id: '2nd year', label: '2nd Year', subtitle: 'Second Year Students' },
-    { id: '3rd year', label: '3rd Year', subtitle: 'Third Year Students' },
-    { id: '4th year', label: '4th Year', subtitle: 'Fourth Year Students' }
+    { id: '1st year', label: '1st Year' },
+    { id: '2nd year', label: '2nd Year' },
+    { id: '3rd year', label: '3rd Year' },
+    { id: '4th year', label: '4th Year' }
   ];
 
-  const navigateToSchedule = (course, year) => {
-    navigate(`/admin/schedule/${course}/${year.replace(/\s+/g, '').toLowerCase()}`);
+  const fetchSections = useCallback(async () => {
+    if (!selectedCourse || !selectedYear) {
+      setSections([]);
+      setError(null);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await axios.get(
+        `http://localhost:5000/api/sections?course=${selectedCourse}&year=${selectedYear}`
+      );
+      
+      if (Array.isArray(response.data)) {
+        const sortedSections = response.data.sort((a, b) => 
+          a.name.localeCompare(b.name)
+        );
+        setSections(sortedSections);
+      } else if (response.data.success === false) {
+        setError(response.data.message || 'Error fetching sections');
+        setSections([]);
+      } else {
+        setSections([]);
+      }
+    } catch (err) {
+      console.error('Error fetching sections:', err);
+      setError(err.response?.data?.message || 'Error to fetch data');
+      setSections([]);
+      showToast('Error to fetch data', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedCourse, selectedYear, showToast]);
+
+  useEffect(() => {
+    fetchSections();
+  }, [fetchSections]);
+
+  const handleAddSection = async (e) => {
+    e.preventDefault();
+    
+    if (!newSectionName.trim()) {
+      showToast('Please enter a section name', 'error');
+      return;
+    }
+
+    if (!selectedCourse || !selectedYear) {
+      showToast('Please select a course and year level', 'error');
+      return;
+    }
+
+    setAddingSection(true);
+    try {
+      const response = await axios.post('http://localhost:5000/api/sections/create', {
+        course: selectedCourse,
+        year: selectedYear,
+        name: newSectionName.trim(),
+      });
+
+      if (response.data.success) {
+        showToast('Section added successfully!', 'success');
+        setNewSectionName('');
+        setShowAddSectionPopup(false);
+        await fetchSections();
+      } else {
+        showToast(response.data.message || 'Failed to add section', 'error');
+      }
+    } catch (err) {
+      console.error('Error adding section:', err);
+      showToast(err.response?.data?.message || 'Error adding section', 'error');
+    } finally {
+      setAddingSection(false);
+    }
+  };
+
+  const handleDeleteSection = (section) => {
+    setConfirmDialog({
+      show: true,
+      title: 'Delete Section',
+      message: `Are you sure you want to delete section "${section.name}"? This will also delete all associated schedules. This action cannot be undone.`,
+      onConfirm: async () => {
+        try {
+          const response = await axios.delete(`http://localhost:5000/api/sections/${section._id}`);
+          if (response.data.success) {
+            showToast('Section deleted successfully!', 'success');
+            await fetchSections();
+          } else {
+            showToast(response.data.message || 'Failed to delete section', 'error');
+          }
+        } catch (err) {
+          console.error('Error deleting section:', err);
+          showToast(err.response?.data?.message || 'Error deleting section', 'error');
+        }
+        setConfirmDialog({ show: false, title: '', message: '', onConfirm: null, destructive: false });
+      },
+      destructive: true,
+    });
   };
 
   const currentCourse = courses.find(c => c.id === selectedCourse);
@@ -48,18 +163,18 @@ const ManageSchedule = () => {
     <div className="dashboard-container" style={{ display: 'flex', height: '100vh' }}>
       <Sidebar />
       <main className="main-content" style={{ flex: 1, padding: '1rem', overflowY: 'auto' }}>
-        <Header title="Manage Schedule" />
-        <div className="dashboard-content">
+        <Header title="Section Management" />
+        <div className="dashboard-content" style={{ marginTop: '140px' }}>
           {/* Welcome Section */}
           <div className="welcome-section" style={{ marginBottom: '30px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '8px' }}>
               <FontAwesomeIcon 
-                icon={faCalendarAlt} 
+                icon={faUsers} 
                 style={{ fontSize: 32, color: '#f97316' }}
               />
-              <h2 style={{ margin: 0 }}>Schedule Management</h2>
+              <h2 style={{ margin: 0 }}>Section Management</h2>
             </div>
-            <p style={{ margin: 0 }}>Select a course and year level to manage class schedules</p>
+            <p style={{ margin: 0 }}>Select a course and year level to manage sections</p>
           </div>
 
           {/* Course Selection */}
@@ -78,7 +193,11 @@ const ManageSchedule = () => {
               {courses.map((course) => (
                 <button
                   key={course.id}
-                  onClick={() => setSelectedCourse(course.id)}
+                  onClick={() => {
+                    setSelectedCourse(course.id);
+                    setSelectedYear(null);
+                    setSections([]);
+                  }}
                   style={{
                     padding: '24px 28px',
                     background: selectedCourse === course.id ? course.gradient : '#f9fafb',
@@ -143,68 +262,189 @@ const ManageSchedule = () => {
               </h3>
               <div style={{ 
                 display: 'grid', 
-                gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', 
-                gap: '20px' 
+                gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', 
+                gap: '16px' 
               }}>
                 {yearLevels.map((year) => (
                   <button
                     key={year.id}
-                    onClick={() => navigateToSchedule(selectedCourse, year.id)}
+                    onClick={() => setSelectedYear(year.id)}
                     style={{
-                      padding: '28px',
-                      background: currentCourse.gradient,
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '14px',
+                      padding: '20px',
+                      background: selectedYear === year.id ? currentCourse.gradient : '#f9fafb',
+                      color: selectedYear === year.id ? 'white' : '#374151',
+                      border: selectedYear === year.id ? 'none' : '2px solid #e5e7eb',
+                      borderRadius: '12px',
                       cursor: 'pointer',
-                      textAlign: 'left',
+                      fontWeight: '600',
+                      fontSize: '16px',
                       transition: 'all 0.3s ease',
-                      position: 'relative',
-                      overflow: 'hidden',
+                      textAlign: 'center',
                     }}
                     onMouseOver={(e) => {
-                      e.currentTarget.style.transform = 'translateY(-4px)';
-                      e.currentTarget.style.boxShadow = '0 12px 28px rgba(0, 0, 0, 0.15)';
+                      if (selectedYear !== year.id) {
+                        e.currentTarget.style.background = '#f3f4f6';
+                        e.currentTarget.style.transform = 'translateY(-2px)';
+                      }
                     }}
                     onMouseOut={(e) => {
-                      e.currentTarget.style.transform = 'translateY(0)';
-                      e.currentTarget.style.boxShadow = 'none';
+                      if (selectedYear !== year.id) {
+                        e.currentTarget.style.background = '#f9fafb';
+                        e.currentTarget.style.transform = 'translateY(0)';
+                      }
                     }}
                   >
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      marginBottom: '12px'
-                    }}>
-                      <div style={{ fontSize: '24px', fontWeight: '700' }}>
-                        {year.label}
-                      </div>
-                      <FontAwesomeIcon 
-                        icon={faChevronRight} 
-                        style={{ fontSize: 20, opacity: 0.8 }} 
-                      />
-                    </div>
-                    <div style={{ fontSize: '14px', opacity: 0.9 }}>
-                      {year.subtitle}
-                    </div>
-                    <div style={{
-                      position: 'absolute',
-                      top: '-20px',
-                      right: '-20px',
-                      width: '100px',
-                      height: '100px',
-                      background: 'rgba(255, 255, 255, 0.1)',
-                      borderRadius: '50%',
-                    }} />
+                    {year.label}
                   </button>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Instructions when no course selected */}
-          {!selectedCourse && (
+          {/* Sections List - Only shows when both course and year are selected */}
+          {selectedCourse && selectedYear && (
+            <div style={{
+              background: '#fff',
+              padding: '24px',
+              borderRadius: '18px',
+              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)',
+              borderLeft: '5px solid #f97316',
+            }}>
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center',
+                marginBottom: '20px'
+              }}>
+                <h3 style={{ fontSize: '20px', fontWeight: '700', color: '#1e293b', margin: 0 }}>
+                  Sections for {courses.find(c => c.id === selectedCourse)?.shortName} - {selectedYear}
+                </h3>
+                <button
+                  onClick={() => setShowAddSectionPopup(true)}
+                  style={{
+                    padding: '10px 20px',
+                    background: currentCourse.gradient,
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontWeight: '600',
+                    fontSize: '14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    transition: 'all 0.3s ease',
+                  }}
+                  onMouseOver={(e) => {
+                    e.currentTarget.style.transform = 'translateY(-2px)';
+                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
+                  }}
+                  onMouseOut={(e) => {
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = 'none';
+                  }}
+                >
+                  <FontAwesomeIcon icon={faPlus} />
+                  Add Section
+                </button>
+              </div>
+
+              {loading ? (
+                <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
+                  Loading sections...
+                </div>
+              ) : error ? (
+                <div style={{ 
+                  padding: '24px', 
+                  background: '#fef2f2', 
+                  border: '1px solid #fecaca',
+                  borderRadius: '12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  color: '#dc2626'
+                }}>
+                  <FontAwesomeIcon icon={faExclamationCircle} />
+                  <span>{error}</span>
+                </div>
+              ) : sections.length === 0 ? (
+                <div style={{ 
+                  padding: '40px', 
+                  textAlign: 'center', 
+                  color: '#64748b' 
+                }}>
+                  <FontAwesomeIcon 
+                    icon={faUsers} 
+                    style={{ fontSize: 48, marginBottom: '16px', opacity: 0.5 }}
+                  />
+                  <p style={{ margin: 0, fontSize: '16px' }}>
+                    No sections found. Click "Add Section" to create one.
+                  </p>
+                </div>
+              ) : (
+                <div style={{ 
+                  display: 'grid', 
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', 
+                  gap: '16px' 
+                }}>
+                  {sections.map((section) => (
+                    <div
+                      key={section._id}
+                      style={{
+                        padding: '20px',
+                        background: '#f9fafb',
+                        border: '2px solid #e5e7eb',
+                        borderRadius: '12px',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        transition: 'all 0.3s ease',
+                      }}
+                      onMouseOver={(e) => {
+                        e.currentTarget.style.background = '#f3f4f6';
+                        e.currentTarget.style.borderColor = '#d1d5db';
+                      }}
+                      onMouseOut={(e) => {
+                        e.currentTarget.style.background = '#f9fafb';
+                        e.currentTarget.style.borderColor = '#e5e7eb';
+                      }}
+                    >
+                      <span style={{ 
+                        fontSize: '18px', 
+                        fontWeight: '600', 
+                        color: '#1e293b' 
+                      }}>
+                        {section.name}
+                      </span>
+                      <button
+                        onClick={() => handleDeleteSection(section)}
+                        style={{
+                          padding: '8px 12px',
+                          background: '#fee2e2',
+                          color: '#dc2626',
+                          border: 'none',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease',
+                        }}
+                        onMouseOver={(e) => {
+                          e.currentTarget.style.background = '#fecaca';
+                        }}
+                        onMouseOut={(e) => {
+                          e.currentTarget.style.background = '#fee2e2';
+                        }}
+                      >
+                        <FontAwesomeIcon icon={faTrash} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Instructions when no course/year selected */}
+          {(!selectedCourse || !selectedYear) && (
             <div style={{
               background: '#fff',
               padding: '60px 30px',
@@ -214,21 +454,174 @@ const ManageSchedule = () => {
               borderLeft: '5px solid #f97316',
             }}>
               <FontAwesomeIcon 
-                icon={faCalendarAlt} 
+                icon={faUsers} 
                 style={{ fontSize: 48, color: '#f97316', marginBottom: '16px' }} 
               />
               <h3 style={{ color: '#1e293b', fontSize: '20px', fontWeight: '600', marginBottom: '8px' }}>
                 Get Started
               </h3>
               <p style={{ color: '#64748b', fontSize: '16px', margin: 0 }}>
-                Please select a course above to view and manage year level schedules
+                Please select a course and year level above to view and manage sections
               </p>
             </div>
           )}
+
+          {/* Add Section Popup */}
+          {showAddSectionPopup && (
+            <div style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0, 0, 0, 0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1000,
+            }}
+            onClick={() => {
+              if (!addingSection) {
+                setShowAddSectionPopup(false);
+                setNewSectionName('');
+              }
+            }}
+            >
+              <div
+                style={{
+                  background: 'white',
+                  padding: '32px',
+                  borderRadius: '18px',
+                  boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+                  maxWidth: '500px',
+                  width: '90%',
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div style={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  alignItems: 'center',
+                  marginBottom: '24px'
+                }}>
+                  <h3 style={{ fontSize: '24px', fontWeight: '700', color: '#1e293b', margin: 0 }}>
+                    Add New Section
+                  </h3>
+                  <button
+                    onClick={() => {
+                      if (!addingSection) {
+                        setShowAddSectionPopup(false);
+                        setNewSectionName('');
+                      }
+                    }}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                      color: '#64748b',
+                      fontSize: '24px',
+                      padding: '4px',
+                    }}
+                    disabled={addingSection}
+                  >
+                    <FontAwesomeIcon icon={faTimes} />
+                  </button>
+                </div>
+
+                <form onSubmit={handleAddSection}>
+                  <div style={{ marginBottom: '20px' }}>
+                    <label style={{ 
+                      display: 'block', 
+                      marginBottom: '8px', 
+                      fontWeight: '600', 
+                      color: '#374151' 
+                    }}>
+                      Section Name
+                    </label>
+                    <input
+                      type="text"
+                      value={newSectionName}
+                      onChange={(e) => setNewSectionName(e.target.value)}
+                      placeholder="e.g., A, B, C, 1, 2, 3"
+                      style={{
+                        width: '100%',
+                        padding: '12px',
+                        border: '2px solid #e5e7eb',
+                        borderRadius: '8px',
+                        fontSize: '16px',
+                        outline: 'none',
+                        transition: 'border-color 0.2s',
+                      }}
+                      onFocus={(e) => e.target.style.borderColor = '#f97316'}
+                      onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
+                      disabled={addingSection}
+                      autoFocus
+                    />
+                  </div>
+
+                  <div style={{ 
+                    display: 'flex', 
+                    gap: '12px', 
+                    justifyContent: 'flex-end' 
+                  }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!addingSection) {
+                          setShowAddSectionPopup(false);
+                          setNewSectionName('');
+                        }
+                      }}
+                      disabled={addingSection}
+                      style={{
+                        padding: '12px 24px',
+                        background: '#f3f4f6',
+                        color: '#374151',
+                        border: 'none',
+                        borderRadius: '8px',
+                        cursor: addingSection ? 'not-allowed' : 'pointer',
+                        fontWeight: '600',
+                        fontSize: '14px',
+                        opacity: addingSection ? 0.5 : 1,
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={addingSection || !newSectionName.trim()}
+                      style={{
+                        padding: '12px 24px',
+                        background: addingSection || !newSectionName.trim() ? '#d1d5db' : currentCourse.gradient,
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '8px',
+                        cursor: addingSection || !newSectionName.trim() ? 'not-allowed' : 'pointer',
+                        fontWeight: '600',
+                        fontSize: '14px',
+                      }}
+                    >
+                      {addingSection ? 'Adding...' : 'Add Section'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* Confirmation Dialog */}
+          <ConfirmationDialog
+            show={confirmDialog.show}
+            title={confirmDialog.title}
+            message={confirmDialog.message}
+            onConfirm={confirmDialog.onConfirm}
+            onCancel={() => setConfirmDialog({ show: false, title: '', message: '', onConfirm: null, destructive: false })}
+            destructive={confirmDialog.destructive}
+          />
         </div>
       </main>
     </div>
   );
 };
 
-export default ManageSchedule;
+export default SectionManagement;

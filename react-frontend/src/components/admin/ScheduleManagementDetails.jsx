@@ -648,7 +648,7 @@ const ScheduleManagementDetails = () => {
       <Sidebar />
       <main className="main-content" style={{ flex: 1, padding: '1rem', overflowY: 'auto' }}>
         <Header title="Schedule Management" />
-        <div className="dashboard-content">
+        <div className="dashboard-content" style={{ marginTop: '140px' }}>
           {/* Back Button */}
           <button
             onClick={() => navigate('/admin/schedule-management')}

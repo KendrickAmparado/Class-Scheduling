@@ -4,6 +4,7 @@ import Room from '../models/Room.js';
 import Alert from '../models/Alert.js';
 import InstructorNotification from '../models/InstructorNotification.js';
 import bcrypt from 'bcryptjs';
+import { logActivity } from '../utils/activityLogger.js';
 
 const router = express.Router();
 
@@ -50,8 +51,25 @@ router.post("/login", async (req, res) => {
       isValid = await bcrypt.compare(password, admin.password);
     }
     if (isValid) {
+      // Log admin login activity
+      await logActivity({
+        type: 'admin-login',
+        message: 'Admin logged in',
+        source: 'admin',
+        link: '/admin/dashboard',
+        io: req.io
+      });
+      
       return res.json({ success: true, message: "Login successful!" });
     } else {
+      // Log failed login attempt
+      await logActivity({
+        type: 'admin-login-failed',
+        message: 'Failed admin login attempt',
+        source: 'admin',
+        io: req.io
+      });
+      
       return res.status(401).json({ 
         success: false, 
         message: "Wrong password." 
@@ -134,13 +152,81 @@ router.get('/activity', async (req, res) => {
   }
 });
 
+// Helper function to create regex that handles plural/singular forms
+const createPluralSingularRegex = (query) => {
+  // Split query into words for multi-word handling
+  const words = query.trim().split(/\s+/);
+  
+  // Helper function to get plural/singular patterns for a single word
+  const getWordPatterns = (word) => {
+    const escapedWord = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const patterns = [escapedWord];
+    
+    // Handle words ending in 'y' -> 'ies' (category -> categories, faculty -> faculties)
+    if (/y$/i.test(word) && word.length > 1) {
+      patterns.push(escapedWord.slice(0, -1) + 'ies');
+    } else if (/ies$/i.test(word)) {
+      patterns.push(escapedWord.slice(0, -3) + 'y');
+    }
+    
+    // Handle words ending in 's', 'x', 'z', 'ch', 'sh' -> 'es' (class -> classes, box -> boxes)
+    if (/[sxz]|[cs]h$/i.test(word) && !word.endsWith('es')) {
+      patterns.push(escapedWord + 'es');
+    } else if (/es$/i.test(word) && /[sxz]|[cs]h$/i.test(word.slice(0, -2))) {
+      patterns.push(escapedWord.slice(0, -2));
+    }
+    
+    // Handle simple 's' pluralization (room -> rooms, instructor -> instructors, schedule -> schedules)
+    if (!word.endsWith('s') && !word.endsWith('es') && !word.endsWith('ies')) {
+      patterns.push(escapedWord + 's');
+    } else if (word.endsWith('s') && !word.endsWith('es') && !word.endsWith('ies') && word.length > 1) {
+      patterns.push(escapedWord.slice(0, -1));
+    }
+    
+    return [...new Set(patterns)];
+  };
+  
+  // If single word, handle plural/singular
+  if (words.length === 1) {
+    const patterns = getWordPatterns(words[0]);
+    const regexPattern = patterns.map(p => `(${p})`).join('|');
+    return new RegExp(regexPattern, 'i');
+  } else {
+    // For multi-word queries, match the query as a whole with plural/singular variations
+    // This allows matching "computer science" when searching for "computer sciences" or vice versa
+    
+    // Generate all combinations of singular/plural for each word
+    const wordPatternArrays = words.map(word => getWordPatterns(word));
+    
+    // Create a pattern that matches any combination
+    // Use word boundaries to ensure we match complete words
+    const combinedPattern = words.map((word, idx) => {
+      const patterns = wordPatternArrays[idx];
+      return `(${patterns.join('|')})`;
+    }).join('\\s+');
+    
+    return new RegExp(combinedPattern, 'i');
+  }
+};
+
 // Unified search (rooms, instructors, schedules) with pagination
 router.get('/search', async (req, res) => {
   try {
     const q = String(req.query.q || '').trim();
     if (!q) return res.json({ rooms: [], instructors: [], schedules: [], pagination: { rooms: {}, instructors: {}, schedules: {} } });
+    
+    // Log search activity
+    await logActivity({
+      type: 'search-performed',
+      message: `Search performed: "${q}"`,
+      source: 'admin',
+      link: `/admin/search?q=${encodeURIComponent(q)}`,
+      meta: { query: q },
+      io: req.io
+    });
 
-    const regex = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    // Create regex that handles both singular and plural forms, case-insensitive
+    const regex = createPluralSingularRegex(q);
     
     // Pagination parameters
     const roomsPage = parseInt(req.query.roomsPage) || 1;
@@ -158,13 +244,44 @@ router.get('/search', async (req, res) => {
     ]);
 
     // Get counts and paginated results
+    // Include more fields in search to make it more comprehensive
     const [roomsCount, instructorsCount, schedulesCount, rooms, instructors, schedules] = await Promise.all([
       RoomModel.countDocuments({ $or: [{ room: regex }, { area: regex }, { status: regex }] }),
-      InstructorModel.countDocuments({ $or: [ { firstname: regex }, { lastname: regex }, { email: regex }, { department: regex } ] }),
-      ScheduleModel.countDocuments({ $or: [ { subject: regex }, { course: regex }, { section: regex }, { room: regex }, { day: regex } ] }),
+      InstructorModel.countDocuments({ $or: [ 
+        { firstname: regex }, 
+        { lastname: regex }, 
+        { email: regex }, 
+        { department: regex },
+        { instructorId: regex },
+        { contact: regex }
+      ] }),
+      ScheduleModel.countDocuments({ $or: [ 
+        { subject: regex }, 
+        { course: regex }, 
+        { section: regex }, 
+        { room: regex }, 
+        { day: regex },
+        { instructor: regex },
+        { year: regex }
+      ] }),
       RoomModel.find({ $or: [{ room: regex }, { area: regex }, { status: regex }] }).skip(roomsSkip).limit(limit).lean(),
-      InstructorModel.find({ $or: [ { firstname: regex }, { lastname: regex }, { email: regex }, { department: regex } ] }).skip(instructorsSkip).limit(limit).lean(),
-      ScheduleModel.find({ $or: [ { subject: regex }, { course: regex }, { section: regex }, { room: regex }, { day: regex } ] }).skip(schedulesSkip).limit(limit).lean(),
+      InstructorModel.find({ $or: [ 
+        { firstname: regex }, 
+        { lastname: regex }, 
+        { email: regex }, 
+        { department: regex },
+        { instructorId: regex },
+        { contact: regex }
+      ] }).skip(instructorsSkip).limit(limit).lean(),
+      ScheduleModel.find({ $or: [ 
+        { subject: regex }, 
+        { course: regex }, 
+        { section: regex }, 
+        { room: regex }, 
+        { day: regex },
+        { instructor: regex },
+        { year: regex }
+      ] }).skip(schedulesSkip).limit(limit).lean(),
     ]);
 
     res.json({ 

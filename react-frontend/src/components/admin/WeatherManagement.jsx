@@ -168,7 +168,7 @@ const WeatherManagement = () => {
       <main style={{ flex: 1, background: 'linear-gradient(to right, #0f2c63 0%, #f97316 100%)', overflowY: 'auto' }}>
         <Header title="Weather Management" />
         
-        <div style={{ padding: '30px', minHeight: 'calc(100vh - 80px)' }}>
+        <div style={{ padding: '30px', minHeight: 'calc(100vh - 80px)', marginTop: '140px' }}>
           {/* Configuration Notice */}
           {!configured && (
             <div style={{

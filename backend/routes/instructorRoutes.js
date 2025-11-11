@@ -10,6 +10,7 @@ import { listCalendarEvents, isGoogleCalendarConfigured } from "../services/goog
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import { logActivity, getUserEmailFromRequest } from '../utils/activityLogger.js';
 
 const router = express.Router();
 // Multer storage for profile images
@@ -76,12 +77,19 @@ router.get("/calendar/events", verifyToken, async (req, res) => {
     const timeMax = req.query.timeMax;
     const maxResults = parseInt(req.query.maxResults) || 50;
 
-    // Fetch calendar events
-    const events = await listCalendarEvents(instructor.email, {
-      timeMin,
-      timeMax,
-      maxResults
-    });
+    // Fetch calendar events (gracefully handles errors - returns empty array if calendar not accessible)
+    let events = [];
+    try {
+      events = await listCalendarEvents(instructor.email, {
+        timeMin,
+        timeMax,
+        maxResults
+      });
+    } catch (error) {
+      // Error already handled in listCalendarEvents, but catch here as extra safety
+      console.warn(`⚠️ Calendar events fetch failed for ${instructor.email}:`, error.message);
+      events = [];
+    }
 
     // Also get schedules that are synced to calendar
     const schedules = await Schedule.find({ 
@@ -110,12 +118,30 @@ router.get("/calendar/events", verifyToken, async (req, res) => {
 router.put("/profile", verifyToken, async (req, res) => {
   try {
     const { firstname, lastname, contact, department } = req.body;
+    const oldInstructor = await Instructor.findOne({ email: req.userEmail });
     const updated = await Instructor.findOneAndUpdate(
       { email: req.userEmail },
       { $set: { firstname, lastname, contact, department } },
       { new: true }
     ).select("instructorId firstname lastname email contact department image status");
     if (!updated) return res.status(404).json({ message: "Instructor not found" });
+    
+    // Log profile update activity
+    const changes = [];
+    if (oldInstructor && oldInstructor.firstname !== firstname) changes.push(`firstname: ${oldInstructor.firstname} → ${firstname}`);
+    if (oldInstructor && oldInstructor.lastname !== lastname) changes.push(`lastname: ${oldInstructor.lastname} → ${lastname}`);
+    if (oldInstructor && oldInstructor.contact !== contact) changes.push(`contact: ${oldInstructor.contact} → ${contact}`);
+    
+    await logActivity({
+      type: 'instructor-profile-updated',
+      message: `${updated.firstname} ${updated.lastname} updated profile${changes.length > 0 ? ` (${changes.join(', ')})` : ''}`,
+      source: 'instructor',
+      userEmail: req.userEmail,
+      link: '/instructor/settings',
+      meta: { changes },
+      io: req.io
+    });
+    
     res.json({ success: true, instructor: updated });
   } catch (err) {
     res.status(500).json({ success: false, message: "Error updating profile", error: err.message });
@@ -133,6 +159,18 @@ router.post("/profile/image", verifyToken, upload.single("image"), async (req, r
       { new: true }
     ).select("instructorId firstname lastname email contact department image status");
     if (!updated) return res.status(404).json({ success: false, message: "Instructor not found" });
+    
+    // Log image upload activity
+    await logActivity({
+      type: 'instructor-image-uploaded',
+      message: `${updated.firstname} ${updated.lastname} uploaded profile image`,
+      source: 'instructor',
+      userEmail: req.userEmail,
+      link: '/instructor/settings',
+      meta: { imagePath: relativePath },
+      io: req.io
+    });
+    
     res.json({ success: true, instructor: updated, image: relativePath });
   } catch (err) {
     res.status(500).json({ success: false, message: "Error uploading image", error: err.message });
@@ -307,6 +345,16 @@ router.post("/registration/send-registration", async (req, res) => {
       { upsert: true, new: true }
     );
 
+    // Log registration link sent activity
+    await logActivity({
+      type: 'instructor-registration-link-sent',
+      message: `Registration link sent to ${email} (${department})`,
+      source: 'admin',
+      link: '/admin/faculty-management',
+      meta: { email, department, instructorId: instructor.instructorId },
+      io: req.io
+    });
+
     res.status(200).json({ 
       message: "Registration link sent successfully",
       instructorId: instructor.instructorId
@@ -391,14 +439,14 @@ router.post("/complete-registration", async (req, res) => {
     await instructor.save();
 
     // Optional: Notify via alert system that instructor completed registration
-    const alert = await Alert.create({
-      type: "availability-update",
-      message: `Instructor ${firstname} ${lastname} completed registration.`,
-      link: "/admin/faculty-management",
-      createdAt: new Date(),
+    await logActivity({
+      type: 'instructor-registration-completed',
+      message: `Instructor ${firstname} ${lastname} completed registration`,
+      source: 'admin',
+      link: '/admin/faculty-management',
+      meta: { instructorEmail: email },
+      io: req.io
     });
-
-    req.io?.emit("new-alert", alert);
 
     res.json({
       success: true,
@@ -434,12 +482,14 @@ router.put("/:id", async (req, res) => {
       { email, contact },
       { new: true }
     );
-    const alert = await Alert.create({
-      type: "availability-update",
-      message: `Instructor ${updated.firstname} ${updated.lastname} details updated.`,
-      link: "/admin/faculty-management",
+    await logActivity({
+      type: 'instructor-updated',
+      message: `Instructor ${updated.firstname} ${updated.lastname} details updated by admin`,
+      source: 'admin',
+      link: '/admin/faculty-management',
+      meta: { instructorId: updated.instructorId, email: updated.email },
+      io: req.io
     });
-    req.io?.emit("new-alert", alert);
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -458,12 +508,14 @@ router.put("/:id/archive", async (req, res) => {
       return res.status(404).json({ success: false, error: "Instructor not found" });
     }
     const instructorName = `${instructor.firstname} ${instructor.lastname}`;
-    const alert = await Alert.create({
-      type: "availability-update",
-      message: `Instructor ${instructorName} archived.`,
-      link: "/admin/faculty-management",
+    await logActivity({
+      type: 'instructor-archived',
+      message: `Instructor ${instructorName} archived by admin`,
+      source: 'admin',
+      link: '/admin/faculty-management',
+      meta: { instructorId: instructor.instructorId, email: instructor.email },
+      io: req.io
     });
-    req.io?.emit("new-alert", alert);
     res.json({ success: true, message: "Instructor archived", instructor });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -482,12 +534,14 @@ router.put("/:id/restore", async (req, res) => {
       return res.status(404).json({ success: false, error: "Instructor not found" });
     }
     const instructorName = `${instructor.firstname} ${instructor.lastname}`;
-    const alert = await Alert.create({
-      type: "availability-update",
-      message: `Instructor ${instructorName} restored.`,
-      link: "/admin/faculty-management",
+    await logActivity({
+      type: 'instructor-restored',
+      message: `Instructor ${instructorName} restored by admin`,
+      source: 'admin',
+      link: '/admin/faculty-management',
+      meta: { instructorId: instructor.instructorId, email: instructor.email },
+      io: req.io
     });
-    req.io?.emit("new-alert", alert);
     res.json({ success: true, message: "Instructor restored", instructor });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -506,12 +560,14 @@ router.delete("/:id", async (req, res) => {
       return res.status(404).json({ error: "Instructor not found" });
     }
     const instructorName = `${instructor.firstname} ${instructor.lastname}`;
-    const alert = await Alert.create({
-      type: "availability-update",
-      message: `Instructor ${instructorName} moved to archive.`,
-      link: "/admin/faculty-management",
+    await logActivity({
+      type: 'instructor-archived',
+      message: `Instructor ${instructorName} moved to archive by admin`,
+      source: 'admin',
+      link: '/admin/faculty-management',
+      meta: { instructorId: instructor.instructorId, email: instructor.email },
+      io: req.io
     });
-    req.io?.emit("new-alert", alert);
     res.json({ success: true, message: "Instructor moved to archive", instructor });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -526,12 +582,14 @@ router.delete("/:id/permanent", async (req, res) => {
       return res.status(404).json({ success: false, error: "Instructor not found" });
     }
     const instructorName = `${instructor.firstname} ${instructor.lastname}`;
-    const alert = await Alert.create({
-      type: "availability-update",
-      message: `Instructor ${instructorName} permanently deleted.`,
-      link: "/admin/faculty-management",
+    await logActivity({
+      type: 'instructor-deleted',
+      message: `Instructor ${instructorName} permanently deleted by admin`,
+      source: 'admin',
+      link: '/admin/faculty-management',
+      meta: { instructorId: instructor.instructorId, email: instructor.email },
+      io: req.io
     });
-    req.io?.emit("new-alert", alert);
     res.json({ success: true, message: "Instructor permanently deleted" });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -565,6 +623,16 @@ router.post('/activate', async (req, res) => {
     instructor.status = 'active';
 
     await instructor.save();
+
+    // Log activation activity
+    await logActivity({
+      type: 'instructor-activated',
+      message: `Instructor ${instructor.firstname} ${instructor.lastname} account activated by admin`,
+      source: 'admin',
+      link: '/admin/faculty-management',
+      meta: { instructorId: instructor.instructorId, email: instructor.email },
+      io: req.io
+    });
 
     res.json({ success: true, message: 'Instructor account activated successfully.', instructor });
   } catch (err) {

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faUser, faEnvelope, faCalendarAlt, faUserPlus, faLock, faPhone, faBuilding, faCheckCircle, faTimes } from '@fortawesome/free-solid-svg-icons';
+import { faUser, faEnvelope, faCalendarAlt, faUserPlus, faLock, faPhone, faBuilding, faCheckCircle, faTimes, faKey, faRefresh, faEye, faEyeSlash, faCopy } from '@fortawesome/free-solid-svg-icons';
 
 const InstructorSignup = () => {
   const [searchParams] = useSearchParams();
@@ -15,6 +15,10 @@ const InstructorSignup = () => {
   });
   const [loading, setLoading] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [suggestedPassword, setSuggestedPassword] = useState('');
+  const [passwordStrength, setPasswordStrength] = useState({ score: 0, feedback: '' });
+  const [hasFocusedPassword, setHasFocusedPassword] = useState(false);
   const navigate = useNavigate();
 
   // Auto-populate email and department from URL query parameters
@@ -31,11 +35,140 @@ const InstructorSignup = () => {
     }
   }, [searchParams]);
 
-  const handleChange = (e) => {
+  // Generate strong password using Credential Management principles
+  const generateStrongPassword = () => {
+    const length = 16;
+    const lowercase = 'abcdefghijklmnopqrstuvwxyz';
+    const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const numbers = '0123456789';
+    const symbols = '!@#$%^&*()_+-=[]{}|;:,.<>?';
+    const allChars = lowercase + uppercase + numbers + symbols;
+    
+    // Ensure at least one character from each category
+    let password = '';
+    password += lowercase[Math.floor(Math.random() * lowercase.length)];
+    password += uppercase[Math.floor(Math.random() * uppercase.length)];
+    password += numbers[Math.floor(Math.random() * numbers.length)];
+    password += symbols[Math.floor(Math.random() * symbols.length)];
+    
+    // Fill the rest randomly
+    for (let i = password.length; i < length; i++) {
+      password += allChars[Math.floor(Math.random() * allChars.length)];
+    }
+    
+    // Shuffle the password
+    password = password.split('').sort(() => Math.random() - 0.5).join('');
+    
+    setSuggestedPassword(password);
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value
+      password: password
     });
+    calculatePasswordStrength(password);
+  };
+
+  // Calculate password strength
+  const calculatePasswordStrength = (password) => {
+    let score = 0;
+    let feedback = [];
+
+    if (password.length >= 8) score += 1;
+    else feedback.push('At least 8 characters');
+    
+    if (password.length >= 12) score += 1;
+    
+    if (/[a-z]/.test(password)) score += 1;
+    else feedback.push('lowercase letter');
+    
+    if (/[A-Z]/.test(password)) score += 1;
+    else feedback.push('uppercase letter');
+    
+    if (/[0-9]/.test(password)) score += 1;
+    else feedback.push('number');
+    
+    if (/[^a-zA-Z0-9]/.test(password)) score += 1;
+    else feedback.push('special character');
+
+    let strengthText = '';
+    let strengthColor = '';
+    
+    if (score <= 2) {
+      strengthText = 'Weak';
+      strengthColor = '#ef4444';
+    } else if (score <= 4) {
+      strengthText = 'Fair';
+      strengthColor = '#f59e0b';
+    } else if (score <= 5) {
+      strengthText = 'Good';
+      strengthColor = '#3b82f6';
+    } else {
+      strengthText = 'Strong';
+      strengthColor = '#10b981';
+    }
+
+    setPasswordStrength({
+      score,
+      feedback: feedback.length > 0 ? `Add: ${feedback.join(', ')}` : '',
+      text: strengthText,
+      color: strengthColor
+    });
+  };
+
+  const handleChange = (e) => {
+    const newValue = e.target.value;
+    setFormData({
+      ...formData,
+      [e.target.name]: newValue
+    });
+    
+    // Calculate password strength when password changes
+    if (e.target.name === 'password') {
+      calculatePasswordStrength(newValue);
+      // Clear suggested password if user types their own
+      if (newValue !== suggestedPassword) {
+        setSuggestedPassword('');
+      }
+    }
+  };
+
+  // Copy password to clipboard
+  const copyPasswordToClipboard = async () => {
+    if (formData.password) {
+      try {
+        await navigator.clipboard.writeText(formData.password);
+        alert('Password copied to clipboard!');
+      } catch (err) {
+        console.error('Failed to copy password:', err);
+      }
+    }
+  };
+
+  // Use Credential Management API to store credentials after successful signup
+  const storeCredentials = async () => {
+    // Check if Credential Management API is available
+    if ('credentials' in navigator && 'PasswordCredential' in window) {
+      try {
+        // Create a PasswordCredential object
+        // eslint-disable-next-line no-undef
+        const cred = new PasswordCredential({
+          id: formData.email,
+          password: formData.password,
+          name: `${formData.firstname} ${formData.lastname}`,
+          iconURL: window.location.origin + '/images/buksuu.png'
+        });
+        
+        // Store the credential
+        await navigator.credentials.store(cred);
+        console.log('Credentials stored successfully using Credential Management API');
+      } catch (err) {
+        // Credential storage might not be available (requires HTTPS, user permission, etc.)
+        // The browser's built-in password manager will still offer to save the password
+        console.log('Credential storage not available or declined:', err.message);
+      }
+    } else {
+      // Fallback: Browser's built-in password manager will handle it
+      console.log('Credential Management API not available. Browser password manager will handle credential storage.');
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -59,8 +192,11 @@ const InstructorSignup = () => {
       const data = await res.json();
   
       if (res.ok) {
+        // Store credentials using Credential Management API
+        await storeCredentials();
+        
         setShowSuccessModal(true);
-  
+
         // Auto redirect to login after 3 seconds
         setTimeout(() => {
           navigate('/instructor/login');
@@ -294,19 +430,166 @@ const InstructorSignup = () => {
               </div>
 
               {/* Password */}
-              <div className="input-field2" style={inputFieldStyle}>
-                <FontAwesomeIcon icon={faLock} style={iconStyle} />
-                <input
-                  type="password"
-                  name="password"
-                  placeholder="Password (min. 6 characters)"
-                  value={formData.password}
-                  onChange={handleChange}
-                  required
-                  minLength="6"
-                  disabled={loading}
-                  style={inputStyle}
-                />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <div className="input-field2" style={inputFieldStyle}>
+                  <FontAwesomeIcon icon={faLock} style={iconStyle} />
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    name="password"
+                    placeholder="Password (min. 6 characters)"
+                    value={formData.password}
+                    onChange={handleChange}
+                    onFocus={(e) => {
+                      // Auto-suggest password on first focus if field is empty
+                      if (!hasFocusedPassword && !formData.password) {
+                        setHasFocusedPassword(true);
+                        generateStrongPassword();
+                      }
+                    }}
+                    required
+                    minLength="6"
+                    disabled={loading}
+                    style={inputStyle}
+                  />
+                  <div style={{ display: 'flex', gap: '8px', paddingRight: '15px' }}>
+                    {formData.password && (
+                      <button
+                        type="button"
+                        onClick={copyPasswordToClipboard}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          cursor: 'pointer',
+                          color: '#666',
+                          padding: '5px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          transition: 'color 0.2s'
+                        }}
+                        onMouseEnter={(e) => e.target.style.color = '#f97316'}
+                        onMouseLeave={(e) => e.target.style.color = '#666'}
+                        title="Copy password"
+                      >
+                        <FontAwesomeIcon icon={faCopy} />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        cursor: 'pointer',
+                        color: '#666',
+                        padding: '5px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        transition: 'color 0.2s'
+                      }}
+                      onMouseEnter={(e) => e.target.style.color = '#f97316'}
+                      onMouseLeave={(e) => e.target.style.color = '#666'}
+                      title={showPassword ? "Hide password" : "Show password"}
+                    >
+                      <FontAwesomeIcon icon={showPassword ? faEyeSlash : faEye} />
+                    </button>
+                  </div>
+                </div>
+                
+                {/* Password Generator Button */}
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                  <button
+                    type="button"
+                    onClick={generateStrongPassword}
+                    disabled={loading}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '10px 16px',
+                      background: 'linear-gradient(135deg, #0f2c63 0%, #1e40af 100%)',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '10px',
+                      fontSize: '14px',
+                      fontWeight: '600',
+                      cursor: loading ? 'not-allowed' : 'pointer',
+                      transition: 'all 0.3s ease',
+                      boxShadow: '0 4px 12px rgba(15, 44, 99, 0.3)',
+                      opacity: loading ? 0.7 : 1
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!loading) {
+                        e.target.style.transform = 'translateY(-2px)';
+                        e.target.style.boxShadow = '0 6px 16px rgba(15, 44, 99, 0.4)';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!loading) {
+                        e.target.style.transform = 'translateY(0)';
+                        e.target.style.boxShadow = '0 4px 12px rgba(15, 44, 99, 0.3)';
+                      }
+                    }}
+                  >
+                    <FontAwesomeIcon icon={faKey} />
+                    <FontAwesomeIcon icon={faRefresh} style={{ fontSize: '12px' }} />
+                    <span>Generate Strong Password</span>
+                  </button>
+                  
+                  {suggestedPassword && formData.password === suggestedPassword && (
+                    <span style={{
+                      fontSize: '12px',
+                      color: '#10b981',
+                      fontWeight: '600',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '5px'
+                    }}>
+                      <FontAwesomeIcon icon={faCheckCircle} />
+                      Using suggested password
+                    </span>
+                  )}
+                </div>
+
+                {/* Password Strength Indicator */}
+                {formData.password && (
+                  <div style={{ marginTop: '-5px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '5px' }}>
+                      <div style={{
+                        flex: 1,
+                        height: '6px',
+                        background: '#e5e7eb',
+                        borderRadius: '3px',
+                        overflow: 'hidden'
+                      }}>
+                        <div style={{
+                          width: `${(passwordStrength.score / 6) * 100}%`,
+                          height: '100%',
+                          background: passwordStrength.color,
+                          transition: 'all 0.3s ease',
+                          borderRadius: '3px'
+                        }} />
+                      </div>
+                      <span style={{
+                        fontSize: '12px',
+                        fontWeight: '600',
+                        color: passwordStrength.color,
+                        minWidth: '50px'
+                      }}>
+                        {passwordStrength.text}
+                      </span>
+                    </div>
+                    {passwordStrength.feedback && (
+                      <p style={{
+                        fontSize: '11px',
+                        color: '#64748b',
+                        margin: 0,
+                        marginTop: '3px'
+                      }}>
+                        {passwordStrength.feedback}
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 

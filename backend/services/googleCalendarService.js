@@ -221,41 +221,100 @@ export const createCalendarEvent = async (schedule, instructorEmail) => {
     return response.data.id;
     
   } catch (error) {
+    // Handle 404 - Calendar not found or not shared
+    if (error.code === 404 || error.status === 404) {
+      console.warn(`⚠️ Google Calendar not found for ${instructorEmail}. Calendar may not exist or service account doesn't have access. Event creation skipped.`);
+      return null; // Return null instead of throwing to allow schedule creation to continue
+    }
+    
+    // Handle 403 - Permission denied
+    if (error.code === 403 || error.status === 403) {
+      console.warn(`⚠️ Permission denied creating event in calendar for ${instructorEmail}. Calendar may not be shared with service account. Event creation skipped.`);
+      return null; // Return null instead of throwing to allow schedule creation to continue
+    }
+
+    // Log other errors but don't throw to prevent breaking schedule creation
     if (error?.response?.data) {
       console.error('❌ Error creating Google Calendar event:', JSON.stringify(error.response.data));
     } else {
       console.error('❌ Error creating Google Calendar event:', error.message);
     }
-    throw error;
+    // Return null instead of throwing to allow schedule creation to continue
+    return null;
   }
 };
 
 /**
  * List upcoming events from an instructor's Google Calendar
+ * Returns empty array if calendar doesn't exist or isn't accessible
  */
 export const listCalendarEvents = async (instructorEmail, { timeMin, timeMax, maxResults = 50 } = {}) => {
-  if (!instructorEmail) throw new Error('Instructor email is required');
-  const now = new Date();
-  const params = {
-    calendarId: instructorEmail,
-    singleEvents: true,
-    orderBy: 'startTime',
-    maxResults,
-    timeMin: (timeMin ? new Date(timeMin) : now).toISOString(),
-  };
-  if (timeMax) params.timeMax = new Date(timeMax).toISOString();
+  if (!instructorEmail) {
+    console.warn('⚠️ listCalendarEvents: Instructor email is required');
+    return [];
+  }
 
-  const res = await calendar.events.list(params);
-  return res.data.items || [];
+  try {
+    const now = new Date();
+    const params = {
+      calendarId: instructorEmail,
+      singleEvents: true,
+      orderBy: 'startTime',
+      maxResults,
+      timeMin: (timeMin ? new Date(timeMin) : now).toISOString(),
+    };
+    if (timeMax) params.timeMax = new Date(timeMax).toISOString();
+
+    const res = await calendar.events.list(params);
+    return res.data.items || [];
+  } catch (error) {
+    // Handle 404 - Calendar not found or not shared
+    if (error.code === 404 || error.status === 404) {
+      console.warn(`⚠️ Google Calendar not found or not shared for ${instructorEmail}. Calendar may not exist or service account doesn't have access.`);
+      return [];
+    }
+    
+    // Handle 403 - Permission denied
+    if (error.code === 403 || error.status === 403) {
+      console.warn(`⚠️ Permission denied accessing calendar for ${instructorEmail}. Calendar may not be shared with service account.`);
+      return [];
+    }
+
+    // Log other errors but don't crash
+    console.error(`❌ Error fetching Google Calendar events for ${instructorEmail}:`, error.message);
+    return [];
+  }
 };
 
 /**
  * Get a specific event by ID from an instructor's calendar
+ * Returns null if calendar or event doesn't exist
  */
 export const getCalendarEvent = async (instructorEmail, eventId) => {
-  if (!instructorEmail || !eventId) throw new Error('Instructor email and eventId are required');
-  const res = await calendar.events.get({ calendarId: instructorEmail, eventId });
-  return res.data;
+  if (!instructorEmail || !eventId) {
+    console.warn('⚠️ getCalendarEvent: Instructor email and eventId are required');
+    return null;
+  }
+
+  try {
+    const res = await calendar.events.get({ calendarId: instructorEmail, eventId });
+    return res.data;
+  } catch (error) {
+    // Handle 404 - Calendar or event not found
+    if (error.code === 404 || error.status === 404) {
+      console.warn(`⚠️ Google Calendar event not found for ${instructorEmail} (eventId: ${eventId})`);
+      return null;
+    }
+    
+    // Handle 403 - Permission denied
+    if (error.code === 403 || error.status === 403) {
+      console.warn(`⚠️ Permission denied accessing calendar event for ${instructorEmail}`);
+      return null;
+    }
+
+    console.error(`❌ Error fetching Google Calendar event for ${instructorEmail}:`, error.message);
+    return null;
+  }
 };
 
 /**
@@ -320,12 +379,26 @@ export const updateCalendarEvent = async (eventId, schedule, instructorEmail) =>
     return response.data.id;
     
   } catch (error) {
+    // Handle 404 - Calendar or event not found
+    if (error.code === 404 || error.status === 404) {
+      console.warn(`⚠️ Google Calendar event not found for update (${instructorEmail}, eventId: ${eventId}). Event may have been deleted.`);
+      return null;
+    }
+    
+    // Handle 403 - Permission denied
+    if (error.code === 403 || error.status === 403) {
+      console.warn(`⚠️ Permission denied updating calendar event for ${instructorEmail}. Calendar may not be shared with service account.`);
+      return null;
+    }
+
+    // Log other errors but don't throw to prevent breaking schedule updates
     if (error?.response?.data) {
       console.error('❌ Error updating Google Calendar event:', JSON.stringify(error.response.data));
     } else {
       console.error('❌ Error updating Google Calendar event:', error.message);
     }
-    throw error;
+    // Return null instead of throwing to allow schedule update to continue
+    return null;
   }
 };
 

@@ -38,7 +38,7 @@ const Sidebar = () => {
       display: 'flex',
       flexDirection: 'column',
       boxShadow: '4px 0 20px rgba(0, 0, 0, 0.1)',
-      zIndex: 1000
+      zIndex: 1000,
     }}>
       <div className="admin-profile" style={{
         padding: '20px',
@@ -47,8 +47,21 @@ const Sidebar = () => {
         gap: '15px',
         background: 'rgba(255, 255, 255, 0.1)',
         margin: '20px',
-        borderRadius: '12px'
-      }}>
+        borderRadius: '12px',
+        backdropFilter: 'blur(10px)',
+        border: '1px solid rgba(255, 255, 255, 0.1)'
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
+        e.currentTarget.style.transform = 'translateY(-2px)';
+        e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+        e.currentTarget.style.transform = 'translateY(0)';
+        e.currentTarget.style.boxShadow = 'none';
+      }}
+      >
         <div className="admin-avatar" style={{
           width: '50px',
           height: '50px',
@@ -56,13 +69,14 @@ const Sidebar = () => {
           borderRadius: '50%',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'center'
+          justifyContent: 'center',
+          border: '2px solid rgba(255, 255, 255, 0.2)'
         }}>
           <FontAwesomeIcon 
             icon={faUserShield} 
             style={{
               fontSize: '24px',
-              color: 'white'
+              color: 'white',
             }}
           />
         </div>
@@ -71,12 +85,12 @@ const Sidebar = () => {
             fontSize: '16px',
             fontWeight: '600',
             marginBottom: '4px',
-            margin: 0
+            margin: 0,
           }}>Administrator</h4>
           <p style={{
             fontSize: '14px',
             opacity: '0.8',
-            margin: 0
+            margin: 0,
           }}>System Admin</p>
         </div>
       </div>
@@ -85,7 +99,7 @@ const Sidebar = () => {
         flex: 1,
         padding: '20px 0'
       }}>
-        {menuItems.map((item) => (
+        {menuItems.map((item, index) => (
           <Link
             key={item.path}
             to={item.path}
@@ -97,25 +111,34 @@ const Sidebar = () => {
               padding: '15px 25px',
               color: location.pathname === item.path ? 'white' : 'rgba(255, 255, 255, 0.8)',
               textDecoration: 'none',
-              transition: 'all 0.3s ease',
               margin: '2px 15px',
               borderRadius: '10px',
               fontWeight: '500',
               background: location.pathname === item.path ? 'rgba(255, 255, 255, 0.2)' : 'transparent',
-              boxShadow: location.pathname === item.path ? 'inset 4px 0 0 #f97316' : 'none'
+              boxShadow: location.pathname === item.path ? 'inset 4px 0 0 #f97316, 0 2px 8px rgba(0, 0, 0, 0.1)' : 'none',
+              position: 'relative',
+              overflow: 'hidden',
             }}
             onMouseEnter={(e) => {
               if (location.pathname !== item.path) {
-                e.target.style.background = 'rgba(255, 255, 255, 0.1)';
-                e.target.style.color = 'white';
-                e.target.style.transform = 'translateX(5px)';
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
+                e.currentTarget.style.color = 'white';
+                e.currentTarget.style.transform = 'translateX(8px) scale(1.02)';
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
+              } else {
+                e.currentTarget.style.transform = 'scale(1.02)';
+                e.currentTarget.style.boxShadow = 'inset 4px 0 0 #f97316, 0 4px 12px rgba(0, 0, 0, 0.15)';
               }
             }}
             onMouseLeave={(e) => {
               if (location.pathname !== item.path) {
-                e.target.style.background = 'transparent';
-                e.target.style.color = 'rgba(255, 255, 255, 0.8)';
-                e.target.style.transform = 'translateX(0)';
+                e.currentTarget.style.background = 'transparent';
+                e.currentTarget.style.color = 'rgba(255, 255, 255, 0.8)';
+                e.currentTarget.style.transform = 'translateX(0) scale(1)';
+                e.currentTarget.style.boxShadow = 'none';
+              } else {
+                e.currentTarget.style.transform = 'scale(1)';
+                e.currentTarget.style.boxShadow = 'inset 4px 0 0 #f97316, 0 2px 8px rgba(0, 0, 0, 0.1)';
               }
             }}
           >
@@ -123,10 +146,20 @@ const Sidebar = () => {
               icon={item.icon} 
               style={{
                 fontSize: '18px',
-                width: '20px'
+                width: '20px',
               }}
             />
-            <span>{item.label}</span>
+            <span style={{ fontWeight: location.pathname === item.path ? '600' : '500' }}>{item.label}</span>
+            {location.pathname === item.path && (
+              <div style={{
+                position: 'absolute',
+                right: '15px',
+                width: '6px',
+                height: '6px',
+                background: '#f97316',
+                borderRadius: '50%',
+              }} />
+            )}
           </Link>
         ))}
       </nav>
@@ -142,23 +175,36 @@ const Sidebar = () => {
             alignItems: 'center',
             gap: '12px',
             padding: '15px 20px',
-            background: 'rgba(249, 4, 4, 0.2)',
-            color: '#fe9d9dff',
+            background: 'rgba(239, 68, 68, 0.2)',
+            color: '#fca5a5',
             textDecoration: 'none',
             borderRadius: '10px',
-            transition: 'all 0.3s ease',
             fontWeight: '500',
-            border: 'none',
+            border: '1px solid rgba(239, 68, 68, 0.3)',
             cursor: 'pointer',
-            width: '100%'
+            width: '100%',
+            position: 'relative',
+            overflow: 'hidden'
           }}
           onMouseEnter={(e) => {
-            e.target.style.background = 'rgba(239, 68, 68, 0.3)';
-            e.target.style.color = 'white';
+            e.currentTarget.style.background = 'rgba(239, 68, 68, 0.35)';
+            e.currentTarget.style.color = 'white';
+            e.currentTarget.style.transform = 'translateY(-2px)';
+            e.currentTarget.style.boxShadow = '0 4px 12px rgba(239, 68, 68, 0.3)';
+            e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.5)';
           }}
           onMouseLeave={(e) => {
-            e.target.style.background = 'rgba(239, 68, 68, 0.2)';
-            e.target.style.color = '#fca5a5';
+            e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)';
+            e.currentTarget.style.color = '#fca5a5';
+            e.currentTarget.style.transform = 'translateY(0)';
+            e.currentTarget.style.boxShadow = 'none';
+            e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+          }}
+          onMouseDown={(e) => {
+            e.currentTarget.style.transform = 'translateY(0) scale(0.98)';
+          }}
+          onMouseUp={(e) => {
+            e.currentTarget.style.transform = 'translateY(-2px) scale(1)';
           }}
         >
           <FontAwesomeIcon icon={faSignOutAlt} />

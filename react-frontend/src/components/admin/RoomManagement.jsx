@@ -213,7 +213,7 @@ const RoomManagement = () => {
 
           {/* Popup removed - using Toast system now */}
 
-          <div className="dashboard-content">
+          <div className="dashboard-content" style={{ marginTop: '140px' }}>
             {/* Welcome Section */}
             <div className="welcome-section" style={{ marginBottom: '30px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '8px' }}>

@@ -191,7 +191,7 @@ const AdminDashboard = () => {
       <Sidebar />
       <main className="main-content" style={{ flex: 1, padding: '1rem' }}>
         <Header title="Admin Dashboard" />
-        <div className="dashboard-content">
+        <div className="dashboard-content" style={{ marginTop: '140px' }}>
           <div className="welcome-section">
             <h2>Welcome to the Admin Dashboard</h2>
             <p>Manage your class scheduling system efficiently</p>

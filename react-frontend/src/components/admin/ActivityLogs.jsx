@@ -278,7 +278,6 @@ const ActivityLogs = () => {
       }
 
       xPos = margin;
-      const badgeColor = getAlertBadgeColor(alert.type, alert.source);
       const typeText = formatAlertType(alert.type || alert.source || 'activity').split(' ')[0];
       const message = doc.splitTextToSize(alert.message || '', colWidths[1] - 4);
       const timeText = formatTimestamp(alert.createdAt || alert.timestamp);
@@ -333,7 +332,7 @@ const ActivityLogs = () => {
       <Sidebar />
       <main className="main-content" style={{ flex: 1, padding: '1rem', overflowY: 'auto' }}>
         <Header title="Activity Logs" />
-        <div className="dashboard-content">
+        <div className="dashboard-content" style={{ marginTop: '140px' }}>
           {/* Back Button */}
           <button
             onClick={() => navigate('/admin/dashboard')}

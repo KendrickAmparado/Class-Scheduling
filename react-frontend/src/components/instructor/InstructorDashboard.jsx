@@ -1,7 +1,7 @@
 import InstructorSidebar from '../common/InstructorSidebar.jsx';
 import InstructorHeader from '../common/InstructorHeader.jsx';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faUser, faCalendarAlt, faClock, faMapMarkerAlt, faFilter, faCalendarWeek, faSync, faExternalLinkAlt, faCheckCircle, faExclamationCircle, faCloudSun, faCloudRain, faSun, faBolt, faWind, faEye, faTemperatureHigh, faTemperatureLow, faExclamationTriangle, faInfoCircle } from '@fortawesome/free-solid-svg-icons';
+import { faUser, faCalendarAlt, faClock, faMapMarkerAlt, faFilter, faCalendarWeek, faSync, faExternalLinkAlt, faCheckCircle, faExclamationCircle, faCloudSun, faCloudRain, faSun, faBolt, faWind, faTemperatureHigh, faExclamationTriangle, faInfoCircle } from '@fortawesome/free-solid-svg-icons';
 import '../../styles/InstructorDashboard.css';
 import { AuthContext } from '../../context/AuthContext.jsx';
 import React, { useState, useEffect, useContext } from 'react';
@@ -17,12 +17,6 @@ const InstructorDashboard = () => {
     image: '' 
   });
   const apiBase = process.env.REACT_APP_API_BASE || 'http://localhost:5000';
-  const resolveImageUrl = (value) => {
-    if (!value) return '/images/tiger.png';
-    if (value.startsWith('http')) return value;
-    if (value.startsWith('/uploads/')) return `${apiBase}${value}`;
-    return value;
-  };
 
   const [allSchedules, setAllSchedules] = useState([]);
   const [selectedDay, setSelectedDay] = useState('all');
@@ -62,6 +56,13 @@ const InstructorDashboard = () => {
     }
 
     const apiBase = process.env.REACT_APP_API_BASE || 'http://localhost:5000';
+    
+    const resolveImageUrl = (value) => {
+      if (!value) return '/images/tiger.png';
+      if (value.startsWith('http')) return value;
+      if (value.startsWith('/uploads/')) return `${apiBase}${value}`;
+      return value;
+    };
 
     const fetchInstructorData = () => {
       console.log('Fetching instructor profile via token for email:', userEmail);
@@ -116,9 +117,17 @@ const InstructorDashboard = () => {
     const fetchScheduleData = async () => {
       console.log('Fetching schedules for instructor email:', userEmail);
       try {
-        const emailRes = await fetch(`${apiBase}/api/schedule/instructor/${encodeURIComponent(userEmail)}`);
+        const token = localStorage.getItem('token');
+        const emailRes = await fetch(`${apiBase}/api/schedule/instructor/${encodeURIComponent(userEmail)}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
         console.log('Schedule (email) response status:', emailRes.status);
-        if (!emailRes.ok) throw new Error(`Failed to fetch by email: ${emailRes.status} ${emailRes.statusText}`);
+        if (!emailRes.ok) {
+          const errorData = await emailRes.json().catch(() => ({}));
+          throw new Error(errorData.message || `Failed to fetch by email: ${emailRes.status} ${emailRes.statusText}`);
+        }
         const emailData = await emailRes.json();
 
         const normalize = (data) => Array.isArray(data) ? data : (data?.schedules || []);
@@ -128,7 +137,12 @@ const InstructorDashboard = () => {
         let nameSchedules = [];
         const name = [instructorData.firstname, instructorData.lastname].filter(Boolean).join(' ').trim();
         if (name.length > 0) {
-          const nameRes = await fetch(`${apiBase}/api/schedule/instructor/by-name/${encodeURIComponent(name)}`);
+          const token = localStorage.getItem('token');
+          const nameRes = await fetch(`${apiBase}/api/schedule/instructor/by-name/${encodeURIComponent(name)}`, {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          });
           console.log('Schedule (name) response status:', nameRes.status);
           if (nameRes.ok) {
             const nameData = await nameRes.json();
@@ -307,7 +321,7 @@ const InstructorDashboard = () => {
       <InstructorSidebar />
       <main className="main-content" style={{ flex: 1, padding: '1rem', overflowY: 'auto' }}>
         <InstructorHeader />
-        <div className="dashboard-content">
+        <div className="dashboard-content" style={{ marginTop: '140px' }}>
           {/* Welcome Section */}
           <div className="welcome-section" style={{ marginBottom: '30px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '8px' }}>

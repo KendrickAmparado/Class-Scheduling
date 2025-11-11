@@ -17,12 +17,13 @@ const ConfirmationDialog = ({ show, title, message, confirmText = 'Confirm', can
         left: 0,
         right: 0,
         bottom: 0,
-        background: 'rgba(0, 0, 0, 0.5)',
+        background: 'rgba(0, 0, 0, 0.6)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         zIndex: 10000,
         animation: 'fadeIn 0.2s ease-out',
+        backdropFilter: 'blur(4px)',
       }}
       onClick={onCancel}
     >
@@ -33,10 +34,18 @@ const ConfirmationDialog = ({ show, title, message, confirmText = 'Confirm', can
           padding: '24px',
           minWidth: 400,
           maxWidth: 500,
-          boxShadow: '0 20px 40px rgba(0, 0, 0, 0.3)',
-          animation: 'slideUp 0.3s ease-out',
+          boxShadow: '0 20px 60px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1)',
+          animation: 'scaleIn 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          transform: 'scale(1)',
+          transition: 'transform 0.2s ease',
         }}
         onClick={(e) => e.stopPropagation()}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.transform = 'scale(1.02)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.transform = 'scale(1)';
+        }}
       >
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, marginBottom: 20 }}>
           <div
@@ -74,15 +83,25 @@ const ConfirmationDialog = ({ show, title, message, confirmText = 'Confirm', can
               fontWeight: 600,
               cursor: 'pointer',
               fontSize: 14,
-              transition: 'all 0.2s',
+              transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
             }}
             onMouseOver={(e) => {
               e.currentTarget.style.background = '#f9fafb';
               e.currentTarget.style.borderColor = '#d1d5db';
+              e.currentTarget.style.transform = 'translateY(-1px)';
+              e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.1)';
             }}
             onMouseOut={(e) => {
               e.currentTarget.style.background = '#ffffff';
               e.currentTarget.style.borderColor = '#e5e7eb';
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = 'none';
+            }}
+            onMouseDown={(e) => {
+              e.currentTarget.style.transform = 'translateY(0) scale(0.98)';
+            }}
+            onMouseUp={(e) => {
+              e.currentTarget.style.transform = 'translateY(-1px) scale(1)';
             }}
           >
             {cancelText}
@@ -98,15 +117,24 @@ const ConfirmationDialog = ({ show, title, message, confirmText = 'Confirm', can
               fontWeight: 600,
               cursor: 'pointer',
               fontSize: 14,
-              transition: 'all 0.2s',
+              transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
             }}
             onMouseOver={(e) => {
-              e.currentTarget.style.opacity = '0.9';
-              e.currentTarget.style.transform = 'translateY(-1px)';
+              e.currentTarget.style.opacity = '0.95';
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.2)';
             }}
             onMouseOut={(e) => {
               e.currentTarget.style.opacity = '1';
               e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.15)';
+            }}
+            onMouseDown={(e) => {
+              e.currentTarget.style.transform = 'translateY(0) scale(0.98)';
+            }}
+            onMouseUp={(e) => {
+              e.currentTarget.style.transform = 'translateY(-2px) scale(1)';
             }}
           >
             {confirmText}
@@ -118,13 +146,13 @@ const ConfirmationDialog = ({ show, title, message, confirmText = 'Confirm', can
           from { opacity: 0; }
           to { opacity: 1; }
         }
-        @keyframes slideUp {
+        @keyframes scaleIn {
           from {
-            transform: translateY(20px);
+            transform: scale(0.9);
             opacity: 0;
           }
           to {
-            transform: translateY(0);
+            transform: scale(1);
             opacity: 1;
           }
         }

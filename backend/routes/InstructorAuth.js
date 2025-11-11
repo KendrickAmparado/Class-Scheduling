@@ -1,10 +1,11 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import Instructor from '../models/Instructor.js';
-import Alert from '../models/Alert.js'; // Add this line
+import Alert from '../models/Alert.js';
 import axios from 'axios';
 import validator from 'validator';
 import rateLimit from 'express-rate-limit';
+import { logActivity, getUserEmailFromRequest } from '../utils/activityLogger.js';
 
 const loginLimiter = rateLimit({
   windowMs: 10 * 60 * 1000,
@@ -98,18 +99,14 @@ router.post('/signup', async (req, res) => {
     });
 
     // ✅ CREATE ACTIVITY LOG for signup
-    try {
-        const alert = new Alert({
-          type: 'availability-update',
-          message: `${firstname} ${lastname} (${department}) completed registration`,
-          timestamp: new Date(),
-          read: false
-        });
-        await alert.save();
-        console.log('✅ Activity log created for instructor registration');
-      } catch (alertError) {
-        console.error('❌ Failed to create activity log:', alertError);
-      }
+    await logActivity({
+      type: 'instructor-signup',
+      message: `${firstname} ${lastname} (${department}) completed registration`,
+      source: 'instructor',
+      userEmail: email,
+      link: '/admin/faculty-management',
+      io: req.io
+    });
 
     // Emit real-time notification to admin (optional)
     if (req.io) {
@@ -207,6 +204,15 @@ router.post('/login', loginLimiter, async (req, res) => {
 
     if (!isMatch) {
       console.log('❌ Password mismatch');
+      // Log failed login attempt
+      await logActivity({
+        type: 'instructor-login-failed',
+        message: `Failed login attempt for ${email}`,
+        source: 'instructor',
+        userEmail: email,
+        io: req.io
+      });
+      
       return res.status(401).json({ 
         message: 'Invalid email or password' 
       });
@@ -215,18 +221,14 @@ router.post('/login', loginLimiter, async (req, res) => {
     console.log('✅ Login successful for:', instructor.email);
 
     // ✅ CREATE ACTIVITY LOG for login
-    try {
-    const alert = new Alert({
-      type: 'availability-update',
+    await logActivity({
+      type: 'instructor-login',
       message: `${instructor.firstname} ${instructor.lastname} (${instructor.department}) logged in`,
-      timestamp: new Date(),
-      read: false
+      source: 'instructor',
+      userEmail: instructor.email,
+      link: '/instructor/dashboard',
+      io: req.io
     });
-    await alert.save();
-    console.log('✅ Activity log created for instructor login');
-  } catch (alertError) {
-    console.error('❌ Failed to create login activity log:', alertError);
-  }
   
 
     // Return instructor data (without password)

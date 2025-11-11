@@ -1,12 +1,15 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import Sidebar from '../common/Sidebar.jsx';
 import Header from '../common/Header.jsx';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faSearch, faDoorOpen, faUser, faCalendarAlt, faDownload } from '@fortawesome/free-solid-svg-icons';
+import { faDoorOpen, faUser, faCalendarAlt, faDownload, faArrowRight, faEnvelope, faPhone, faIdCard, faMapMarkerAlt, faClock, faChalkboardTeacher } from '@fortawesome/free-solid-svg-icons';
 import axios from 'axios';
 import XLSX from 'xlsx-js-style';
 
 const Search = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
   const apiBase = process.env.REACT_APP_API_BASE || 'http://localhost:5000';
   const [q, setQ] = useState('');
   const [loading, setLoading] = useState(false);
@@ -16,31 +19,51 @@ const Search = () => {
     instructors: { page: 1, limit: 10, total: 0, totalPages: 1, hasNext: false, hasPrev: false },
     schedules: { page: 1, limit: 10, total: 0, totalPages: 1, hasNext: false, hasPrev: false }
   });
+  const previousQueryRef = useRef('');
 
+  // Reset and perform new search when URL query parameter changes
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const initial = params.get('q') || '';
-    setQ(initial);
-    if (initial.trim()) {
-      // Reset pagination when new search
+    const params = new URLSearchParams(location.search);
+    const newQuery = params.get('q') || '';
+    
+    // Only reset and search if the query has actually changed
+    if (newQuery !== previousQueryRef.current) {
+      previousQueryRef.current = newQuery;
+      setQ(newQuery);
+      
+      // Reset all results and pagination immediately
+      setResults({ rooms: [], instructors: [], schedules: [] });
       setPagination({
         rooms: { page: 1, limit: 10, total: 0, totalPages: 1, hasNext: false, hasPrev: false },
         instructors: { page: 1, limit: 10, total: 0, totalPages: 1, hasNext: false, hasPrev: false },
         schedules: { page: 1, limit: 10, total: 0, totalPages: 1, hasNext: false, hasPrev: false }
       });
-      doSearch(initial);
+      
+      // Perform new search if query is not empty
+      if (newQuery.trim()) {
+        doSearch(newQuery);
+      } else {
+        // Clear loading state if query is empty
+        setLoading(false);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [location.search]);
 
   const doSearch = async (term, pageOverrides = {}) => {
+    if (!term || !term.trim()) {
+      setResults({ rooms: [], instructors: [], schedules: [] });
+      setLoading(false);
+      return;
+    }
+    
     setLoading(true);
     try {
       const params = {
-        q: term,
-        roomsPage: pageOverrides.roomsPage || pagination.rooms.page,
-        instructorsPage: pageOverrides.instructorsPage || pagination.instructors.page,
-        schedulesPage: pageOverrides.schedulesPage || pagination.schedules.page,
+        q: term.trim(),
+        roomsPage: pageOverrides.roomsPage || 1,
+        instructorsPage: pageOverrides.instructorsPage || 1,
+        schedulesPage: pageOverrides.schedulesPage || 1,
         limit: 10
       };
       
@@ -56,6 +79,11 @@ const Search = () => {
       }
     } catch (_) {
       setResults({ rooms: [], instructors: [], schedules: [] });
+      setPagination({
+        rooms: { page: 1, limit: 10, total: 0, totalPages: 1, hasNext: false, hasPrev: false },
+        instructors: { page: 1, limit: 10, total: 0, totalPages: 1, hasNext: false, hasPrev: false },
+        schedules: { page: 1, limit: 10, total: 0, totalPages: 1, hasNext: false, hasPrev: false }
+      });
     }
     setLoading(false);
   };
@@ -152,50 +180,49 @@ const Search = () => {
       <Sidebar />
       <main className="main-content" style={{ flex: 1, padding: '1rem' }}>
         <Header title="Search" />
-        <div className="dashboard-content">
-          <div style={{ background: '#fff', borderRadius: 12, padding: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.06)', marginBottom: 16 }}>
-            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-              <div style={{ position: 'relative', flex: 1, minWidth: '300px' }}>
-                <FontAwesomeIcon icon={faSearch} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }} />
-                <input value={q} onChange={(e)=>setQ(e.target.value)} onKeyDown={(e)=>{ if(e.key==='Enter') {
-                  setPagination({
-                    rooms: { page: 1, limit: 10, total: 0, totalPages: 1, hasNext: false, hasPrev: false },
-                    instructors: { page: 1, limit: 10, total: 0, totalPages: 1, hasNext: false, hasPrev: false },
-                    schedules: { page: 1, limit: 10, total: 0, totalPages: 1, hasNext: false, hasPrev: false }
-                  });
-                  doSearch(q);
-                }}} placeholder="Search rooms, instructors, schedules..." style={{ width: '100%', padding: '10px 10px 10px 36px', border: '2px solid #e5e7eb', borderRadius: 8 }} />
+        <div className="dashboard-content" style={{ marginTop: '140px' }}>
+          {/* Welcome Section */}
+          <div className="welcome-section" style={{ marginBottom: '30px' }}>
+            <h2>Search Results</h2>
+            <p>Search query: <strong>"{q}"</strong></p>
+            {loading && (
+              <div style={{ marginTop: '16px', padding: '12px', background: '#f0f9ff', borderRadius: '8px', color: '#0f2c63', fontWeight: '500' }}>
+                Loading search results...
               </div>
-              <button onClick={()=>{
-                setPagination({
-                  rooms: { page: 1, limit: 10, total: 0, totalPages: 1, hasNext: false, hasPrev: false },
-                  instructors: { page: 1, limit: 10, total: 0, totalPages: 1, hasNext: false, hasPrev: false },
-                  schedules: { page: 1, limit: 10, total: 0, totalPages: 1, hasNext: false, hasPrev: false }
-                });
-                doSearch(q);
-              }} disabled={loading || !q.trim()} style={{ padding: '10px 16px', borderRadius: 8, border: 'none', background: '#f97316', color: '#fff', fontWeight: 800, cursor: loading?'not-allowed':'pointer' }}>{loading ? 'Searching...' : 'Search'}</button>
-              {(counts.rooms > 0 || counts.instructors > 0 || counts.schedules > 0) && (
+            )}
+            {!loading && (counts.rooms > 0 || counts.instructors > 0 || counts.schedules > 0) && (
+              <div style={{ marginTop: '16px' }}>
                 <button
                   onClick={exportSearchResults}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
                     gap: '8px',
-                    padding: '10px 16px',
-                    borderRadius: 8,
-                    border: 'none',
+                    padding: '12px 20px',
                     background: 'linear-gradient(135deg, #0f2c63 0%, #1e40af 100%)',
                     color: '#fff',
-                    fontWeight: 600,
+                    border: 'none',
+                    borderRadius: '10px',
+                    fontWeight: '600',
                     cursor: 'pointer',
-                    fontSize: '14px'
+                    fontSize: '14px',
+                    transition: 'all 0.3s ease',
+                    boxShadow: '0 4px 12px rgba(15, 44, 99, 0.3)'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = 'translateY(-2px)';
+                    e.currentTarget.style.boxShadow = '0 6px 16px rgba(15, 44, 99, 0.4)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(15, 44, 99, 0.3)';
                   }}
                 >
                   <FontAwesomeIcon icon={faDownload} />
                   Export Excel
                 </button>
-              )}
-            </div>
+              </div>
+            )}
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16 }}>
@@ -209,9 +236,54 @@ const Search = () => {
                 <>
                   <div style={{ display: 'grid', gap: 8, marginBottom: pagination.rooms.totalPages > 1 ? 15 : 0 }}>
                     {results.rooms.map((r)=> (
-                      <div key={r._id} style={{ padding: 12, border: '1px solid #e5e7eb', borderRadius: 8, display: 'flex', justifyContent: 'space-between' }}>
-                        <div style={{ fontWeight: 700 }}>{r.room}</div>
-                        <div style={{ color: '#6b7280' }}>{r.area} • {r.status}</div>
+                      <div 
+                        key={r._id} 
+                        onClick={() => navigate(`/admin/room-management?q=${encodeURIComponent(q)}`)}
+                        style={{ 
+                          padding: 12, 
+                          border: '1px solid #e5e7eb', 
+                          borderRadius: 8, 
+                          display: 'flex', 
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          cursor: 'pointer',
+                          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                          background: '#fff'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = '#f0f9ff';
+                          e.currentTarget.style.borderColor = '#0f2c63';
+                          e.currentTarget.style.transform = 'translateX(4px)';
+                          e.currentTarget.style.boxShadow = '0 2px 8px rgba(15, 44, 99, 0.1)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = '#fff';
+                          e.currentTarget.style.borderColor = '#e5e7eb';
+                          e.currentTarget.style.transform = 'translateX(0)';
+                          e.currentTarget.style.boxShadow = 'none';
+                        }}
+                      >
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: 1 }}>
+                          <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '16px' }}>{r.room}</div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#64748b', fontSize: '13px' }}>
+                              <FontAwesomeIcon icon={faMapMarkerAlt} style={{ fontSize: '12px' }} />
+                              <span>{r.area}</span>
+                            </div>
+                            <div style={{
+                              padding: '4px 10px',
+                              borderRadius: '6px',
+                              fontSize: '11px',
+                              fontWeight: '700',
+                              textTransform: 'uppercase',
+                              backgroundColor: r.status === 'available' ? '#dcfce7' : r.status === 'occupied' ? '#fee2e2' : '#fef3c7',
+                              color: r.status === 'available' ? '#16a34a' : r.status === 'occupied' ? '#dc2626' : '#d97706',
+                            }}>
+                              {r.status}
+                            </div>
+                          </div>
+                        </div>
+                        <FontAwesomeIcon icon={faArrowRight} style={{ color: '#9ca3af', fontSize: '14px', marginLeft: '12px' }} />
                       </div>
                     ))}
                   </div>
@@ -266,9 +338,78 @@ const Search = () => {
                 <>
                   <div style={{ display: 'grid', gap: 8, marginBottom: pagination.instructors.totalPages > 1 ? 15 : 0 }}>
                     {results.instructors.map((i)=> (
-                      <div key={i._id} style={{ padding: 12, border: '1px solid #e5e7eb', borderRadius: 8, display: 'flex', justifyContent: 'space-between' }}>
-                        <div style={{ fontWeight: 700 }}>{i.firstname && i.lastname ? `${i.firstname} ${i.lastname}` : (i.name || i.email)}</div>
-                        <div style={{ color: '#6b7280' }}>{i.department || '—'}</div>
+                      <div 
+                        key={i._id} 
+                        onClick={() => navigate(`/admin/faculty-management?q=${encodeURIComponent(q)}`)}
+                        style={{ 
+                          padding: 12, 
+                          border: '1px solid #e5e7eb', 
+                          borderRadius: 8, 
+                          display: 'flex', 
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          cursor: 'pointer',
+                          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                          background: '#fff'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = '#f0f9ff';
+                          e.currentTarget.style.borderColor = '#0f2c63';
+                          e.currentTarget.style.transform = 'translateX(4px)';
+                          e.currentTarget.style.boxShadow = '0 2px 8px rgba(15, 44, 99, 0.1)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = '#fff';
+                          e.currentTarget.style.borderColor = '#e5e7eb';
+                          e.currentTarget.style.transform = 'translateX(0)';
+                          e.currentTarget.style.boxShadow = 'none';
+                        }}
+                      >
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: 1 }}>
+                          <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '16px' }}>
+                            {i.firstname && i.lastname ? `${i.firstname} ${i.lastname}` : (i.name || i.email)}
+                          </div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center' }}>
+                            {i.instructorId && (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#64748b', fontSize: '13px' }}>
+                                <FontAwesomeIcon icon={faIdCard} style={{ fontSize: '12px' }} />
+                                <span>ID-{i.instructorId}</span>
+                              </div>
+                            )}
+                            {i.email && (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#64748b', fontSize: '13px' }}>
+                                <FontAwesomeIcon icon={faEnvelope} style={{ fontSize: '12px' }} />
+                                <span>{i.email}</span>
+                              </div>
+                            )}
+                            {i.department && (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#64748b', fontSize: '13px' }}>
+                                <FontAwesomeIcon icon={faUser} style={{ fontSize: '12px' }} />
+                                <span>{i.department}</span>
+                              </div>
+                            )}
+                            {i.contact && (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#64748b', fontSize: '13px' }}>
+                                <FontAwesomeIcon icon={faPhone} style={{ fontSize: '12px' }} />
+                                <span>{i.contact}</span>
+                              </div>
+                            )}
+                            {i.status && (
+                              <div style={{
+                                padding: '4px 10px',
+                                borderRadius: '6px',
+                                fontSize: '11px',
+                                fontWeight: '700',
+                                textTransform: 'uppercase',
+                                backgroundColor: i.status === 'active' ? '#dcfce7' : i.status === 'pending' ? '#fef3c7' : '#fee2e2',
+                                color: i.status === 'active' ? '#16a34a' : i.status === 'pending' ? '#d97706' : '#dc2626',
+                              }}>
+                                {i.status}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <FontAwesomeIcon icon={faArrowRight} style={{ color: '#9ca3af', fontSize: '14px', marginLeft: '12px' }} />
                       </div>
                     ))}
                   </div>
@@ -323,9 +464,76 @@ const Search = () => {
                 <>
                   <div style={{ display: 'grid', gap: 8, marginBottom: pagination.schedules.totalPages > 1 ? 15 : 0 }}>
                     {results.schedules.map((s, idx)=> (
-                      <div key={s._id || idx} style={{ padding: 12, border: '1px solid #e5e7eb', borderRadius: 8 }}>
-                        <div style={{ fontWeight: 700 }}>{s.subject} • {s.course} {s.year} - {s.section}</div>
-                        <div style={{ color: '#6b7280' }}>{s.day} • {s.time} • {s.room}</div>
+                      <div 
+                        key={s._id || idx} 
+                        onClick={() => {
+                          // Navigate to schedule management, or specific schedule page if course/year available
+                          if (s.course && s.year) {
+                            const courseId = s.course.toLowerCase().replace(/\s+/g, '-');
+                            const yearId = s.year.toLowerCase().replace(/\s+/g, '');
+                            navigate(`/admin/schedule-management/${courseId}/${yearId}?q=${encodeURIComponent(q)}`);
+                          } else {
+                            navigate(`/admin/schedule-management?q=${encodeURIComponent(q)}`);
+                          }
+                        }}
+                        style={{ 
+                          padding: 12, 
+                          border: '1px solid #e5e7eb', 
+                          borderRadius: 8,
+                          cursor: 'pointer',
+                          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                          background: '#fff',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = '#f0f9ff';
+                          e.currentTarget.style.borderColor = '#0f2c63';
+                          e.currentTarget.style.transform = 'translateX(4px)';
+                          e.currentTarget.style.boxShadow = '0 2px 8px rgba(15, 44, 99, 0.1)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = '#fff';
+                          e.currentTarget.style.borderColor = '#e5e7eb';
+                          e.currentTarget.style.transform = 'translateX(0)';
+                          e.currentTarget.style.boxShadow = 'none';
+                        }}
+                      >
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: 1 }}>
+                          <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '16px' }}>{s.subject}</div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#64748b', fontSize: '13px' }}>
+                              <FontAwesomeIcon icon={faCalendarAlt} style={{ fontSize: '12px' }} />
+                              <span>{s.course} {s.year} - {s.section}</span>
+                            </div>
+                            {s.day && (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#64748b', fontSize: '13px' }}>
+                                <FontAwesomeIcon icon={faCalendarAlt} style={{ fontSize: '12px' }} />
+                                <span>{s.day}</span>
+                              </div>
+                            )}
+                            {s.time && (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#64748b', fontSize: '13px' }}>
+                                <FontAwesomeIcon icon={faClock} style={{ fontSize: '12px' }} />
+                                <span>{s.time}</span>
+                              </div>
+                            )}
+                            {s.room && (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#64748b', fontSize: '13px' }}>
+                                <FontAwesomeIcon icon={faDoorOpen} style={{ fontSize: '12px' }} />
+                                <span>{s.room}</span>
+                              </div>
+                            )}
+                            {s.instructor && (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#64748b', fontSize: '13px' }}>
+                                <FontAwesomeIcon icon={faChalkboardTeacher} style={{ fontSize: '12px' }} />
+                                <span>{s.instructor}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <FontAwesomeIcon icon={faArrowRight} style={{ color: '#9ca3af', fontSize: '14px', marginLeft: '12px' }} />
                       </div>
                     ))}
                   </div>

@@ -1,11 +1,25 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faSearch } from '@fortawesome/free-solid-svg-icons';
 
 const Header = ({ title }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [search, setSearch] = useState('');
+  
+  // Sync search input with URL query parameter when on search page
+  useEffect(() => {
+    if (location.pathname === '/admin/search') {
+      const params = new URLSearchParams(location.search);
+      const queryParam = params.get('q') || '';
+      setSearch(queryParam);
+    } else {
+      // Clear search when navigating away from search page
+      setSearch('');
+    }
+  }, [location]);
+  
   const onKeyDown = (e) => {
     if (e.key === 'Enter') {
       const q = search.trim();
@@ -18,42 +32,37 @@ const Header = ({ title }) => {
     <header
       className="top-header"
       style={{
-        background: 'linear-gradient(135deg, #0f2c63 0%, #1e3a72 20%, #2d4a81 40%, #ea580c 70%, #f97316 100%)',
-        padding: '15px 25px',
+        background: 'linear-gradient(135deg, #0f2c63 0%, #1e40af 50%, #f97316 100%)',
+        padding: '24px 40px',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        boxShadow: '0 4px 20px rgba(15, 44, 99, 0.25), 0 2px 8px rgba(249, 115, 22, 0.15)',
-        borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-        position: 'relative',
+        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
+        borderBottom: '2px solid rgba(255, 255, 255, 0.2)',
+        position: 'fixed',
+        top: 0,
+        left: '280px',
+        right: 0,
+        width: 'calc(100% - 280px)',
+        zIndex: 999,
+        boxSizing: 'border-box',
+        minHeight: '90px',
       }}
     >
-      {/* Subtle overlay pattern for texture */}
-      <div style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        height: '100%',
-        background: 'radial-gradient(circle at 20% 50%, rgba(255, 255, 255, 0.05) 0%, transparent 50%)',
-        pointerEvents: 'none',
-        zIndex: 0,
-        overflow: 'hidden',
-      }} />
       <div style={{ position: 'relative', zIndex: 1, display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
         <div className="header-left" style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
           {/* Additional left-side content if needed */}
         </div>
-        <div className="header-center" style={{ flex: 1, maxWidth: '700px', margin: '0 30px' }}>
+        <div className="header-center" style={{ flex: 1, maxWidth: '800px', margin: '0 30px' }}>
           <div className="search-container" style={{ position: 'relative', width: '100%' }}>
             <FontAwesomeIcon
               icon={faSearch}
               style={{
                 position: 'absolute',
-                left: '15px',
+                left: '16px',
                 top: '50%',
                 transform: 'translateY(-50%)',
-                color: '#94a3b8',
+                color: '#64748b',
                 fontSize: '16px',
                 zIndex: 2,
               }}
@@ -63,30 +72,28 @@ const Header = ({ title }) => {
               placeholder="Search schedules, instructors, rooms..."
               style={{
                 width: '100%',
-                padding: '12px 45px',
-                border: '2px solid rgba(255, 255, 255, 0.2)',
+                padding: '14px 50px',
+                border: '2px solid rgba(255, 255, 255, 0.25)',
                 borderRadius: '12px',
-                fontSize: '14px',
+                fontSize: '15px',
                 background: 'rgba(255, 255, 255, 0.95)',
                 backdropFilter: 'blur(10px)',
-                transition: 'all 0.3s ease',
-                boxShadow: '0 2px 10px rgba(0, 0, 0, 0.1)',
+                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+                fontWeight: '500',
               }}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={onKeyDown}
               onFocus={(e) => {
                 e.target.style.outline = 'none';
-                e.target.style.borderColor = 'rgba(255, 255, 255, 0.4)';
+                e.target.style.borderColor = 'rgba(249, 115, 22, 0.6)';
                 e.target.style.background = 'white';
-                e.target.style.boxShadow = '0 4px 20px rgba(15, 44, 99, 0.2), 0 0 0 3px rgba(249, 115, 22, 0.1)';
-                e.target.style.transform = 'scale(1.02)';
+                e.target.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
               }}
               onBlur={(e) => {
-                e.target.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+                e.target.style.borderColor = 'rgba(255, 255, 255, 0.25)';
                 e.target.style.background = 'rgba(255, 255, 255, 0.95)';
-                e.target.style.boxShadow = '0 2px 10px rgba(0, 0, 0, 0.1)';
-                e.target.style.transform = 'scale(1)';
+                e.target.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.1)';
               }}
             />
           </div>
@@ -96,7 +103,7 @@ const Header = ({ title }) => {
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '25px',
+            gap: '20px',
           }}
         >
           <div
@@ -104,12 +111,12 @@ const Header = ({ title }) => {
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '8px',
-              padding: '8px 12px',
-              background: 'rgba(255, 255, 255, 0.1)',
+              gap: '10px',
+              padding: '8px 14px',
+              background: 'rgba(255, 255, 255, 0.15)',
               borderRadius: '12px',
-              backdropFilter: 'blur(5px)',
-              border: '1px solid rgba(255, 255, 255, 0.15)',
+              backdropFilter: 'blur(8px)',
+              border: '2px solid rgba(255, 255, 255, 0.2)',
             }}
           >
             <img
@@ -121,8 +128,8 @@ const Header = ({ title }) => {
                 height: '60px',
                 objectFit: 'contain',
                 borderRadius: '8px',
-                padding: '4px',
-                filter: 'brightness(1.1)',
+                padding: '3px',
+                opacity: 0.98,
               }}
             />
             <img
@@ -134,8 +141,8 @@ const Header = ({ title }) => {
                 height: '60px',
                 objectFit: 'contain',
                 borderRadius: '8px',
-                padding: '4px',
-                filter: 'brightness(1.1)',
+                padding: '3px',
+                opacity: 0.98,
               }}
             />
           </div>

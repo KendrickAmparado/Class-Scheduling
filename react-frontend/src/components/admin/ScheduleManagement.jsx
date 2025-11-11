@@ -25,7 +25,7 @@ const ScheduleManagement = () => {
       name: 'BS Entertainment and Multimedia Computing',
       shortName: 'BSEMC-DAT',
       icon: faCode,
-      gradient: 'linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%)',
+      gradient: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
     }
   ];
 
@@ -45,7 +45,7 @@ const ScheduleManagement = () => {
       <Sidebar />
       <main className="main-content" style={{ flex: 1, padding: '1rem' }}>
         <Header title="Schedule Management" />
-        <div className="dashboard-content">
+        <div className="dashboard-content" style={{ marginTop: '140px' }}>
           <div className="welcome-section">
             <h2>Schedule Management</h2>
             <p>Select a course and year level to manage schedules</p>
