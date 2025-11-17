@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
@@ -6,12 +6,27 @@ import {
   faSignOutAlt,
   faChartBar,
   faCog,
-  faBell
+  faBell,
+  faTimes,
+  faBars
 } from '@fortawesome/free-solid-svg-icons';
 
-const InstructorSidebar = () => {
+const InstructorSidebar = ({ isOpen, onClose }) => {
   const location = useLocation();
   const navigate = useNavigate();
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 768);
+      if (window.innerWidth > 768 && isOpen) {
+        onClose?.();
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [isOpen, onClose]);
 
   const menuItems = [
     { path: '/instructor/dashboard', icon: faHome, label: 'Dashboard' },
@@ -26,15 +41,65 @@ const InstructorSidebar = () => {
   };
 
   return (
-    <aside className="sidebar" style={{
-      width: '200px',
-      background: 'linear-gradient(135deg, #0f2c63 60%, #ea580c 100%)',
-      color: 'white',
-      display: 'flex',
-      flexDirection: 'column',
-      boxShadow: '4px 0 20px rgba(0, 0, 0, 0.1)',
-      zIndex: 1000,
-    }}>
+    <>
+      {/* Mobile Overlay */}
+      {isMobile && isOpen && (
+        <div
+          onClick={onClose}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.5)',
+            zIndex: 999,
+            transition: 'opacity 0.3s ease',
+          }}
+        />
+      )}
+
+      <aside
+        className="sidebar"
+        style={{
+          width: isMobile ? '280px' : '200px',
+          background: 'linear-gradient(135deg, #0f2c63 60%, #ea580c 100%)',
+          color: 'white',
+          display: 'flex',
+          flexDirection: 'column',
+          boxShadow: '4px 0 20px rgba(0, 0, 0, 0.1)',
+          zIndex: 1000,
+          position: isMobile ? 'fixed' : 'relative',
+          height: isMobile ? '100vh' : 'auto',
+          left: isMobile ? (isOpen ? 0 : '-280px') : 0,
+          top: 0,
+          transition: 'left 0.3s ease-in-out',
+        }}
+      >
+        {/* Mobile Close Button */}
+        {isMobile && (
+          <button
+            onClick={onClose}
+            style={{
+              position: 'absolute',
+              top: '15px',
+              right: '15px',
+              background: 'rgba(255, 255, 255, 0.2)',
+              border: 'none',
+              borderRadius: '8px',
+              width: '40px',
+              height: '40px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              color: 'white',
+              zIndex: 1001,
+            }}
+          >
+            <FontAwesomeIcon icon={faTimes} />
+          </button>
+        )}
       <nav className="sidebar-menu" style={{
         flex: 1,
         padding: '60px 0 10px 0'
@@ -62,24 +127,29 @@ const InstructorSidebar = () => {
               position: 'relative',
               overflow: 'hidden',
             }}
+            onClick={() => {
+              if (isMobile) {
+                onClose?.();
+              }
+            }}
             onMouseEnter={(e) => {
-              if (location.pathname !== item.path) {
+              if (!isMobile && location.pathname !== item.path) {
                 e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
                 e.currentTarget.style.color = 'white';
                 e.currentTarget.style.transform = 'translateX(8px) scale(1.05)';
                 e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
-              } else {
+              } else if (!isMobile) {
                 e.currentTarget.style.transform = 'scale(1.05)';
                 e.currentTarget.style.boxShadow = 'inset 4px 0 0 #ffffff, 0 4px 12px rgba(0, 0, 0, 0.15)';
               }
             }}
             onMouseLeave={(e) => {
-              if (location.pathname !== item.path) {
+              if (!isMobile && location.pathname !== item.path) {
                 e.currentTarget.style.background = 'transparent';
                 e.currentTarget.style.color = 'rgba(255, 255, 255, 0.8)';
                 e.currentTarget.style.transform = 'translateX(0) scale(1)';
                 e.currentTarget.style.boxShadow = 'none';
-              } else {
+              } else if (!isMobile) {
                 e.currentTarget.style.transform = 'scale(1)';
                 e.currentTarget.style.boxShadow = 'inset 4px 0 0 #ffffff, 0 2px 8px rgba(0, 0, 0, 0.1)';
               }
@@ -157,6 +227,7 @@ const InstructorSidebar = () => {
         </button>
       </div>
     </aside>
+    </>
   );
 };
 

@@ -7,6 +7,7 @@ import { AuthContext } from '../../context/AuthContext.jsx';
 
 const InstructorSettings = () => {
   const { userEmail } = useContext(AuthContext);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileData, setProfileData] = useState({
     instructorId: '',
     firstname: '',
@@ -193,9 +194,9 @@ const InstructorSettings = () => {
 
   return (
     <div className="dashboard-container" style={{ display: 'flex', height: '100vh' }}>
-      <InstructorSidebar />
+      <InstructorSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <main className="main-content" style={{ flex: 1, padding: '1rem', overflowY: 'auto' }}>
-        <InstructorHeader />
+        <InstructorHeader onMenuClick={() => setSidebarOpen(!sidebarOpen)} />
         <div className="dashboard-content" style={{ display: 'flex', justifyContent: 'center', alignItems: 'flex-start', marginTop: '140px' }}>
           <div
             style={{

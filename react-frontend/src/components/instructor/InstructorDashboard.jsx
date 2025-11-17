@@ -8,6 +8,7 @@ import React, { useState, useEffect, useContext } from 'react';
 
 const InstructorDashboard = () => {
   const { userEmail } = useContext(AuthContext);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   
   // 🟢 CHANGED: separated fields for first and last name
   const [instructorData, setInstructorData] = useState({ 
@@ -318,9 +319,9 @@ const InstructorDashboard = () => {
 
   return (
     <div className="dashboard-container" style={{ display: 'flex', height: '100vh' }}>
-      <InstructorSidebar />
+      <InstructorSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <main className="main-content" style={{ flex: 1, padding: '1rem', overflowY: 'auto' }}>
-        <InstructorHeader />
+        <InstructorHeader onMenuClick={() => setSidebarOpen(!sidebarOpen)} />
         <div className="dashboard-content" style={{ marginTop: '140px' }}>
           {/* Welcome Section */}
           <div className="welcome-section" style={{ marginBottom: '30px' }}>

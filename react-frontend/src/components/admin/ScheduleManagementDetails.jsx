@@ -814,128 +814,130 @@ const ScheduleManagementDetails = () => {
                   overflowY: 'auto',
                 }}
               >
-                {selectedSection && (
-                  <>
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      marginBottom: '24px',
-                      paddingBottom: '20px',
-                      borderBottom: '2px solid #f1f5f9',
-                    }}>
-                      <div>
-                        <h3 style={{ fontSize: '22px', fontWeight: '700', color: '#1e293b', margin: '0 0 4px 0' }}>
-                          {course.toUpperCase()}-{year.charAt(0).toUpperCase()}{selectedSection.name}
-                        </h3>
-                        <p style={{ fontSize: '14px', color: '#64748b', margin: 0 }}>
-                          {getSectionSchedules(selectedSection.name).length} schedule(s)
-                        </p>
-                      </div>
-                      <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                        <button
-                          onClick={() => setShowTemplateManager(true)}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            padding: '12px 20px',
-                            background: 'linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%)',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '10px',
-                            fontWeight: '600',
-                            cursor: 'pointer',
-                            fontSize: '15px',
-                            transition: 'transform 0.18s ease',
-                          }}
-                          onMouseOver={(e) => (e.currentTarget.style.transform = 'translateY(-2px)')}
-                          onMouseOut={(e) => (e.currentTarget.style.transform = '')}
-                        >
-                          <FontAwesomeIcon icon={faFileAlt} />
-                          Templates
-                        </button>
-                        <button
-                          onClick={() => setShowImporter(true)}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            padding: '12px 20px',
-                            background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '10px',
-                            fontWeight: '600',
-                            cursor: 'pointer',
-                            fontSize: '15px',
-                            transition: 'transform 0.18s ease',
-                          }}
-                          onMouseOver={(e) => (e.currentTarget.style.transform = 'translateY(-2px)')}
-                          onMouseOut={(e) => (e.currentTarget.style.transform = '')}
-                        >
-                          <FontAwesomeIcon icon={faFileImport} />
-                          Import
-                        </button>
-                        <button
-                          onClick={() => setShowAddSchedulePopup(true)}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '10px',
-                            padding: '12px 20px',
-                            background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '10px',
-                            fontWeight: '600',
-                            cursor: 'pointer',
-                            fontSize: '15px',
-                            transition: 'transform 0.18s ease',
-                          }}
-                          onMouseOver={(e) => (e.currentTarget.style.transform = 'translateY(-2px)')}
-                          onMouseOut={(e) => (e.currentTarget.style.transform = '')}
-                        >
-                          <FontAwesomeIcon icon={faPlus} />
-                          Add Schedule
-                        </button>
-                      </div>
-                    </div>
-
-                    <div style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-                      gap: '20px',
-                    }}>
-                      {getSectionSchedules(selectedSection.name).length === 0 ? (
-                        <div style={{
-                          gridColumn: '1 / -1',
-                          textAlign: 'center',
-                          padding: '60px 20px',
-                        }}>
-                          <FontAwesomeIcon icon={faCalendarAlt} style={{ fontSize: 64, color: '#d1d5db', marginBottom: '16px' }} />
-                          <p style={{ color: '#6b7280', fontSize: '16px', marginBottom: '20px' }}>No schedules yet for this section</p>
+                {selectedSection && (() => {
+                  const sectionSchedules = getSectionSchedules(selectedSection?.name || '');
+                  return (
+                    <>
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        marginBottom: '24px',
+                        paddingBottom: '20px',
+                        borderBottom: '2px solid #f1f5f9',
+                      }}>
+                        <div>
+                          <h3 style={{ fontSize: '22px', fontWeight: '700', color: '#1e293b', margin: '0 0 4px 0' }}>
+                            {course.toUpperCase()}-{year.charAt(0).toUpperCase()}{selectedSection.name}
+                          </h3>
+                          <p style={{ fontSize: '14px', color: '#64748b', margin: 0 }}>
+                            {sectionSchedules.length} schedule(s)
+                          </p>
+                        </div>
+                        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
                           <button
-                            onClick={() => setShowAddSchedulePopup(true)}
+                            onClick={() => setShowTemplateManager(true)}
                             style={{
-                              display: 'inline-flex',
+                              display: 'flex',
                               alignItems: 'center',
-                              gap: '10px',
-                              padding: '12px 24px',
-                              background: 'linear-gradient(135deg, #0f2c63 0%, #1e40af 100%)',
+                              gap: '8px',
+                              padding: '12px 20px',
+                              background: 'linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%)',
                               color: 'white',
                               border: 'none',
                               borderRadius: '10px',
                               fontWeight: '600',
                               cursor: 'pointer',
+                              fontSize: '15px',
+                              transition: 'transform 0.18s ease',
                             }}
+                            onMouseOver={(e) => (e.currentTarget.style.transform = 'translateY(-2px)')}
+                            onMouseOut={(e) => (e.currentTarget.style.transform = '')}
+                          >
+                            <FontAwesomeIcon icon={faFileAlt} />
+                            Templates
+                          </button>
+                          <button
+                            onClick={() => setShowImporter(true)}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              padding: '12px 20px',
+                              background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '10px',
+                              fontWeight: '600',
+                              cursor: 'pointer',
+                              fontSize: '15px',
+                              transition: 'transform 0.18s ease',
+                            }}
+                            onMouseOver={(e) => (e.currentTarget.style.transform = 'translateY(-2px)')}
+                            onMouseOut={(e) => (e.currentTarget.style.transform = '')}
+                          >
+                            <FontAwesomeIcon icon={faFileImport} />
+                            Import
+                          </button>
+                          <button
+                            onClick={() => setShowAddSchedulePopup(true)}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '10px',
+                              padding: '12px 20px',
+                              background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '10px',
+                              fontWeight: '600',
+                              cursor: 'pointer',
+                              fontSize: '15px',
+                              transition: 'transform 0.18s ease',
+                            }}
+                            onMouseOver={(e) => (e.currentTarget.style.transform = 'translateY(-2px)')}
+                            onMouseOut={(e) => (e.currentTarget.style.transform = '')}
                           >
                             <FontAwesomeIcon icon={faPlus} />
-                            Add First Schedule
+                            Add Schedule
                           </button>
                         </div>
-                      ) : (
-                        getSectionSchedules(selectedSection.name).map((schedule) => (
+                      </div>
+
+                      <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+                        gap: '20px',
+                      }}>
+                        {sectionSchedules.length === 0 ? (
+                          <div style={{
+                            gridColumn: '1 / -1',
+                            textAlign: 'center',
+                            padding: '60px 20px',
+                          }}>
+                            <FontAwesomeIcon icon={faCalendarAlt} style={{ fontSize: 64, color: '#d1d5db', marginBottom: '16px' }} />
+                            <p style={{ color: '#6b7280', fontSize: '16px', marginBottom: '20px' }}>No schedules yet for this section</p>
+                            <button
+                              onClick={() => setShowAddSchedulePopup(true)}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '10px',
+                                padding: '12px 24px',
+                                background: 'linear-gradient(135deg, #0f2c63 0%, #1e40af 100%)',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '10px',
+                                fontWeight: '600',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              <FontAwesomeIcon icon={faPlus} />
+                              Add First Schedule
+                            </button>
+                          </div>
+                        ) : (
+                          sectionSchedules.map((schedule) => (
                           <div
                             key={schedule._id}
                             style={{
@@ -1054,8 +1056,9 @@ const ScheduleManagementDetails = () => {
                         ))
                       )}
                     </div>
-                  </>
-                )}
+                    </>
+                  );
+                })()}
               </div>
             </div>
           )}

@@ -27,6 +27,7 @@ import {
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [alerts, setAlerts] = useState([]);
   const [roomStatus, setRoomStatus] = useState([]);
   const [weather, setWeather] = useState(null);
@@ -188,9 +189,9 @@ const AdminDashboard = () => {
 
   return (
     <div className="dashboard-container" style={{ display: 'flex' }}>
-      <Sidebar />
+      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <main className="main-content" style={{ flex: 1, padding: '1rem' }}>
-        <Header title="Admin Dashboard" />
+        <Header title="Admin Dashboard" onMenuClick={() => setSidebarOpen(!sidebarOpen)} />
         <div className="dashboard-content" style={{ marginTop: '140px' }}>
           <div className="welcome-section">
             <h2>Welcome to the Admin Dashboard</h2>

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import Toast from './Toast.jsx';
 
 const ToastContext = createContext();
@@ -23,6 +23,18 @@ export const ToastProvider = ({ children }) => {
   const removeToast = useCallback((id) => {
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
   }, []);
+
+  // Expose showToast globally for API client and other utilities
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.showToast = showToast;
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        delete window.showToast;
+      }
+    };
+  }, [showToast]);
 
   return (
     <ToastContext.Provider value={{ showToast }}>

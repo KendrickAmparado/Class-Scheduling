@@ -9,6 +9,7 @@ import { useToast } from '../common/ToastProvider.jsx';
 const InstructorNotifications = () => {
   const { userEmail } = useContext(AuthContext);
   const { showToast } = useToast();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const apiBase = process.env.REACT_APP_API_BASE || 'http://localhost:5000';
   
   const [notifications, setNotifications] = useState([]);
@@ -221,9 +222,9 @@ const InstructorNotifications = () => {
 
   return (
     <div className="dashboard-container" style={{ display: 'flex', height: '100vh' }}>
-      <InstructorSidebar />
+      <InstructorSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <main className="main-content" style={{ flex: 1, padding: '1rem', overflowY: 'auto' }}>
-        <InstructorHeader />
+        <InstructorHeader onMenuClick={() => setSidebarOpen(!sidebarOpen)} />
         <div className="dashboard-content" style={{ marginTop: '140px' }}>
           {/* Welcome Section */}
           <div className="welcome-section" style={{ marginBottom: '30px' }}>

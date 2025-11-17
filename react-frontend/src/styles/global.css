@@ -101,6 +101,13 @@ body {
   animation: fadeInUp 0.5s ease-out;
 }
 
+/* Mobile marginTop adjustment */
+@media (max-width: 768px) {
+  .dashboard-content[style*="marginTop"] {
+    margin-top: 80px !important;
+  }
+}
+
 /* Welcome Section */
 .welcome-section {
   background: #dedede;
@@ -302,8 +309,12 @@ textarea:disabled {
   pointer-events: none;
 }
 
-/* Responsive Design */
-@media (max-width: 768px) {
+/* ============================================
+   RESPONSIVE DESIGN - MOBILE FIRST APPROACH
+   ============================================ */
+
+/* Tablet and below (max-width: 1024px) */
+@media (max-width: 1024px) {
   .dashboard-content {
     padding: 20px;
   }
@@ -311,20 +322,276 @@ textarea:disabled {
   .welcome-section {
     padding: 20px;
   }
-  
-  /* Admin Layout Responsive - NEW */
-  .admin-layout {
-    flex-direction: column;
-  }
-}
-
-@media (max-width: 480px) {
-  .dashboard-container {
-    flex-direction: column;
-  }
 
   .welcome-section h2 {
     font-size: 24px;
+  }
+}
+
+/* Mobile Landscape and below (max-width: 768px) */
+@media (max-width: 768px) {
+  /* Dashboard Container - Stack sidebar and content */
+  .dashboard-container {
+    flex-direction: column;
+    height: auto;
+    min-height: 100vh;
+  }
+
+  .dashboard-content {
+    padding: 15px;
+    min-height: auto;
+  }
+
+  .welcome-section {
+    padding: 15px;
+    margin-bottom: 20px;
+  }
+
+  .welcome-section h2 {
+    font-size: 22px;
+  }
+
+  .welcome-section p {
+    font-size: 14px;
+  }
+
+  /* Admin Layout Responsive */
+  .admin-layout {
+    flex-direction: column;
+  }
+
+  /* Main Content adjustments */
+  .main-content {
+    width: 100%;
+    padding: 0;
+  }
+
+  /* Tables - Make scrollable on mobile */
+  table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Forms - Stack inputs */
+  .form-row {
+    flex-direction: column !important;
+    gap: 15px !important;
+  }
+
+  /* Buttons - Full width on mobile */
+  button {
+    min-height: 44px; /* Touch-friendly size */
+    min-width: 44px;
+  }
+
+  /* Cards - Full width */
+  .card, [class*="card"] {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+}
+
+/* Mobile Portrait (max-width: 480px) */
+@media (max-width: 480px) {
+  .dashboard-content {
+    padding: 10px;
+  }
+
+  .welcome-section {
+    padding: 15px;
+    border-radius: 12px;
+  }
+
+  .welcome-section h2 {
+    font-size: 20px;
+    margin-bottom: 6px;
+  }
+
+  .welcome-section p {
+    font-size: 13px;
+  }
+
+  /* Smaller font sizes for mobile */
+  h1 { font-size: 24px !important; }
+  h2 { font-size: 20px !important; }
+  h3 { font-size: 18px !important; }
+  h4 { font-size: 16px !important; }
+
+  /* Inputs - Larger touch targets */
+  input, select, textarea {
+    font-size: 16px !important; /* Prevents zoom on iOS */
+    padding: 12px !important;
+    min-height: 44px;
+  }
+
+  /* Buttons - Larger and full width */
+  button {
+    padding: 12px 20px !important;
+    font-size: 16px !important;
+    min-height: 44px;
+  }
+
+  /* Spacing adjustments */
+  .gap-20 { gap: 10px !important; }
+  .gap-30 { gap: 15px !important; }
+  .margin-30 { margin: 15px !important; }
+  .padding-30 { padding: 15px !important; }
+}
+
+/* Extra Small Devices (max-width: 360px) */
+@media (max-width: 360px) {
+  .dashboard-content {
+    padding: 8px;
+  }
+
+  .welcome-section {
+    padding: 12px;
+  }
+
+  .welcome-section h2 {
+    font-size: 18px;
+  }
+}
+
+/* Touch Device Optimizations */
+@media (hover: none) and (pointer: coarse) {
+  /* Remove hover effects on touch devices */
+  *:hover {
+    transform: none !important;
+  }
+
+  /* Larger touch targets */
+  a, button, [role="button"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Better spacing for touch */
+  .menu-item, .nav-item {
+    padding: 15px !important;
+  }
+}
+
+/* Landscape Orientation */
+@media (max-width: 768px) and (orientation: landscape) {
+  .dashboard-container {
+    flex-direction: row;
+  }
+
+  .main-content {
+    padding: 10px;
+  }
+}
+
+/* Responsive Tables */
+@media (max-width: 768px) {
+  table {
+    font-size: 14px;
+  }
+
+  th, td {
+    padding: 8px 4px !important;
+    font-size: 12px;
+  }
+
+  /* Stack table headers on very small screens */
+  @media (max-width: 480px) {
+    table, thead, tbody, th, td, tr {
+      display: block;
+    }
+
+    thead tr {
+      position: absolute;
+      top: -9999px;
+      left: -9999px;
+    }
+
+    tr {
+      border: 1px solid #ccc;
+      margin-bottom: 10px;
+      padding: 10px;
+      border-radius: 8px;
+      background: white;
+    }
+
+    td {
+      border: none;
+      position: relative;
+      padding-left: 50% !important;
+      text-align: left;
+    }
+
+    td:before {
+      content: attr(data-label);
+      position: absolute;
+      left: 6px;
+      width: 45%;
+      padding-right: 10px;
+      white-space: nowrap;
+      font-weight: bold;
+      color: #0f2c63;
+    }
+  }
+}
+
+/* Responsive Forms */
+@media (max-width: 768px) {
+  .form-group {
+    margin-bottom: 15px;
+  }
+
+  .form-row {
+    flex-direction: column;
+    gap: 15px;
+  }
+
+  .form-actions {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .form-actions button {
+    width: 100%;
+  }
+}
+
+/* Responsive Cards and Grids */
+@media (max-width: 768px) {
+  .stats-grid,
+  .card-grid,
+  [class*="grid"] {
+    grid-template-columns: 1fr !important;
+    gap: 15px;
+  }
+
+  .card {
+    width: 100%;
+    max-width: 100%;
+  }
+}
+
+/* Responsive Modals and Popups */
+@media (max-width: 768px) {
+  .modal-content,
+  .popup-content {
+    width: 95% !important;
+    max-width: 95% !important;
+    margin: 10px !important;
+    padding: 20px !important;
+  }
+}
+
+/* Responsive Sidebar adjustments */
+@media (max-width: 768px) {
+  .dashboard-container {
+    position: relative;
+  }
+
+  .main-content {
+    width: 100%;
+    margin-left: 0;
   }
 }
 

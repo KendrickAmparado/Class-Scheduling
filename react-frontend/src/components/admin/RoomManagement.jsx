@@ -289,8 +289,7 @@ const RoomManagement = () => {
                 >
                   <option value="all">All Status</option>
                   <option value="available">Available</option>
-                  <option value="occupied">Occupied</option>
-                  <option value="maintenance">Maintenance</option>
+                  <option value="maintenance">Under Maintenance</option>
                 </select>
                 <select
                   value={areaFilter}
@@ -667,7 +666,6 @@ const RoomManagement = () => {
                   required
                 >
                   <option value="available">Available</option>
-                  <option value="occupied">Occupied</option>
                   <option value="maintenance">Under Maintenance</option>
                 </select>
               </div>
@@ -838,7 +836,6 @@ const RoomManagement = () => {
                   required
                 >
                   <option value="available">Available</option>
-                  <option value="occupied">Occupied</option>
                   <option value="maintenance">Under Maintenance</option>
                 </select>
               </div>
