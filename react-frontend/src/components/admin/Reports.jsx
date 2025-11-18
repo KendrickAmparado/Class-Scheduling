@@ -21,9 +21,12 @@ import XLSX from 'xlsx-js-style';
 const Reports = () => {
   const [schedules, setSchedules] = useState([]);
   const [sections, setSections] = useState([]);
+  const [instructors, setInstructors] = useState([]);
+  const [rooms, setRooms] = useState([]);
   const [selectedCourse, setSelectedCourse] = useState('bsit');
   const [selectedYear, setSelectedYear] = useState('1st year');
   const [selectedSection, setSelectedSection] = useState(null);
+  const [reportType, setReportType] = useState('schedule'); // 'schedule'|'instructors'|'rooms'|'sections'
   const [loading, setLoading] = useState(false);
   const [dayFilter, setDayFilter] = useState('all');
 
@@ -70,15 +73,19 @@ const Reports = () => {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [sectionsRes, schedulesRes] = await Promise.all([
+      const [sectionsRes, schedulesRes, instructorsRes] = await Promise.all([
         axios.get(`http://localhost:5000/api/sections?course=${selectedCourse}&year=${selectedYear}`),
         axios.get(`http://localhost:5000/api/schedule?course=${selectedCourse}&year=${selectedYear}`),
+        axios.get(`http://localhost:5000/api/instructors`),
       ]);
+
       const sortedSections = (Array.isArray(sectionsRes.data) ? sectionsRes.data : []).sort((a, b) =>
         a.name.localeCompare(b.name)
       );
+
       setSections(sortedSections);
       setSchedules(Array.isArray(schedulesRes.data) ? schedulesRes.data : []);
+      setInstructors(Array.isArray(instructorsRes.data) ? instructorsRes.data : []);
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -86,10 +93,34 @@ const Reports = () => {
     }
   }, [selectedCourse, selectedYear]);
 
+  // Fetch rooms independently so room reports are not tied to selectedYear
+  useEffect(() => {
+    let mounted = true;
+    const fetchRoomsOnly = async () => {
+      try {
+        const res = await axios.get(`http://localhost:5000/api/rooms`);
+        if (!mounted) return;
+        // backend returns { rooms: [...] }
+        if (Array.isArray(res.data)) {
+          setRooms(res.data);
+        } else if (Array.isArray(res.data.rooms)) {
+          setRooms(res.data.rooms);
+        } else {
+          setRooms([]);
+        }
+      } catch (err) {
+        console.error('Error fetching rooms:', err);
+      }
+    };
+
+    fetchRoomsOnly();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   useEffect(() => {
     fetchData();
-    const autoRefreshInterval = setInterval(fetchData, 30000);
-    return () => clearInterval(autoRefreshInterval);
   }, [fetchData]);
 
   useEffect(() => {
@@ -450,6 +481,131 @@ const Reports = () => {
     document.body.removeChild(link);
   };
 
+  // --- New: Exports for instructors, rooms, sections ---
+  const exportInstructorsToPDF = () => {
+    if (!instructors || instructors.length === 0) return;
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    const margin = 12;
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    instructors.forEach((inst, idx) => {
+      if (idx > 0) doc.addPage();
+
+      const instName = inst.firstname || inst.firstName || inst.name || `${inst.firstName || ''} ${inst.lastName || ''}`.trim();
+      doc.setFontSize(14);
+      doc.setFont(undefined, 'bold');
+      doc.text(`Instructor: ${instName}`, margin, 18);
+      doc.setFontSize(10);
+      doc.setFont(undefined, 'normal');
+      doc.text(`Email: ${inst.email || '-'}`, margin, 24);
+      doc.text(`Department: ${inst.department || '-'}`, margin, 30);
+
+      // Find schedules for this instructor (use instructorEmail or name fallback)
+      const email = (inst.email || '').toLowerCase();
+      const fullName = (inst.firstname || inst.firstName || inst.name || '').toString().toLowerCase();
+      const instSchedules = (Array.isArray(schedules) ? schedules : []).filter(s => {
+        if (!s) return false;
+        if (s.instructorEmail && String(s.instructorEmail).toLowerCase() === email && email) return true;
+        if (s.instructor && String(s.instructor).toLowerCase().includes(fullName) && fullName) return true;
+        return false;
+      });
+
+      const body = instSchedules.map(s => [s.day || '', s.time || '', s.subject || '', s.section || '', s.room || '']);
+      const header = [['Day','Time','Subject','Section','Room']];
+
+      if (body.length === 0) {
+        doc.setFontSize(10);
+        doc.text('No schedules found for this instructor.', margin, 40);
+      } else {
+        doc.autoTable({ startY: 36, head: header, body, margin: { left: margin, right: margin }, styles: { fontSize: 9 } });
+      }
+
+      // Footer notes
+      doc.setFontSize(8);
+      doc.setTextColor(120);
+      doc.text(`Generated: ${new Date().toLocaleString()}`, pageWidth - margin, doc.internal.pageSize.getHeight() - 8, { align: 'right' });
+    });
+
+    doc.save('Instructors_With_Schedules_Report.pdf');
+  };
+
+  const exportInstructorsToExcel = () => {
+    if (!instructors || instructors.length === 0) return;
+    const wb = XLSX.utils.book_new();
+
+    instructors.forEach((inst) => {
+      const instNameRaw = inst.firstname || inst.firstName || inst.name || `${inst.firstName || ''} ${inst.lastName || ''}`.trim() || 'Instructor';
+      const instName = instNameRaw.length > 20 ? instNameRaw.slice(0, 20) : instNameRaw;
+      const shortId = inst._id ? String(inst._id).slice(-6) : Math.random().toString(36).slice(2, 6);
+      let sheetName = `${instName}_${shortId}`;
+      // sanitize sheet name by replacing characters that are invalid in Excel sheet names
+      const forbidden = ['/', '\\', '?', '*', '[', ']'];
+      forbidden.forEach(ch => { sheetName = sheetName.split(ch).join('_'); });
+      sheetName = sheetName.slice(0, 31);
+
+      // gather schedules for instructor
+      const email = (inst.email || '').toLowerCase();
+      const fullName = (inst.firstname || inst.firstName || inst.name || '').toString().toLowerCase();
+      const instSchedules = (Array.isArray(schedules) ? schedules : []).filter(s => {
+        if (!s) return false;
+        if (s.instructorEmail && String(s.instructorEmail).toLowerCase() === email && email) return true;
+        if (s.instructor && String(s.instructor).toLowerCase().includes(fullName) && fullName) return true;
+        return false;
+      });
+
+      const aoa = [
+        ['Instructor', instNameRaw],
+        ['Email', inst.email || '-'],
+        ['Department', inst.department || '-'],
+        [],
+        ['Day','Time','Subject','Section','Room'],
+        ...instSchedules.map(s => [s.day || '', s.time || '', s.subject || '', s.section || '', s.room || ''])
+      ];
+
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      ws['!cols'] = [{wch: 14},{wch:20},{wch:36},{wch:14},{wch:14}];
+      XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    });
+
+    XLSX.writeFile(wb, 'Instructors_With_Schedules_Report.xlsx');
+  };
+
+  const exportRoomsToPDF = () => {
+    if (!rooms || rooms.length === 0) return;
+    const doc = new jsPDF();
+    const head = [['Room', 'Area/Location', 'Status']];
+    const body = rooms.map(r => [r.name || r.room || '', r.area || r.location || '', r.status || '']);
+    doc.autoTable({ head, body });
+    doc.save('Rooms_Report.pdf');
+  };
+
+  const exportRoomsToExcel = () => {
+    if (!rooms || rooms.length === 0) return;
+    const wb = XLSX.utils.book_new();
+    const aoa = [[ 'Room', 'Area/Location', 'Status' ], ...rooms.map(r => [r.name || r.room || '', r.area || r.location || '', r.status || ''])];
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    XLSX.utils.book_append_sheet(wb, ws, 'Rooms');
+    XLSX.writeFile(wb, 'Rooms_Report.xlsx');
+  };
+
+  const exportSectionsToPDF = () => {
+    if (!sections || sections.length === 0) return;
+    const doc = new jsPDF();
+    const head = [['Section', 'Course', 'Year', 'Schedules']];
+    const body = sections.map(s => [s.name || '', s.course || selectedCourse, s.year || selectedYear, (s._id ? (s._id && schedules.filter(sc => sc.section === s.name).length) : schedules.filter(sc => sc.section === s.name).length)]);
+    doc.autoTable({ head, body });
+    doc.save('Sections_Report.pdf');
+  };
+
+  const exportSectionsToExcel = () => {
+    if (!sections || sections.length === 0) return;
+    const wb = XLSX.utils.book_new();
+    const aoa = [[ 'Section', 'Course', 'Year', 'Schedules' ], ...sections.map(s => [s.name || '', s.course || selectedCourse, s.year || selectedYear, schedules.filter(sc => sc.section === s.name).length])];
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    XLSX.utils.book_append_sheet(wb, ws, 'Sections');
+    XLSX.writeFile(wb, 'Sections_Report.xlsx');
+  };
+
 
   const currentCourse = courses.find((c) => c.id === selectedCourse);
 
@@ -554,423 +710,591 @@ const Reports = () => {
 
           {loading ? (
             <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>Loading reports...</div>
-          ) : sections.length === 0 ? (
-            <div
-              style={{
-                background: '#fff',
-                padding: '60px 30px',
-                borderRadius: '18px',
-                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)',
-                textAlign: 'center',
-                borderLeft: '5px solid #f97316',
-              }}
-            >
-              <p style={{ color: '#64748b', fontSize: '16px' }}>
-                No sections found for {currentCourse.shortName} {selectedYear}.
-              </p>
-            </div>
           ) : (
             <>
-             {/* Sections Container */}
-              <div
-                style={{
-                  background: '#fff',
-                  padding: '24px',
-                  borderRadius: '18px',
-                  boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)',
-                  borderLeft: '5px solid #f97316',
-                  marginBottom: '24px',
-                }}
-              >
-                <div
+              {/* Report Type Selector */}
+              <div style={{ display: 'flex', gap: 12, marginBottom: '20px' }}>
+                <button
+                  onClick={() => {
+                    setReportType('schedule');
+                    setSelectedSection(null);
+                  }}
                   style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    marginBottom: '20px',
-                    paddingBottom: '16px',
-                    borderBottom: '2px solid #f1f5f9',
+                    padding: '10px 14px',
+                    borderRadius: 10,
+                    cursor: 'pointer',
+                    border: reportType === 'schedule' ? '2px solid #3b82f6' : '2px solid #e5e7eb',
+                    background: reportType === 'schedule' ? '#eff6ff' : '#fff',
+                    fontWeight: 700,
                   }}
                 >
-                  <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#1e293b', margin: 0 }}>Select Section</h3>
-                  <span
-                    style={{
-                      background: '#e0e7ff',
-                      color: '#4f46e5',
-                      padding: '4px 12px',
-                      borderRadius: '12px',
-                      fontSize: '13px',
-                      fontWeight: '700',
-                    }}
-                  >
-                    {sections.length} section(s)
-                  </span>
-                </div>
-
-                <div
+                  Schedule
+                </button>
+                <button
+                  onClick={() => setReportType('instructors')}
                   style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-                    gap: '12px',
+                    padding: '10px 14px',
+                    borderRadius: 10,
+                    cursor: 'pointer',
+                    border: reportType === 'instructors' ? '2px solid #3b82f6' : '2px solid #e5e7eb',
+                    background: reportType === 'instructors' ? '#eff6ff' : '#fff',
+                    fontWeight: 700,
                   }}
                 >
-                  {sections.map((section) => (
-                    <button
-                      key={section._id}
-                      onClick={() => setSelectedSection(section)}
-                      style={{
-                        background: selectedSection?._id === section._id ? '#eff6ff' : '#f9fafb',
-                        border: selectedSection?._id === section._id ? '2px solid #3b82f6' : '2px solid transparent',
-                        padding: '16px',
-                        borderRadius: '12px',
-                        cursor: 'pointer',
-                        textAlign: 'left',
-                        transition: 'all 0.2s ease',
-                      }}
-                      onMouseOver={(e) => {
-                        if (selectedSection?._id !== section._id) {
-                          e.currentTarget.style.background = '#f3f4f6';
-                        }
-                      }}
-                      onMouseOut={(e) => {
-                        if (selectedSection?._id !== section._id) {
-                          e.currentTarget.style.background = '#f9fafb';
-                        }
-                      }}
-                    >
-                      <div style={{ fontSize: '16px', fontWeight: '600', color: '#1f2937', marginBottom: '4px' }}>
-                        {selectedCourse.toUpperCase()}-{selectedYear.charAt(0).toUpperCase()}
-                        {section.name}
-                      </div>
-                      <div style={{ fontSize: '13px', color: '#6b7280' }}>
-                        {getSectionSchedules(section.name).length} schedule(s)
-                      </div>
-                    </button>
-                  ))}
-                </div>
+                  Instructors
+                </button>
+                <button
+                  onClick={() => setReportType('rooms')}
+                  style={{
+                    padding: '10px 14px',
+                    borderRadius: 10,
+                    cursor: 'pointer',
+                    border: reportType === 'rooms' ? '2px solid #3b82f6' : '2px solid #e5e7eb',
+                    background: reportType === 'rooms' ? '#eff6ff' : '#fff',
+                    fontWeight: 700,
+                  }}
+                >
+                  Rooms
+                </button>
+                <button
+                  onClick={() => setReportType('sections')}
+                  style={{
+                    padding: '10px 14px',
+                    borderRadius: 10,
+                    cursor: 'pointer',
+                    border: reportType === 'sections' ? '2px solid #3b82f6' : '2px solid #e5e7eb',
+                    background: reportType === 'sections' ? '#eff6ff' : '#fff',
+                    fontWeight: 700,
+                  }}
+                >
+                  Sections
+                </button>
               </div>
 
-              {/* Schedule Report */}
-              {selectedSection && (
-                <div
-                  style={{
-                    background: '#fff',
-                    padding: '30px',
-                    borderRadius: '18px',
-                    boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)',
-                    borderLeft: '5px solid #f97316',
-                  }}
-                >
+              {/* Views */}
+              {reportType === 'schedule' ? (
+                // schedule view: reuse previous logic
+                sections.length === 0 ? (
                   <div
                     style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      marginBottom: '24px',
-                      paddingBottom: '20px',
-                      borderBottom: '2px solid #f1f5f9',
+                      background: '#fff',
+                      padding: '60px 30px',
+                      borderRadius: '18px',
+                      boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)',
+                      textAlign: 'center',
+                      borderLeft: '5px solid #f97316',
                     }}
                   >
-                    <div>
-                      <h3
-                        style={{
-                          fontSize: '24px',
-                          fontWeight: '700',
-                          color: '#1e293b',
-                          margin: '0 0 4px 0',
-                        }}
-                      >
-                        {selectedCourse.toUpperCase()}-{selectedYear.charAt(0).toUpperCase()}
-                        {selectedSection.name} Report
-                      </h3>
-                      <p style={{ fontSize: '15px', color: '#64748b', margin: 0 }}>
-                        {getSectionSchedules(selectedSection.name).length} schedule(s) • {currentCourse.name}
-                      </p>
-                    </div>
-
-                    {/* Download Buttons */}
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <button
-                        onClick={exportToExcel}
-                        style={{
-                          padding: '14px 20px',
-                          background: 'linear-gradient(135deg, #22d3ee 0%, #0e7490 100%)',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '10px',
-                          fontWeight: '600',
-                          cursor: 'pointer',
-                          fontSize: '16px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '10px',
-                        }}
-                      >
-                        <FontAwesomeIcon icon={faDownload} />
-                        Excel
-                      </button>
-                      <button onClick={exportToPDF} style={{
-                        padding: '14px 20px',
-                        background: 'linear-gradient(135deg, #dc2626 0%, #ef4444 100%)',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '10px',
-                        fontWeight: '600',
-                        cursor: 'pointer',
-                        fontSize: '16px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '10px',
-                        boxShadow: '0 2px 10px rgba(220, 38, 38, 0.3)',
-                      }}>
-                        <FontAwesomeIcon icon={faDownload} />
-                        PDF
-                      </button>
-                      <button onClick={downloadCSVReport} style={{
-                        padding: '14px 20px',
-                        background: 'linear-gradient(135deg, #0f2c63 0%, #1e40af 100%)',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '10px',
-                        fontWeight: '600',
-                        cursor: 'pointer',
-                        fontSize: '16px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '10px',
-                        boxShadow: '0 2px 10px #1e40af33',
-                      }}><FontAwesomeIcon icon={faDownload}/> CSV</button>
-                    </div>
+                    <p style={{ color: '#64748b', fontSize: '16px' }}>
+                      No sections found for {currentCourse.shortName} {selectedYear}.
+                    </p>
                   </div>
-
-                  {/* Filter */}
-                  <div style={{ marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <FontAwesomeIcon icon={faFilter} style={{ color: '#6b7280', fontSize: '18px' }} />
-                    <select
-                      value={dayFilter}
-                      onChange={(e) => setDayFilter(e.target.value)}
+                ) : (
+                  <>
+                    {/* Sections Container */}
+                    <div
                       style={{
-                        padding: '12px 16px',
-                        border: '2px solid #e5e7eb',
-                        borderRadius: '10px',
-                        fontSize: '15px',
-                        fontWeight: '500',
+                        background: '#fff',
+                        padding: '24px',
+                        borderRadius: '18px',
+                        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)',
+                        borderLeft: '5px solid #f97316',
+                        marginBottom: '24px',
                       }}
                     >
-                      <option value="all">All Days</option>
-                      <option value="mon">Monday</option>
-                      <option value="tue">Tuesday</option>
-                      <option value="wed">Wednesday</option>
-                      <option value="thu">Thursday</option>
-                      <option value="fri">Friday</option>
-                      <option value="sat">Saturday</option>
-                    </select>
-                  </div>
-
-                  {/* Grid Table Container - Matching InstructorReports style */}
-                  <div
-                    style={{
-                      padding: '36px 24px 24px 24px',
-                      maxWidth: '100%',
-                      margin: '0 auto',
-                      background: '#fff',
-                      borderRadius: '22px',
-                      boxShadow: '0 8px 32px rgba(15, 44, 99, 0.12)',
-                      overflowX: 'auto',
-                    }}
-                  >
-                    {getSectionSchedules(selectedSection.name).length === 0 ? (
-                      <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280', fontSize: '17px' }}>
-                        No schedules for this section yet
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          marginBottom: '20px',
+                          paddingBottom: '16px',
+                          borderBottom: '2px solid #f1f5f9',
+                        }}
+                      >
+                        <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#1e293b', margin: 0 }}>Select Section</h3>
+                        <span
+                          style={{
+                            background: '#e0e7ff',
+                            color: '#4f46e5',
+                            padding: '4px 12px',
+                            borderRadius: '12px',
+                            fontSize: '13px',
+                            fontWeight: '700',
+                          }}
+                        >
+                          {sections.length} section(s)
+                        </span>
                       </div>
-                    ) : (
+
                       <div
                         style={{
                           display: 'grid',
-                          gridTemplateColumns: `120px repeat(${
-                            dayDisplayGroups.filter((dayGroup) => dayFilter === 'all' || dayFilter === dayGroup.group).length
-                          }, 1fr)`,
-                          minWidth: 900,
+                          gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+                          gap: '12px',
                         }}
                       >
-                        {/* Grid Header */}
+                        {sections.map((section) => (
+                          <button
+                            key={section._id}
+                            onClick={() => setSelectedSection(section)}
+                            style={{
+                              background: selectedSection?._id === section._id ? '#eff6ff' : '#f9fafb',
+                              border: selectedSection?._id === section._id ? '2px solid #3b82f6' : '2px solid transparent',
+                              padding: '16px',
+                              borderRadius: '12px',
+                              cursor: 'pointer',
+                              textAlign: 'left',
+                              transition: 'all 0.2s ease',
+                            }}
+                            onMouseOver={(e) => {
+                              if (selectedSection?._id !== section._id) {
+                                e.currentTarget.style.background = '#f3f4f6';
+                              }
+                            }}
+                            onMouseOut={(e) => {
+                              if (selectedSection?._id !== section._id) {
+                                e.currentTarget.style.background = '#f9fafb';
+                              }
+                            }}
+                          >
+                            <div style={{ fontSize: '16px', fontWeight: '600', color: '#1f2937', marginBottom: '4px' }}>
+                              {selectedCourse.toUpperCase()}-{selectedYear.charAt(0).toUpperCase()}
+                              {section.name}
+                            </div>
+                            <div style={{ fontSize: '13px', color: '#6b7280' }}>
+                              {getSectionSchedules(section.name).length} schedule(s)
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Schedule Report (existing layout) */}
+                    {selectedSection && (
+                      <div
+                        style={{
+                          background: '#fff',
+                          padding: '30px',
+                          borderRadius: '18px',
+                          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)',
+                          borderLeft: '5px solid #f97316',
+                        }}
+                      >
                         <div
                           style={{
-                            background: 'linear-gradient(120deg, #0f2c63, #f97316 85%)',
-                            color: '#fff',
-                            fontWeight: 800,
-                            fontSize: 16,
-                            textAlign: 'center',
-                            padding: '18px 0',
-                            letterSpacing: '0.7px',
-                            borderTopLeftRadius: 14,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            marginBottom: '24px',
+                            paddingBottom: '20px',
+                            borderBottom: '2px solid #f1f5f9',
                           }}
                         >
-                          Time
-                        </div>
-                        {dayDisplayGroups
-                          .filter((dayGroup) => dayFilter === 'all' || dayFilter === dayGroup.group)
-                          .map((day, idx) => (
-                            <div
-                              key={day.day}
+                          <div>
+                            <h3
                               style={{
-                                background: 'linear-gradient(120deg, #0f2c63, #f97316 85%)',
-                                color: '#fff',
-                                fontWeight: 800,
-                                fontSize: 16,
-                                textAlign: 'center',
-                                padding: '18px 0',
-                                borderTopRightRadius:
-                                  idx ===
-                                  dayDisplayGroups.filter((dayGroup) => dayFilter === 'all' || dayFilter === dayGroup.group).length - 1
-                                    ? 14
-                                    : 0,
+                                fontSize: '24px',
+                                fontWeight: '700',
+                                color: '#1e293b',
+                                margin: '0 0 4px 0',
                               }}
                             >
-                              {day.label}
-                            </div>
-                          ))}
-                        {/* Grid Body */}
-                        {(() => {
-                          const displayedDays = dayDisplayGroups.filter(
-                            (dayGroup) => dayFilter === 'all' || dayFilter === dayGroup.group
-                          );
-                          const skipSlots = {};
-                          displayedDays.forEach((day) => {
-                            skipSlots[day.day] = {};
-                          });
+                              {selectedCourse.toUpperCase()}-{selectedYear.charAt(0).toUpperCase()}
+                              {selectedSection.name} Report
+                            </h3>
+                            <p style={{ fontSize: '15px', color: '#64748b', margin: 0 }}>
+                              {getSectionSchedules(selectedSection.name).length} schedule(s) • {currentCourse.name}
+                            </p>
+                          </div>
 
-                          return timeSlots.map((slot, slotIndex) => {
-                            const rowCells = [
+                          {/* Download Buttons */}
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <button
+                              onClick={exportToExcel}
+                              style={{
+                                padding: '14px 20px',
+                                background: 'linear-gradient(135deg, #22d3ee 0%, #0e7490 100%)',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '10px',
+                                fontWeight: '600',
+                                cursor: 'pointer',
+                                fontSize: '16px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '10px',
+                              }}
+                            >
+                              <FontAwesomeIcon icon={faDownload} />
+                              Excel
+                            </button>
+                            <button onClick={exportToPDF} style={{
+                              padding: '14px 20px',
+                              background: 'linear-gradient(135deg, #dc2626 0%, #ef4444 100%)',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '10px',
+                              fontWeight: '600',
+                              cursor: 'pointer',
+                              fontSize: '16px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '10px',
+                              boxShadow: '0 2px 10px rgba(220, 38, 38, 0.3)',
+                            }}>
+                              <FontAwesomeIcon icon={faDownload} />
+                              PDF
+                            </button>
+                            <button onClick={downloadCSVReport} style={{
+                              padding: '14px 20px',
+                              background: 'linear-gradient(135deg, #0f2c63 0%, #1e40af 100%)',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '10px',
+                              fontWeight: '600',
+                              cursor: 'pointer',
+                              fontSize: '16px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '10px',
+                              boxShadow: '0 2px 10px #1e40af33',
+                            }}><FontAwesomeIcon icon={faDownload}/> CSV</button>
+                          </div>
+                        </div>
+
+                        {/* Filter */}
+                        <div style={{ marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <FontAwesomeIcon icon={faFilter} style={{ color: '#6b7280', fontSize: '18px' }} />
+                          <select
+                            value={dayFilter}
+                            onChange={(e) => setDayFilter(e.target.value)}
+                            style={{
+                              padding: '12px 16px',
+                              border: '2px solid #e5e7eb',
+                              borderRadius: '10px',
+                              fontSize: '15px',
+                              fontWeight: '500',
+                            }}
+                          >
+                            <option value="all">All Days</option>
+                            <option value="mon">Monday</option>
+                            <option value="tue">Tuesday</option>
+                            <option value="wed">Wednesday</option>
+                            <option value="thu">Thursday</option>
+                            <option value="fri">Friday</option>
+                            <option value="sat">Saturday</option>
+                          </select>
+                        </div>
+
+                        {/* Grid Table Container - Matching InstructorReports style */}
+                        <div
+                          style={{
+                            padding: '36px 24px 24px 24px',
+                            maxWidth: '100%',
+                            margin: '0 auto',
+                            background: '#fff',
+                            borderRadius: '22px',
+                            boxShadow: '0 8px 32px rgba(15, 44, 99, 0.12)',
+                            overflowX: 'auto',
+                          }}
+                        >
+                          {getSectionSchedules(selectedSection.name).length === 0 ? (
+                            <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280', fontSize: '17px' }}>
+                              No schedules for this section yet
+                            </div>
+                          ) : (
+                            <div
+                              style={{
+                                display: 'grid',
+                                gridTemplateColumns: `120px repeat(${
+                                  dayDisplayGroups.filter((dayGroup) => dayFilter === 'all' || dayFilter === dayGroup.group).length
+                                }, 1fr)`,
+                                minWidth: 900,
+                              }}
+                            >
+                              {/* Grid Header */}
                               <div
-                                key={'time-' + slotIndex}
                                 style={{
-                                  padding: '13px 7px',
-                                  fontWeight: 700,
-                                  fontSize: 15,
-                                  borderLeft: '3px solid #f97316',
-                                  background: slotIndex % 2 === 0 ? '#fff' : '#f3f4f6',
-                                  color: '#64748b',
+                                  background: 'linear-gradient(120deg, #0f2c63, #f97316 85%)',
+                                  color: '#fff',
+                                  fontWeight: 800,
+                                  fontSize: 16,
                                   textAlign: 'center',
-                                  minHeight: 44,
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
+                                  padding: '18px 0',
+                                  letterSpacing: '0.7px',
+                                  borderTopLeftRadius: 14,
                                 }}
                               >
-                                <FontAwesomeIcon icon={faClock} style={{ marginRight: 6, fontSize: 13 }} /> {slot}
-                              </div>,
-                            ];
-
-                            displayedDays.forEach((day) => {
-                              if (skipSlots[day.day][slotIndex]) {
-                                return;
-                              }
-
-                              const dayToken = day.day.toLowerCase();
-                              const scheduleStartHere = schedules.find((sched) => {
-                                if (sched.section !== selectedSection.name) return false;
-                                const schedDayStrs = sched.day.toLowerCase().replace(/\s/g, '').split('/');
-                                if (!schedDayStrs.includes(dayToken)) return false;
-
-                                const [schedStart, schedEnd] = sched.time.split(' - ').map((x) => x.trim());
-                                const schedStartMin = timeStringToMinutes(schedStart);
-                                const schedEndMin = timeStringToMinutes(schedEnd);
-                                const [slotStart] = slot.split(' - ').map((x) => x.trim());
-                                const slotStartMin = timeStringToMinutes(slotStart);
-
-                                return schedStartMin <= slotStartMin && slotStartMin < schedEndMin;
-                              });
-
-                              if (scheduleStartHere) {
-                                const [schedStart, schedEnd] = scheduleStartHere.time.split(' - ').map((x) => x.trim());
-                                const schedStartMin = timeStringToMinutes(schedStart);
-                                const schedEndMin = timeStringToMinutes(schedEnd);
-                                const step = TIME_SLOT_CONFIGS.DETAILED.duration || 30;
-                                const startRounded = Math.floor(schedStartMin / step) * step;
-                                const endRounded = Math.ceil(schedEndMin / step) * step;
-                                const rowSpan = Math.max(1, Math.ceil((endRounded - startRounded) / step));
-
-                                for (let skip = 1; skip < rowSpan; ++skip) {
-                                  skipSlots[day.day][slotIndex + skip] = true;
-                                }
-
-                                rowCells.push(
+                                Time
+                              </div>
+                              {dayDisplayGroups
+                                .filter((dayGroup) => dayFilter === 'all' || dayFilter === dayGroup.group)
+                                .map((day, idx) => (
                                   <div
-                                    key={day.day + '-' + slotIndex}
+                                    key={day.day}
                                     style={{
-                                      gridRow: `span ${rowSpan}`,
-                                      minHeight: 44 * rowSpan,
-                                      display: 'flex',
-                                      flexDirection: 'column',
-                                      justifyContent: 'center',
-                                      alignItems: 'center',
-                                      padding: '0px 4px',
-                                      background: 'linear-gradient(120deg, #0f2c63 60%, #f97316 100%)',
-                                      borderRadius: 11,
+                                      background: 'linear-gradient(120deg, #0f2c63, #f97316 85%)',
                                       color: '#fff',
                                       fontWeight: 800,
-                                      fontSize: 15,
-                                      boxShadow: '0 4px 16px rgba(15, 44, 99, 0.21)',
-                                      position: 'relative',
-                                      border: '2px solid #f97316',
-                                      margin: '2px 3px',
+                                      fontSize: 16,
+                                      textAlign: 'center',
+                                      padding: '18px 0',
+                                      borderTopRightRadius:
+                                        idx ===
+                                        dayDisplayGroups.filter((dayGroup) => dayFilter === 'all' || dayFilter === dayGroup.group).length - 1
+                                          ? 14
+                                          : 0,
                                     }}
                                   >
-                                    <div style={{ fontWeight: 900, fontSize: 15, marginBottom: 2 }}>
-                                      {scheduleStartHere.subject}
-                                    </div>
-                                    <div style={{ fontSize: 13, opacity: 0.94, fontWeight: 500 }}>
-                                      {scheduleStartHere.time}
-                                    </div>
+                                    {day.label}
+                                  </div>
+                                ))}
+                              {/* Grid Body */}
+                              {(() => {
+                                const displayedDays = dayDisplayGroups.filter(
+                                  (dayGroup) => dayFilter === 'all' || dayFilter === dayGroup.group
+                                );
+                                const skipSlots = {};
+                                displayedDays.forEach((day) => {
+                                  skipSlots[day.day] = {};
+                                });
+
+                                return timeSlots.map((slot, slotIndex) => {
+                                  const rowCells = [
                                     <div
+                                      key={'time-' + slotIndex}
                                       style={{
-                                        marginTop: 4,
-                                        fontSize: 12,
+                                        padding: '13px 7px',
+                                        fontWeight: 700,
+                                        fontSize: 15,
+                                        borderLeft: '3px solid #f97316',
+                                        background: slotIndex % 2 === 0 ? '#fff' : '#f3f4f6',
+                                        color: '#64748b',
+                                        textAlign: 'center',
+                                        minHeight: 44,
                                         display: 'flex',
                                         alignItems: 'center',
-                                        gap: 7,
-                                        flexWrap: 'wrap',
                                         justifyContent: 'center',
                                       }}
                                     >
-                                      <span
-                                        style={{
-                                          background: 'rgba(255, 255, 255, 0.2)',
-                                          borderRadius: 7,
-                                          padding: '2.5px 8px',
-                                          color: '#fff',
-                                          fontWeight: 700,
-                                        }}
-                                      >
-                                        {scheduleStartHere.instructor}
-                                      </span>
-                                      <span style={{ fontStyle: 'italic', marginLeft: 6 }}>
-                                        <FontAwesomeIcon icon={faDoorOpen} /> {scheduleStartHere.room}
-                                      </span>
-                                    </div>
-                                  </div>
-                                );
-                              } else {
-                                rowCells.push(
-                                  <div
-                                    key={day.day + '-' + slotIndex}
-                                    style={{
-                                      minHeight: 44,
-                                      background: slotIndex % 2 === 0 ? '#fff' : '#f3f4f6',
-                                      borderBottom: '1.5px solid #e5e7eb',
-                                      borderRight: '1.5px solid #e5e7eb',
-                                    }}
-                                  />
-                                );
-                              }
-                            });
+                                      <FontAwesomeIcon icon={faClock} style={{ marginRight: 6, fontSize: 13 }} /> {slot}
+                                    </div>,
+                                  ];
 
-                            return rowCells;
-                          });
-                        })()}
+                                  displayedDays.forEach((day) => {
+                                    if (skipSlots[day.day][slotIndex]) {
+                                      return;
+                                    }
+
+                                    const dayToken = day.day.toLowerCase();
+                                    const scheduleStartHere = schedules.find((sched) => {
+                                      if (sched.section !== selectedSection.name) return false;
+                                      const schedDayStrs = sched.day.toLowerCase().replace(/\s/g, '').split('/');
+                                      if (!schedDayStrs.includes(dayToken)) return false;
+
+                                      const [schedStart, schedEnd] = sched.time.split(' - ').map((x) => x.trim());
+                                      const schedStartMin = timeStringToMinutes(schedStart);
+                                      const schedEndMin = timeStringToMinutes(schedEnd);
+                                      const [slotStart] = slot.split(' - ').map((x) => x.trim());
+                                      const slotStartMin = timeStringToMinutes(slotStart);
+
+                                      return schedStartMin <= slotStartMin && slotStartMin < schedEndMin;
+                                    });
+
+                                    if (scheduleStartHere) {
+                                      const [schedStart, schedEnd] = scheduleStartHere.time.split(' - ').map((x) => x.trim());
+                                      const schedStartMin = timeStringToMinutes(schedStart);
+                                      const schedEndMin = timeStringToMinutes(schedEnd);
+                                      const step = TIME_SLOT_CONFIGS.DETAILED.duration || 30;
+                                      const startRounded = Math.floor(schedStartMin / step) * step;
+                                      const endRounded = Math.ceil(schedEndMin / step) * step;
+                                      const rowSpan = Math.max(1, Math.ceil((endRounded - startRounded) / step));
+
+                                      for (let skip = 1; skip < rowSpan; ++skip) {
+                                        skipSlots[day.day][slotIndex + skip] = true;
+                                      }
+
+                                      rowCells.push(
+                                        <div
+                                          key={day.day + '-' + slotIndex}
+                                          style={{
+                                            gridRow: `span ${rowSpan}`,
+                                            minHeight: 44 * rowSpan,
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            justifyContent: 'center',
+                                            alignItems: 'center',
+                                            padding: '0px 4px',
+                                            background: 'linear-gradient(120deg, #0f2c63 60%, #f97316 100%)',
+                                            borderRadius: 11,
+                                            color: '#fff',
+                                            fontWeight: 800,
+                                            fontSize: 15,
+                                            boxShadow: '0 4px 16px rgba(15, 44, 99, 0.21)',
+                                            position: 'relative',
+                                            border: '2px solid #f97316',
+                                            margin: '2px 3px',
+                                          }}
+                                        >
+                                          <div style={{ fontWeight: 900, fontSize: 15, marginBottom: 2 }}>
+                                            {scheduleStartHere.subject}
+                                          </div>
+                                          <div style={{ fontSize: 13, opacity: 0.94, fontWeight: 500 }}>
+                                            {scheduleStartHere.time}
+                                          </div>
+                                          <div
+                                            style={{
+                                              marginTop: 4,
+                                              fontSize: 12,
+                                              display: 'flex',
+                                              alignItems: 'center',
+                                              gap: 7,
+                                              flexWrap: 'wrap',
+                                              justifyContent: 'center',
+                                            }}
+                                          >
+                                            <span
+                                              style={{
+                                                background: 'rgba(255, 255, 255, 0.2)',
+                                                borderRadius: 7,
+                                                padding: '2.5px 8px',
+                                                color: '#fff',
+                                                fontWeight: 700,
+                                              }}
+                                            >
+                                              {scheduleStartHere.instructor}
+                                            </span>
+                                            <span style={{ fontStyle: 'italic', marginLeft: 6 }}>
+                                              <FontAwesomeIcon icon={faDoorOpen} /> {scheduleStartHere.room}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      );
+                                    } else {
+                                      rowCells.push(
+                                        <div
+                                          key={day.day + '-' + slotIndex}
+                                          style={{
+                                            minHeight: 44,
+                                            background: slotIndex % 2 === 0 ? '#fff' : '#f3f4f6',
+                                            borderBottom: '1.5px solid #e5e7eb',
+                                            borderRight: '1.5px solid #e5e7eb',
+                                          }}
+                                        />
+                                      );
+                                    }
+                                  });
+
+                                  return rowCells;
+                                });
+                              })()}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )}
+                  </>
+                )
+              ) : reportType === 'instructors' ? (
+                <div style={{ background: '#fff', padding: '24px', borderRadius: '18px', boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                    <div>
+                      <h3 style={{ margin: 0, fontSize: 20 }}>Instructors Report</h3>
+                      <p style={{ margin: 0, color: '#64748b' }}>{instructors.length} instructor(s) found</p>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button onClick={exportInstructorsToExcel} style={{ padding: '10px 12px', borderRadius: 8, background: '#0ea5e9', color: '#fff', border: 'none' }}><FontAwesomeIcon icon={faDownload}/> Excel</button>
+                      <button onClick={exportInstructorsToPDF} style={{ padding: '10px 12px', borderRadius: 8, background: '#ef4444', color: '#fff', border: 'none' }}><FontAwesomeIcon icon={faDownload}/> PDF</button>
+                    </div>
+                  </div>
+
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr style={{ background: '#f1f5f9' }}>
+                          <th style={{ padding: 12, textAlign: 'left' }}>Name</th>
+                          <th style={{ padding: 12, textAlign: 'left' }}>Email</th>
+                          <th style={{ padding: 12, textAlign: 'left' }}>Department</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {instructors.map((ins) => (
+                          <tr key={ins._id}>
+                            <td style={{ padding: 12, borderBottom: '1px solid #e5e7eb' }}>{ins.name || `${ins.firstName || ''} ${ins.lastName || ''}`.trim()}</td>
+                            <td style={{ padding: 12, borderBottom: '1px solid #e5e7eb' }}>{ins.email || ins.username || '-'}</td>
+                            <td style={{ padding: 12, borderBottom: '1px solid #e5e7eb' }}>{ins.department || '-'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : reportType === 'rooms' ? (
+                <div style={{ background: '#fff', padding: '24px', borderRadius: '18px', boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                    <div>
+                      <h3 style={{ margin: 0, fontSize: 20 }}>Rooms Report</h3>
+                      <p style={{ margin: 0, color: '#64748b' }}>{rooms.length} room(s) found</p>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button onClick={exportRoomsToExcel} style={{ padding: '10px 12px', borderRadius: 8, background: '#0ea5e9', color: '#fff', border: 'none' }}><FontAwesomeIcon icon={faDownload}/> Excel</button>
+                      <button onClick={exportRoomsToPDF} style={{ padding: '10px 12px', borderRadius: 8, background: '#ef4444', color: '#fff', border: 'none' }}><FontAwesomeIcon icon={faDownload}/> PDF</button>
+                    </div>
+                  </div>
+
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr style={{ background: '#f1f5f9' }}>
+                          <th style={{ padding: 12, textAlign: 'left' }}>Room</th>
+                          <th style={{ padding: 12, textAlign: 'left' }}>Area / Location</th>
+                          <th style={{ padding: 12, textAlign: 'left' }}>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rooms.map((r) => (
+                          <tr key={r._id || r.name}>
+                            <td style={{ padding: 12, borderBottom: '1px solid #e5e7eb' }}>{r.name || r.room || '-'}</td>
+                            <td style={{ padding: 12, borderBottom: '1px solid #e5e7eb' }}>{r.area || r.location || '-'}</td>
+                            <td style={{ padding: 12, borderBottom: '1px solid #e5e7eb' }}>{r.status || '-'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : (
+                // sections report
+                <div style={{ background: '#fff', padding: '24px', borderRadius: '18px', boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                    <div>
+                      <h3 style={{ margin: 0, fontSize: 20 }}>Sections Report</h3>
+                      <p style={{ margin: 0, color: '#64748b' }}>{sections.length} section(s) for {currentCourse.shortName} {selectedYear}</p>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button onClick={exportSectionsToExcel} style={{ padding: '10px 12px', borderRadius: 8, background: '#0ea5e9', color: '#fff', border: 'none' }}><FontAwesomeIcon icon={faDownload}/> Excel</button>
+                      <button onClick={exportSectionsToPDF} style={{ padding: '10px 12px', borderRadius: 8, background: '#ef4444', color: '#fff', border: 'none' }}><FontAwesomeIcon icon={faDownload}/> PDF</button>
+                    </div>
+                  </div>
+
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr style={{ background: '#f1f5f9' }}>
+                          <th style={{ padding: 12, textAlign: 'left' }}>Section</th>
+                          <th style={{ padding: 12, textAlign: 'left' }}>Schedules Count</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sections.map((s) => (
+                          <tr key={s._id}>
+                            <td style={{ padding: 12, borderBottom: '1px solid #e5e7eb' }}>{s.name}</td>
+                            <td style={{ padding: 12, borderBottom: '1px solid #e5e7eb' }}>{schedules.filter(sc => sc.section === s.name).length}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               )}

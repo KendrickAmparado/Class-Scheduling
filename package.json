@@ -18,6 +18,11 @@
   },
   "homepage": "https://github.com/KendrickAmparado/Class-Scheduling-Systems#readme",
   "dependencies": {
+    "@fortawesome/fontawesome-svg-core": "^7.1.0",
+    "@fortawesome/free-solid-svg-icons": "^7.1.0",
+    "@fortawesome/react-fontawesome": "^3.1.0",
+    "@tanstack/react-query": "^5.90.10",
+    "axios": "^1.6.8",
     "bcrypt": "^6.0.0",
     "bcryptjs": "^3.0.2",
     "body-parser": "^2.2.0",
@@ -30,13 +35,18 @@
     "jwt-decode": "^4.0.0",
     "mongoose": "^8.18.2",
     "nodemailer": "^7.0.9",
+    "react-dom": "^19.2.0",
     "react-google-recaptcha": "^3.1.0",
+    "react-router-dom": "^7.9.6",
+    "react-scripts": "^5.0.1",
     "socket.io": "^4.8.1",
     "socket.io-client": "^4.8.1",
     "xlsx": "^0.18.5",
     "xlsx-js-style": "^1.2.0"
   },
   "devDependencies": {
-    "@types/socket.io": "^3.0.1"
-  }
+    "@types/socket.io": "^3.0.1",
+    "nodemon": "^3.1.11"
+  },
+  "type": "commonjs"
 }

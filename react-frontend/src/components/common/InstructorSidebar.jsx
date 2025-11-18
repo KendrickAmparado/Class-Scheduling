@@ -7,8 +7,7 @@ import {
   faChartBar,
   faCog,
   faBell,
-  faTimes,
-  faBars
+  faTimes
 } from '@fortawesome/free-solid-svg-icons';
 
 const InstructorSidebar = ({ isOpen, onClose }) => {

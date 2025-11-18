@@ -4,6 +4,7 @@ import Section from '../models/Section.js';
 import Room from '../models/Room.js';
 import YearLevel from '../models/yearLevelModel.js';
 import Instructor from '../models/Instructor.js';
+import { getCurrentTime } from '../services/worldTimeService.js';
 
 const router = express.Router();
 
@@ -19,6 +20,22 @@ const router = express.Router();
  * - Rate limiting recommended (can be added via middleware)
  * - CORS enabled for public access
  */
+
+// ============== WORLD TIME API ==============
+/**
+ * GET /api/public/time
+ * Get current time from World Time API
+ * Optional query param: timezone (default: Etc/UTC)
+ */
+router.get('/time', async (req, res) => {
+  const timezone = req.query.timezone || 'Etc/UTC';
+  try {
+    const timeData = await worldTimeService.getCurrentTime(timezone);
+    res.json(timeData);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // ============== HEALTH CHECK ==============
 router.get('/health', (req, res) => {

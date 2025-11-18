@@ -97,13 +97,6 @@ const ScheduleCalendar = () => {
 
   useEffect(() => {
     fetchAllData();
-
-    // Auto-refresh every 30 seconds
-    const autoRefreshInterval = setInterval(fetchAllData, 30000);
-
-    return () => {
-      clearInterval(autoRefreshInterval);
-    };
   }, [fetchAllData]);
 
   useEffect(() => {

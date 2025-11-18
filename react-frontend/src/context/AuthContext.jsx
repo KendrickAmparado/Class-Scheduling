@@ -41,6 +41,8 @@ export const AuthProvider = ({ children }) => {
 
   const logout = () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('instructorToken');
+    localStorage.removeItem('instructorData');
     setUserEmail(null);
     // Clear Sentry user context
     clearSentryUser();

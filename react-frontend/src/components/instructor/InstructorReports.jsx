@@ -195,8 +195,6 @@ const InstructorReports = () => {
       }
     };
     fetchInstructorData();
-    const interval = setInterval(fetchInstructorData, 30000);
-    return () => clearInterval(interval);
   }, [userEmail, normalizeScheduleItem]);
 
   // Utility to get day order for sorting

@@ -18,6 +18,7 @@ import { useToast } from '../common/ToastProvider.jsx';
 import ConfirmationDialog from '../common/ConfirmationDialog.jsx';
 import { SkeletonCard } from '../common/SkeletonLoader.jsx';
 import EmptyState from '../common/EmptyState.jsx';
+import { normalizeRoomName, formatRoomLabel } from '../../utils/roomUtils';
 
 const RoomManagement = () => {
   const { showToast } = useToast();
@@ -69,13 +70,6 @@ const RoomManagement = () => {
 
   useEffect(() => {
     fetchRooms();
-
-    // Auto-refresh every 30 seconds
-    const autoRefreshInterval = setInterval(fetchRooms, 30000);
-
-    return () => {
-      clearInterval(autoRefreshInterval);
-    };
   }, []);
 
   // Add Room handlers
@@ -160,7 +154,7 @@ const RoomManagement = () => {
 
   // Filter and sort rooms
   let filteredRooms = rooms.filter(room => {
-    const matchesSearch = room.room.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    const matchesSearch = (searchQuery ? normalizeRoomName(room.room).includes(normalizeRoomName(searchQuery)) : true) ||
                          room.area.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = statusFilter === 'all' || room.status === statusFilter;
     const matchesArea = areaFilter === 'all' || room.area === areaFilter;
@@ -430,7 +424,7 @@ const RoomManagement = () => {
                             color: '#1e293b',
                             margin: '0 0 4px 0',
                           }}>
-                            {room.room}
+                            {formatRoomLabel(room.room)}
                           </h4>
                           <p style={{
                             fontSize: '14px',

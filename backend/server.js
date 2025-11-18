@@ -27,6 +27,7 @@ import scheduleTemplateRoutes from './routes/scheduleTemplateRoutes.js';
 import passwordResetRoutes from './routes/passwordResetRoutes.js';
 import publicRoutes from './routes/publicRoutes.js';
 import weatherRoutes from './routes/weatherRoutes.js';
+import adminMessageRoutes from './routes/adminMessageRoutes.js';
 import { startWeatherScheduler } from './services/weatherScheduler.js';
 import Instructor from './models/Instructor.js'; // Import the model for index management
 
@@ -131,6 +132,7 @@ mongoose
     app.use('/api/password-reset', passwordResetRoutes);
     app.use('/api/public', publicRoutes);
     app.use('/api/weather', weatherRoutes);
+    app.use('/api/admin-message', adminMessageRoutes);
     app.use("/uploads", express.static("uploads"));
 
     // Sentry error handler (must be before other error handlers)

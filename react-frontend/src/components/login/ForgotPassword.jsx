@@ -1,16 +1,14 @@
 import React, { useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faEnvelope, faCalendarAlt, faArrowLeft, faCheckCircle, faTimes } from '@fortawesome/free-solid-svg-icons';
+import { faEnvelope, faCalendarAlt, faArrowLeft, faCheckCircle } from '@fortawesome/free-solid-svg-icons';
 import axios from 'axios';
 import ReCAPTCHA from 'react-google-recaptcha';
 
 const RECAPTCHA_SITE_KEY = '6LcxZ_wrAAAAADV8aWfxkks2Weu6DuHNYnGw7jnT';
 
 const ForgotPassword = () => {
-  const [searchParams] = useSearchParams();
   const userType = 'instructor'; // Only instructors can reset password
-  const navigate = useNavigate();
   
   const [formData, setFormData] = useState({
     email: ''

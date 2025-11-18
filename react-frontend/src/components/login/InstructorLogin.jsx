@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useContext } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faEnvelope, faLock, faCalendarAlt, faRightToBracket, faCheckCircle, faTimes } from '@fortawesome/free-solid-svg-icons';
 import axios from 'axios';
 import ReCAPTCHA from 'react-google-recaptcha';
+import { AuthContext } from '../../context/AuthContext.jsx';
 
 const RECAPTCHA_SITE_KEY = '6LcxZ_wrAAAAADV8aWfxkks2Weu6DuHNYnGw7jnT';
 
@@ -19,6 +20,7 @@ const InstructorLogin = () => {
   const [recaptchaToken, setRecaptchaToken] = useState('');
   const [recaptchaError, setRecaptchaError] = useState('');
   const navigate = useNavigate();
+  const { login: contextLogin } = useContext(AuthContext);
 
   const handleChange = (e) => {
     setFormData({
@@ -54,11 +56,18 @@ const InstructorLogin = () => {
         if (!res.data.token) {
           throw new Error('Login did not return a token');
         }
-        localStorage.setItem('token', res.data.token);
+        // Use AuthContext to set token and user email in app state
+        if (contextLogin) {
+          contextLogin(res.data.token);
+        } else {
+          // Fallback to localStorage if context not available
+          localStorage.setItem('token', res.data.token);
+        }
+
         // Backward compatibility
         localStorage.setItem('instructorToken', res.data.token);
         localStorage.setItem('instructorData', JSON.stringify(res.data.instructor));
-        
+
         // Set instructor name for success modal
         setInstructorName(`${res.data.instructor.firstname} ${res.data.instructor.lastname}`);
         

@@ -44,13 +44,6 @@ const ActivityLogs = () => {
 
   useEffect(() => {
     fetchActivityLogs(pagination.page);
-
-    // Auto-refresh every 30 seconds
-    const autoRefreshInterval = setInterval(() => fetchActivityLogs(pagination.page), 30000);
-
-    return () => {
-      clearInterval(autoRefreshInterval);
-    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pagination.page]);
 

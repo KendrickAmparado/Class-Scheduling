@@ -234,6 +234,17 @@ router.get('/', async (req, res) => {
   }
 });
 
+// GET all schedules (admin use) - returns all schedule documents
+router.get('/all', async (req, res) => {
+  try {
+    const schedules = await Schedule.find({});
+    res.json(schedules);
+  } catch (err) {
+    console.error('Error fetching all schedules:', err);
+    res.status(500).json({ message: 'Server error fetching schedules' });
+  }
+});
+
 // SECURITY FIX: GET schedules filtered by authenticated instructor's email
 // Only returns schedules for the logged-in instructor (from JWT token)
 router.get('/instructor/:instructorEmail', verifyToken, async (req, res) => {
@@ -273,14 +284,14 @@ router.get('/instructor/:instructorEmail', verifyToken, async (req, res) => {
     let searchMethod = '';
     
     // Strategy 1: Search by email (case-insensitive)
-    schedules = await Schedule.find({ instructorEmail: { $regex: new RegExp(`^${authenticatedEmail}$`, 'i') } });
+    schedules = await Schedule.find({ instructorEmail: { $regex: new RegExp(`^${authenticatedEmail}$`, 'i') }, archived: { $ne: true } });
     console.log('🔍 Backend: Strategy 1 (case-insensitive email):', schedules.length, 'schedules');
     
     if (schedules.length > 0) {
       searchMethod = 'case-insensitive-email';
     } else if (instructorName) {
       // Strategy 2: Search by instructor name (case-insensitive)
-      schedules = await Schedule.find({ instructor: { $regex: new RegExp(`^${instructorName}$`, 'i') } });
+      schedules = await Schedule.find({ instructor: { $regex: new RegExp(`^${instructorName}$`, 'i') }, archived: { $ne: true } });
       console.log('🔍 Backend: Strategy 2 (case-insensitive name):', schedules.length, 'schedules');
       
       if (schedules.length > 0) {
@@ -288,7 +299,8 @@ router.get('/instructor/:instructorEmail', verifyToken, async (req, res) => {
       } else {
         // Strategy 3: Search by partial name matches
         schedules = await Schedule.find({ 
-          instructor: { $regex: new RegExp(instructorName, 'i') }
+          instructor: { $regex: new RegExp(instructorName, 'i') },
+          archived: { $ne: true }
         });
         console.log('🔍 Backend: Strategy 3 (partial name):', schedules.length, 'schedules');
         
@@ -367,7 +379,7 @@ router.get('/instructor/by-name/:name', verifyToken, async (req, res) => {
     
     // Search schedules by instructor name (case-insensitive)
     const regex = new RegExp(requestedName, 'i');
-    const schedules = await Schedule.find({ instructor: regex });
+    const schedules = await Schedule.find({ instructor: regex, archived: { $ne: true } });
     
     // Additional security: Filter to ensure all schedules belong to authenticated instructor
     const filteredSchedules = schedules.filter(schedule => {
@@ -655,6 +667,95 @@ router.delete('/:id', async (req, res) => {
   } catch (err) {
     console.error("Error deleting schedule:", err);
     res.status(500).json({ success: false, message: "Server error deleting schedule." });
+  }
+});
+
+// ARCHIVE schedule (mark archived=true but keep record)
+router.post('/:id/archive', async (req, res) => {
+  try {
+    const scheduleId = req.params.id;
+    const schedule = await Schedule.findById(scheduleId);
+    if (!schedule) return res.status(404).json({ success: false, message: 'Schedule not found.' });
+
+    // If there's a Google Calendar event, try to delete it
+    if (schedule.googleCalendarEventId && schedule.instructorEmail && isGoogleCalendarConfigured()) {
+      try {
+        const Instructor = (await import('../models/Instructor.js')).default;
+        const instructorDoc = await Instructor.findOne({ email: { $regex: new RegExp(`^${schedule.instructorEmail}$`, 'i') }, status: 'active' });
+        if (instructorDoc) {
+          await deleteCalendarEvent(schedule.googleCalendarEventId, schedule.instructorEmail);
+          schedule.googleCalendarEventId = undefined;
+        }
+      } catch (err) {
+        console.error('Warning: failed to delete linked Google Calendar event during archive:', err.message);
+      }
+    }
+
+    schedule.archived = true;
+    await schedule.save();
+
+    await logActivity({
+      type: 'schedule-archived',
+      message: `Schedule archived: ${schedule.subject} - ${schedule.course} ${schedule.year} Section ${schedule.section} (${schedule.instructor}, ${schedule.day} ${schedule.time}, ${schedule.room})`,
+      source: 'admin',
+      link: `/admin/schedule/${schedule.course || ''}/${schedule.year || ''}`,
+      meta: { scheduleId: schedule._id, course: schedule.course, year: schedule.year, section: schedule.section, subject: schedule.subject },
+      io: req.io
+    });
+
+    res.json({ success: true, message: 'Schedule archived successfully.' });
+  } catch (err) {
+    console.error('Error archiving schedule:', err);
+    res.status(500).json({ success: false, message: 'Server error archiving schedule.' });
+  }
+});
+
+// GET archived schedules (admin)
+router.get('/archived', async (req, res) => {
+  try {
+    const archived = await Schedule.find({ archived: true });
+    res.json({ success: true, schedules: archived });
+  } catch (err) {
+    console.error('Error fetching archived schedules:', err);
+    res.status(500).json({ success: false, message: 'Server error fetching archived schedules.' });
+  }
+});
+
+// RESTORE schedule (mark archived=false)
+router.post('/:id/restore', async (req, res) => {
+  try {
+    const scheduleId = req.params.id;
+    const schedule = await Schedule.findById(scheduleId);
+    if (!schedule) return res.status(404).json({ success: false, message: 'Schedule not found.' });
+
+    schedule.archived = false;
+    await schedule.save();
+
+    // Optionally re-sync to Google Calendar if configured
+    if (isGoogleCalendarConfigured()) {
+      try {
+        const syncResult = await syncScheduleToCalendar(schedule);
+        if (!syncResult.success) {
+          console.warn('Warn: failed to re-sync schedule on restore:', syncResult.message);
+        }
+      } catch (syncErr) {
+        console.error('Error re-syncing schedule after restore:', syncErr.message);
+      }
+    }
+
+    await logActivity({
+      type: 'schedule-restored',
+      message: `Schedule restored: ${schedule.subject} - ${schedule.course} ${schedule.year} Section ${schedule.section} (${schedule.instructor}, ${schedule.day} ${schedule.time}, ${schedule.room})`,
+      source: 'admin',
+      link: `/admin/schedule/${schedule.course || ''}/${schedule.year || ''}`,
+      meta: { scheduleId: schedule._id },
+      io: req.io
+    });
+
+    res.json({ success: true, message: 'Schedule restored successfully.' });
+  } catch (err) {
+    console.error('Error restoring schedule:', err);
+    res.status(500).json({ success: false, message: 'Server error restoring schedule.' });
   }
 });
 

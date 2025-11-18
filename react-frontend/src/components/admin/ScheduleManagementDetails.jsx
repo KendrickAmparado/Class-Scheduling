@@ -13,19 +13,18 @@ import {
   faClock,
   faUser,
   faDoorOpen,
-  faCopy,
-  faFileImport,
   faFileAlt,
   faEdit
+  ,faArchive
 } from '@fortawesome/free-solid-svg-icons';
 import axios from 'axios';
+import { generateTimeSlots, TIME_SLOT_CONFIGS, timeRangesOverlap, getTimeRangeDuration, minutesToTimeString, timeStringToMinutes } from '../../utils/timeUtils.js';
+import { normalizeRoomName, formatRoomLabel } from '../../utils/roomUtils';
 import Sidebar from '../common/Sidebar.jsx';
 import Header from '../common/Header.jsx';
 import { useToast } from '../common/ToastProvider.jsx';
 import ConfirmationDialog from '../common/ConfirmationDialog.jsx';
 import ConflictResolutionModal from './ConflictResolutionModal.jsx';
-import ScheduleTemplateManager from './ScheduleTemplateManager.jsx';
-import ScheduleImporter from './ScheduleImporter.jsx';
 
 // ============== SCHEDULE VALIDATION UTILITIES ==============
 const parseTime = (timeStr) => {
@@ -70,6 +69,8 @@ const doDaysOverlap = (day1, day2) => {
   
   return days1.some(day => days2.includes(day));
 };
+
+// Shared room normalization/format helpers imported from utils
 
 // ============== INSTRUCTOR SESSION VALIDATION ==============
 const categorizeTimeOfDay = (timeStr) => {
@@ -252,11 +253,14 @@ const ScheduleManagementDetails = () => {
   const [confirmDialog, setConfirmDialog] = useState({ show: false, title: '', message: '', onConfirm: null, destructive: false });
   const [conflictDetails, setConflictDetails] = useState(null);
   const [pendingScheduleData, setPendingScheduleData] = useState(null);
-  const [showTemplateManager, setShowTemplateManager] = useState(false);
-  const [showImporter, setShowImporter] = useState(false);
+  
   const [showEditSchedulePopup, setShowEditSchedulePopup] = useState(false);
   const [scheduleToEdit, setScheduleToEdit] = useState(null);
   const [editingSchedule, setEditingSchedule] = useState(false);
+  const [rescheduleModal, setRescheduleModal] = useState({ visible: false, schedule: null, suggestions: [], loading: false });
+  const [showArchivedModal, setShowArchivedModal] = useState(false);
+  const [archivedSchedules, setArchivedSchedules] = useState([]);
+  const [archivedLoading, setArchivedLoading] = useState(false);
 
   const courseDetails = {
     bsit: {
@@ -293,7 +297,11 @@ const ScheduleManagementDetails = () => {
         a.name.localeCompare(b.name)
       );
       setSections(sortedSections);
-      setSchedules(Array.isArray(schedulesRes.data) ? schedulesRes.data : []);
+      // Ensure archived schedules are hidden from active lists
+      let schedulesData = [];
+      if (Array.isArray(schedulesRes.data)) schedulesData = schedulesRes.data;
+      else if (schedulesRes.data && Array.isArray(schedulesRes.data.schedules)) schedulesData = schedulesRes.data.schedules;
+      setSchedules(schedulesData.filter(s => !s.archived));
       
       // ✅ FIX: Handle instructor data properly
       if (Array.isArray(instructorsRes.data)) {
@@ -338,15 +346,24 @@ const ScheduleManagementDetails = () => {
     }
   }, [course, normalizedYear, showToast]);
 
+  const fetchArchivedSchedules = async () => {
+    setArchivedLoading(true);
+    try {
+      const res = await axios.get('http://localhost:5000/api/schedule/archived');
+      if (res.data && Array.isArray(res.data.schedules)) setArchivedSchedules(res.data.schedules);
+      else if (Array.isArray(res.data)) setArchivedSchedules(res.data);
+      else setArchivedSchedules([]);
+    } catch (err) {
+      console.error('Error fetching archived schedules', err);
+      showToast('Error loading archived schedules.', 'error');
+      setArchivedSchedules([]);
+    } finally {
+      setArchivedLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchData();
-
-    // Auto-refresh every 30 seconds
-    const autoRefreshInterval = setInterval(fetchData, 30000);
-
-    return () => {
-      clearInterval(autoRefreshInterval);
-    };
   }, [fetchData]);
 
   useEffect(() => {
@@ -485,50 +502,195 @@ const ScheduleManagementDetails = () => {
     });
   };
 
-  const handleDuplicateSchedule = async (schedule) => {
+  const handleArchiveSchedule = (scheduleId) => {
+    setConfirmDialog({
+      show: true,
+      title: 'Archive Schedule',
+      message: 'Are you sure you want to archive this schedule? It will be hidden from active lists.',
+      onConfirm: async () => {
+        try {
+          const res = await axios.post(`http://localhost:5000/api/schedule/${scheduleId}/archive`);
+          if (res.data.success) {
+            showToast('Schedule archived successfully.', 'success');
+            await fetchData();
+          } else {
+            showToast(res.data.message || 'Failed to archive schedule.', 'error');
+          }
+        } catch (err) {
+          console.error('Error archiving schedule:', err);
+          showToast('Error archiving schedule.', 'error');
+        }
+        setConfirmDialog({ show: false, title: '', message: '', onConfirm: null, destructive: false });
+      },
+      destructive: false,
+    });
+  };
+ 
+  const openArchivedModal = () => {
+    setShowArchivedModal(true);
+    fetchArchivedSchedules();
+  };
+
+  const closeArchivedModal = () => {
+    setShowArchivedModal(false);
+    setArchivedSchedules([]);
+  };
+
+  const handleRestoreSchedule = async (scheduleId) => {
     try {
-      // Prepare schedule data for duplication
-      const scheduleData = {
-        course: schedule.course,
-        year: schedule.year,
-        section: schedule.section,
-        subject: `${schedule.subject} (Copy)`,
-        day: schedule.day,
-        time: schedule.time,
-        instructor: schedule.instructor,
-        room: schedule.room,
-      };
-
-      // Add instructor email if available
-      const selectedInstructor = instructors.find(inst => inst.name === schedule.instructor);
-      if (selectedInstructor?.email) {
-        scheduleData.instructorEmail = selectedInstructor.email;
+      const res = await axios.post(`http://localhost:5000/api/schedule/${scheduleId}/restore`);
+      if (res.data.success) {
+        showToast('Schedule restored.', 'success');
+        await fetchData();
+        await fetchArchivedSchedules();
+      } else {
+        showToast(res.data.message || 'Failed to restore schedule.', 'error');
       }
-
-      // Check for conflicts first
-      const conflicts = checkScheduleConflicts(scheduleData, schedules);
-      const hasConflicts = conflicts.instructor.length > 0 || 
-                          conflicts.room.length > 0 || 
-                          conflicts.section.length > 0;
-
-      if (hasConflicts) {
-        setConflictDetails(conflicts);
-        setPendingScheduleData(scheduleData);
-        return;
-      }
-
-      // No conflicts, proceed with duplication
-      await submitSchedule(scheduleData);
-    } catch (error) {
-      showToast('Error duplicating schedule.', 'error');
-      console.error('Error duplicating schedule:', error);
+    } catch (err) {
+      console.error('Error restoring schedule', err);
+      showToast('Error restoring schedule.', 'error');
     }
   };
+
+  const handleDeletePermanently = (scheduleId) => {
+    setConfirmDialog({
+      show: true,
+      title: 'Delete Permanently',
+      message: 'This will permanently delete the schedule from the database. This action cannot be undone. Continue?',
+      onConfirm: async () => {
+        try {
+          const res = await axios.delete(`http://localhost:5000/api/schedule/${scheduleId}`);
+          if (res.data.success) {
+            showToast('Schedule permanently deleted.', 'success');
+            await fetchArchivedSchedules();
+            await fetchData();
+          } else {
+            showToast(res.data.message || 'Failed to delete schedule.', 'error');
+          }
+        } catch (err) {
+          console.error('Error deleting schedule permanently', err);
+          showToast('Error deleting schedule.', 'error');
+        }
+        setConfirmDialog({ show: false, title: '', message: '', onConfirm: null, destructive: false });
+      },
+      destructive: true,
+    });
+  };
+  
 
   const handleEditClick = (schedule) => {
     setScheduleToEdit(schedule);
     setShowEditSchedulePopup(true);
   };
+
+  // --- Reschedule helpers ---
+  const openRescheduleModal = (schedule) => {
+    setRescheduleModal({ visible: true, schedule, suggestions: [], loading: true });
+    // compute suggestions asynchronously
+    setTimeout(() => computeRescheduleSuggestions(schedule), 50);
+  };
+
+  const closeRescheduleModal = () => setRescheduleModal({ visible: false, schedule: null, suggestions: [], loading: false });
+
+  const computeRescheduleSuggestions = (schedule) => {
+    try {
+      // enforce fixed duration for suggestions: 2 hours 30 minutes (150 minutes)
+      const duration = 150;
+      // --- Subject analysis ---
+      const subjectSchedules = schedules.filter(s => s.subject === schedule.subject && s.course === schedule.course && s.year === schedule.year);
+      const subjectTotalMinutes = subjectSchedules.reduce((sum, s) => sum + getTimeRangeDuration(s.time), 0);
+      const subjectTotalHours = +(subjectTotalMinutes / 60).toFixed(2);
+      const subjectOccurrences = subjectSchedules.length;
+      const roomsUsed = [...new Set(subjectSchedules.map(s => s.room).filter(Boolean))];
+
+      // Rooms used by others: map room -> [{subject, day, time}]
+      const roomsUsedByOthers = {};
+      roomsUsed.forEach((r) => {
+        roomsUsedByOthers[r] = schedules
+          .filter(s => s.room === r && s.subject !== schedule.subject)
+          .map(s => ({ subject: s.subject, day: s.day, time: s.time, section: s.section }));
+      });
+
+      // Basic data quality checks (errors)
+      const errors = [];
+      subjectSchedules.forEach((s) => {
+        const dur = getTimeRangeDuration(s.time);
+        if (dur <= 0) errors.push(`Invalid time for schedule ${s._id || s.subject}: "${s.time}"`);
+        if (!s.room) errors.push(`Missing room for schedule ${s._id || s.subject} on ${s.day}`);
+      });
+      // end subject analysis
+      const step = TIME_SLOT_CONFIGS.DETAILED.duration || 30;
+      const slots = generateTimeSlots(TIME_SLOT_CONFIGS.DETAILED.startHour, TIME_SLOT_CONFIGS.DETAILED.endHour, step);
+      // Only consider the same day as the original schedule for reschedule suggestions
+      const days = [schedule.day];
+
+      const suggestions = [];
+
+      for (const day of days) {
+        for (let i = 0; i < slots.length; i++) {
+          const slotStart = slots[i].split(' - ')[0];
+          const startMin = timeStringToMinutes(slotStart);
+          const endMin = startMin + duration;
+          if (endMin > TIME_SLOT_CONFIGS.DETAILED.endHour * 60) continue;
+          const candidateTime = `${minutesToTimeString(startMin)} - ${minutesToTimeString(endMin)}`;
+
+          // Skip if same as current
+          if (day === schedule.day && candidateTime === schedule.time) continue;
+
+          // Skip any candidate that overlaps with any existing schedule (we only suggest fully free slots)
+          const anyOverlap = schedules.some(s => s._id !== schedule._id && timeRangesOverlap(s.time, candidateTime) && doDaysOverlap(s.day, day));
+          if (anyOverlap) continue;
+
+          // Find an available room (prefer original) - since we already ensured no overlap, prefer original room if still available
+          let chosenRoom = null;
+          // prefer original room if normalized names match and room is available
+          const normalizedOriginal = normalizeRoomName(schedule.room);
+          const originalRoomAvailable = rooms.find(r => normalizeRoomName(r.room || r.name) === normalizedOriginal && r.status === 'available');
+          if (originalRoomAvailable) chosenRoom = originalRoomAvailable.room || originalRoomAvailable.name;
+          else {
+            const available = rooms.find(r => r.status === 'available');
+            if (available) chosenRoom = available.room || available.name;
+          }
+          if (!chosenRoom) continue;
+
+          suggestions.push({ day, time: candidateTime, room: chosenRoom });
+          if (suggestions.length >= 8) break;
+        }
+        if (suggestions.length >= 8) break;
+      }
+
+      setRescheduleModal(prev => ({ ...prev, suggestions, loading: false, subjectAnalysis: { subjectTotalHours, subjectOccurrences, roomsUsed, roomsUsedByOthers, errors } }));
+    } catch (err) {
+      console.error('Error computing reschedule suggestions', err);
+      setRescheduleModal(prev => ({ ...prev, suggestions: [], loading: false, subjectAnalysis: { subjectTotalHours: 0, subjectOccurrences: 0, roomsUsed: [], roomsUsedByOthers: {}, errors: ['Internal error computing suggestions'] } }));
+    }
+  };
+
+  const applyReschedule = async (suggestion) => {
+    if (!rescheduleModal.schedule) return;
+    setRescheduleModal(prev => ({ ...prev, loading: true }));
+    try {
+      const update = {
+        day: suggestion.day,
+        time: suggestion.time,
+        room: suggestion.room,
+      };
+      const res = await axios.put(`http://localhost:5000/api/schedule/${rescheduleModal.schedule._id}`, update);
+      if (res.data.success) {
+        showToast('Schedule rescheduled successfully.', 'success');
+        await fetchData();
+        closeRescheduleModal();
+      } else {
+        showToast(res.data.message || 'Failed to reschedule.', 'error');
+        setRescheduleModal(prev => ({ ...prev, loading: false }));
+      }
+    } catch (err) {
+      console.error('Error applying reschedule', err);
+      showToast('Error rescheduling. Check conflicts or server logs.', 'error');
+      setRescheduleModal(prev => ({ ...prev, loading: false }));
+    }
+  };
+  // --- end reschedule helpers ---
 
   const handleEditSubmit = async (e) => {
     e.preventDefault();
@@ -579,69 +741,7 @@ const ScheduleManagementDetails = () => {
     }
   };
 
-  const handleApplyTemplate = useCallback(async (template) => {
-    if (!selectedSection) {
-      showToast('Please select a section first.', 'error');
-      return;
-    }
-
-    if (!template.schedules || template.schedules.length === 0) {
-      showToast('Template has no schedules.', 'error');
-      return;
-    }
-
-    try {
-      const sectionSchedules = getSectionSchedules(selectedSection.name);
-      let successCount = 0;
-      let conflictCount = 0;
-
-      for (const templateSchedule of template.schedules) {
-        const scheduleData = {
-          course,
-          year: normalizedYear,
-          section: selectedSection.name,
-          subject: templateSchedule.subject,
-          day: templateSchedule.day,
-          time: templateSchedule.time,
-          instructor: templateSchedule.instructor,
-          room: templateSchedule.room,
-        };
-
-        // Add instructor email if available
-        const selectedInstructor = instructors.find(inst => inst.name === templateSchedule.instructor);
-        if (selectedInstructor?.email) {
-          scheduleData.instructorEmail = selectedInstructor.email;
-        }
-
-        // Check for conflicts
-        const conflicts = checkScheduleConflicts(scheduleData, [...schedules, ...sectionSchedules]);
-        const hasConflicts = conflicts.instructor.length > 0 || 
-                            conflicts.room.length > 0 || 
-                            conflicts.section.length > 0;
-
-        if (!hasConflicts) {
-          try {
-            await axios.post('http://localhost:5000/api/schedule/create', scheduleData);
-            successCount++;
-          } catch (error) {
-            conflictCount++;
-          }
-        } else {
-          conflictCount++;
-        }
-      }
-
-      if (successCount > 0) {
-        showToast(`Template applied: ${successCount} schedule(s) added${conflictCount > 0 ? `, ${conflictCount} skipped due to conflicts` : ''}.`, 'success');
-        await fetchData();
-      } else {
-        showToast('No schedules could be applied. All conflicts detected.', 'error');
-      }
-    } catch (error) {
-      showToast('Error applying template.', 'error');
-      console.error('Error applying template:', error);
-    }
-  }, [selectedSection, course, normalizedYear, instructors, schedules, getSectionSchedules, showToast, fetchData]);
+  // Template apply functionality removed (templates/import UI deprecated)
 
   return (
     <div className="dashboard-container" style={{ display: 'flex', height: '100vh' }}>
@@ -835,50 +935,7 @@ const ScheduleManagementDetails = () => {
                           </p>
                         </div>
                         <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                          <button
-                            onClick={() => setShowTemplateManager(true)}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '8px',
-                              padding: '12px 20px',
-                              background: 'linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%)',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '10px',
-                              fontWeight: '600',
-                              cursor: 'pointer',
-                              fontSize: '15px',
-                              transition: 'transform 0.18s ease',
-                            }}
-                            onMouseOver={(e) => (e.currentTarget.style.transform = 'translateY(-2px)')}
-                            onMouseOut={(e) => (e.currentTarget.style.transform = '')}
-                          >
-                            <FontAwesomeIcon icon={faFileAlt} />
-                            Templates
-                          </button>
-                          <button
-                            onClick={() => setShowImporter(true)}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '8px',
-                              padding: '12px 20px',
-                              background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '10px',
-                              fontWeight: '600',
-                              cursor: 'pointer',
-                              fontSize: '15px',
-                              transition: 'transform 0.18s ease',
-                            }}
-                            onMouseOver={(e) => (e.currentTarget.style.transform = 'translateY(-2px)')}
-                            onMouseOut={(e) => (e.currentTarget.style.transform = '')}
-                          >
-                            <FontAwesomeIcon icon={faFileImport} />
-                            Import
-                          </button>
+                          {/* Templates and Import buttons removed per request */}
                           <button
                             onClick={() => setShowAddSchedulePopup(true)}
                             style={{
@@ -900,6 +957,25 @@ const ScheduleManagementDetails = () => {
                           >
                             <FontAwesomeIcon icon={faPlus} />
                             Add Schedule
+                          </button>
+                          <button
+                            onClick={openArchivedModal}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              padding: '10px 14px',
+                              background: '#f3f4f6',
+                              color: '#374151',
+                              border: '1px solid #e5e7eb',
+                              borderRadius: '10px',
+                              fontWeight: '600',
+                              cursor: 'pointer',
+                              fontSize: '13px'
+                            }}
+                          >
+                            <FontAwesomeIcon icon={faFileAlt} />
+                            Archived
                           </button>
                         </div>
                       </div>
@@ -989,12 +1065,13 @@ const ScheduleManagementDetails = () => {
                                 >
                                   <FontAwesomeIcon icon={faEdit} />
                                 </button>
-                                <button
-                                  onClick={() => handleDuplicateSchedule(schedule)}
-                                  title="Duplicate Schedule"
+                                
+                                  <button
+                                    onClick={() => openRescheduleModal(schedule)}
+                                    title="Reschedule"
                                   style={{
-                                    background: '#eff6ff',
-                                    color: '#3b82f6',
+                                    background: '#eef2ff',
+                                    color: '#3730a3',
                                     border: 'none',
                                     width: '32px',
                                     height: '32px',
@@ -1005,11 +1082,32 @@ const ScheduleManagementDetails = () => {
                                     justifyContent: 'center',
                                     transition: 'all 0.2s ease',
                                   }}
-                                  onMouseOver={(e) => (e.currentTarget.style.background = '#dbeafe')}
-                                  onMouseOut={(e) => (e.currentTarget.style.background = '#eff6ff')}
+                                  onMouseOver={(e) => (e.currentTarget.style.background = '#e0e7ff')}
+                                  onMouseOut={(e) => (e.currentTarget.style.background = '#eef2ff')}
                                 >
-                                  <FontAwesomeIcon icon={faCopy} />
+                                  <FontAwesomeIcon icon={faCalendarAlt} />
                                 </button>
+                                  <button
+                                    onClick={() => handleArchiveSchedule(schedule._id)}
+                                    title="Archive Schedule"
+                                    style={{
+                                      background: '#f3f4f6',
+                                      color: '#374151',
+                                      border: 'none',
+                                      width: '32px',
+                                      height: '32px',
+                                      borderRadius: '8px',
+                                      cursor: 'pointer',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      transition: 'all 0.2s ease',
+                                    }}
+                                    onMouseOver={(e) => (e.currentTarget.style.background = '#e5e7eb')}
+                                    onMouseOut={(e) => (e.currentTarget.style.background = '#f3f4f6')}
+                                  >
+                                    <FontAwesomeIcon icon={faArchive} />
+                                  </button>
                                 <button
                                   onClick={() => handleDeleteSchedule(schedule._id)}
                                   title="Delete Schedule"
@@ -1331,7 +1429,7 @@ const ScheduleManagementDetails = () => {
                         .filter(room => room.status === 'available')
                         .map((room) => (
                           <option key={room._id} value={room.room}>
-                            {room.room} ({room.area})
+                            {formatRoomLabel(room.room)} ({room.area})
                           </option>
                         ))}
                     </select>
@@ -1379,6 +1477,154 @@ const ScheduleManagementDetails = () => {
                     </button>
                   </div>
                 </form>
+              </div>
+            </div>
+          )}
+
+          {/* Reschedule Modal */}
+          {rescheduleModal.visible && (
+            <div style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0,0,0,0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 10000,
+            }}>
+              <div style={{ background: '#fff', borderRadius: 12, width: '92%', maxWidth: 760, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(2,6,23,0.3)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px', borderBottom: '1px solid #eef2ff' }}>
+                  <div>
+                    <div style={{ fontSize: 16, fontWeight: 800 }}>{rescheduleModal.schedule?.subject || 'Reschedule'}</div>
+                    <div style={{ fontSize: 13, color: '#6b7280' }}>{rescheduleModal.schedule?.instructor} • {rescheduleModal.schedule?.room}</div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <button onClick={closeRescheduleModal} style={{ padding: '8px 12px', background: '#f3f4f6', border: 'none', borderRadius: 8, cursor: 'pointer' }}>Close</button>
+                  </div>
+                </div>
+
+                <div style={{ padding: 18 }}>
+                  {/* Subject analysis display */}
+                  {rescheduleModal.subjectAnalysis && (
+                    <div style={{ marginBottom: 14, padding: 12, borderRadius: 8, background: '#f8fafc', border: '1px solid #e6eefb' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                        <div>
+                          <div style={{ fontSize: 13, color: '#475569' }}>Subject</div>
+                          <div style={{ fontWeight: 800 }}>{rescheduleModal.schedule?.subject || '-'}</div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 13, color: '#475569' }}>Total Hours (week)</div>
+                          <div style={{ fontWeight: 800 }}>{rescheduleModal.subjectAnalysis.subjectTotalHours} hrs</div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 13, color: '#475569' }}>Occurrences</div>
+                          <div style={{ fontWeight: 800 }}>{rescheduleModal.subjectAnalysis.subjectOccurrences}</div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 13, color: '#475569' }}>Rooms Used</div>
+                          <div style={{ fontWeight: 800 }}>{rescheduleModal.subjectAnalysis.roomsUsed.length > 0 ? rescheduleModal.subjectAnalysis.roomsUsed.join(', ') : '—'}</div>
+                        </div>
+                      </div>
+
+                      {rescheduleModal.subjectAnalysis.errors && rescheduleModal.subjectAnalysis.errors.length > 0 && (
+                        <div style={{ marginTop: 8, color: '#7f1d1d', fontSize: 13 }}>
+                          <strong>Data issues:</strong>
+                          <ul style={{ margin: '6px 0 0 18px' }}>
+                            {rescheduleModal.subjectAnalysis.errors.map((err, i) => <li key={i}>{err}</li>)}
+                          </ul>
+                        </div>
+                      )}
+
+                      {rescheduleModal.subjectAnalysis.roomsUsed && Object.keys(rescheduleModal.subjectAnalysis.roomsUsedByOthers || {}).length > 0 && (
+                        <div style={{ marginTop: 8 }}>
+                          <div style={{ fontSize: 13, color: '#475569', marginBottom: 6 }}>Rooms currently used by other subjects (examples)</div>
+                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                            {Object.entries(rescheduleModal.subjectAnalysis.roomsUsedByOthers).map(([room, uses]) => (
+                              <div key={room} style={{ padding: 8, borderRadius: 8, background: '#fff', border: '1px solid #e6eefb', minWidth: 160 }}>
+                                <div style={{ fontWeight: 800 }}>{room}</div>
+                                <div style={{ fontSize: 12, color: '#64748b' }}>{uses.slice(0,3).map(u => `${u.subject} (${u.day} ${u.time})`).join('; ') || '—'}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {rescheduleModal.loading ? (
+                    <div style={{ padding: 24, textAlign: 'center', color: '#64748b' }}>Looking for available slots within this week...</div>
+                  ) : rescheduleModal.suggestions.length === 0 ? (
+                    <div style={{ padding: 24, textAlign: 'center', color: '#64748b' }}>No suitable suggestions found for this week.</div>
+                  ) : (
+                    <div style={{ display: 'grid', gap: 12 }}>
+                      {rescheduleModal.suggestions.map((sug, idx) => (
+                        <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 12, borderRadius: 8, border: '1px solid #e6edf3' }}>
+                          <div>
+                            <div style={{ fontWeight: 800 }}>{sug.day} • {sug.time}</div>
+                            <div style={{ fontSize: 13, color: '#64748b' }}>Room: <strong style={{ color: '#0f1724' }}>{sug.room}</strong></div>
+                          </div>
+                          <div>
+                            <button onClick={() => applyReschedule(sug)} style={{ padding: '8px 14px', background: 'linear-gradient(90deg,#0f2c63,#1e40af)', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer' }}>Apply</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Archived Schedules Modal */}
+          {showArchivedModal && (
+            <div style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0,0,0,0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 10000,
+            }}>
+              <div style={{ background: '#fff', borderRadius: 12, width: '92%', maxWidth: 900, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(2,6,23,0.3)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px', borderBottom: '1px solid #eef2ff' }}>
+                  <div>
+                    <div style={{ fontSize: 16, fontWeight: 800 }}>Archived Schedules</div>
+                    <div style={{ fontSize: 13, color: '#6b7280' }}>{archivedSchedules.length} archived schedule(s)</div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <button onClick={closeArchivedModal} style={{ padding: '8px 12px', background: '#f3f4f6', border: 'none', borderRadius: 8, cursor: 'pointer' }}>Close</button>
+                  </div>
+                </div>
+
+                <div style={{ padding: 18 }}>
+                  {archivedLoading ? (
+                    <div style={{ padding: 24, textAlign: 'center', color: '#64748b' }}>Loading archived schedules...</div>
+                  ) : archivedSchedules.length === 0 ? (
+                    <div style={{ padding: 24, textAlign: 'center', color: '#64748b' }}>No archived schedules.</div>
+                  ) : (
+                    <div style={{ display: 'grid', gap: 12 }}>
+                      {archivedSchedules.map((s) => (
+                        <div key={s._id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 12, borderRadius: 8, border: '1px solid #e6eefb' }}>
+                          <div>
+                            <div style={{ fontWeight: 800 }}>{s.subject} <span style={{ fontWeight: 600, color: '#64748b' }}>• {s.course} {s.year} {s.section}</span></div>
+                            <div style={{ fontSize: 13, color: '#64748b' }}>{s.day} • {s.time} — {s.room} — {s.instructor}</div>
+                          </div>
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <button onClick={() => handleRestoreSchedule(s._id)} style={{ padding: '8px 12px', background: 'linear-gradient(90deg,#059669,#047857)', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer' }}>Restore</button>
+                            <button onClick={() => handleDeletePermanently(s._id)} style={{ padding: '8px 12px', background: '#ffe4e6', color: '#b91c1c', border: '1px solid #fecaca', borderRadius: 8, cursor: 'pointer' }}>Delete Permanently</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -1588,7 +1834,7 @@ const ScheduleManagementDetails = () => {
                         .filter(room => room.status === 'available')
                         .map((room) => (
                           <option key={room._id} value={room.room}>
-                            {room.room} ({room.area})
+                            {formatRoomLabel(room.room)} ({room.area})
                           </option>
                         ))}
                     </select>
@@ -1662,25 +1908,7 @@ const ScheduleManagementDetails = () => {
           />
 
           {/* Schedule Template Manager */}
-          <ScheduleTemplateManager
-            show={showTemplateManager}
-            onClose={() => setShowTemplateManager(false)}
-            course={course}
-            year={normalizedYear}
-            currentSchedules={selectedSection ? getSectionSchedules(selectedSection.name) : []}
-            onApplyTemplate={handleApplyTemplate}
-            sectionName={selectedSection?.name}
-          />
-
-          {/* Schedule Importer */}
-          <ScheduleImporter
-            show={showImporter}
-            onClose={() => setShowImporter(false)}
-            course={course}
-            year={normalizedYear}
-            sectionName={selectedSection?.name}
-            onImportComplete={fetchData}
-          />
+          {/* Templates and Import UI removed */}
         </div>
       </main>
     </div>

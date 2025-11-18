@@ -20,24 +20,18 @@ const calendar = google.calendar({ version: 'v3', auth });
  */
 const dayToDayOfWeek = (day) => {
   const dayMap = {
-    'sunday': 0,
-    'sun': 0,
-    'monday': 1,
-    'mon': 1,
-    'tuesday': 2,
-    'tue': 2,
-    'wednesday': 3,
-    'wed': 3,
-    'thursday': 4,
-    'thu': 4,
-    'friday': 5,
-    'fri': 5,
-    'saturday': 6,
-    'sat': 6,
+    'sunday': 0, 'sun': 0,
+    'monday': 1, 'mon': 1,
+    'tuesday': 2, 'tue': 2, 'tues': 2,
+    'wednesday': 3, 'wed': 3, 'weds': 3,
+    'thursday': 4, 'thu': 4, 'thur': 4, 'thurs': 4,
+    'friday': 5, 'fri': 5,
+    'saturday': 6, 'sat': 6,
   };
 
+  if (typeof day !== 'string') return null;
   const normalizedDay = day.toLowerCase().trim();
-  return dayMap[normalizedDay] !== undefined ? dayMap[normalizedDay] : null;
+  return Object.prototype.hasOwnProperty.call(dayMap, normalizedDay) ? dayMap[normalizedDay] : null;
 };
 
 /**
@@ -45,24 +39,18 @@ const dayToDayOfWeek = (day) => {
  */
 const dayToRRULEDay = (day) => {
   const dayMap = {
-    'sunday': 'SU',
-    'sun': 'SU',
-    'monday': 'MO',
-    'mon': 'MO',
-    'tuesday': 'TU',
-    'tue': 'TU',
-    'wednesday': 'WE',
-    'wed': 'WE',
-    'thursday': 'TH',
-    'thu': 'TH',
-    'friday': 'FR',
-    'fri': 'FR',
-    'saturday': 'SA',
-    'sat': 'SA',
+    'sunday': 'SU', 'sun': 'SU',
+    'monday': 'MO', 'mon': 'MO',
+    'tuesday': 'TU', 'tue': 'TU', 'tues': 'TU',
+    'wednesday': 'WE', 'wed': 'WE', 'weds': 'WE',
+    'thursday': 'TH', 'thu': 'TH', 'thur': 'TH', 'thurs': 'TH',
+    'friday': 'FR', 'fri': 'FR',
+    'saturday': 'SA', 'sat': 'SA',
   };
   
+  if (typeof day !== 'string') return null;
   const normalizedDay = day.toLowerCase().trim();
-  return dayMap[normalizedDay] || 'MO';
+  return dayMap[normalizedDay] || null;
 };
 
 /**
@@ -116,12 +104,19 @@ const getNextDayOccurrence = (dayOfWeek, time) => {
   return nextOccurrence;
 };
 
+const extractDaysFromString = (value = '') => {
+  if (typeof value !== 'string') return [];
+  const dayRegex = /(sunday|sun|monday|mon|tuesday|tues|tue|wednesday|weds|wed|thursday|thur|thurs|thu|friday|fri|saturday|sat)/gi;
+  const matches = value.match(dayRegex);
+  return matches ? matches.map(match => match.trim()) : [];
+};
+
 const getDaysArray = (schedule) => {
-  if (Array.isArray(schedule.days) && schedule.days.length) {
+  if (Array.isArray(schedule?.days) && schedule.days.length) {
     return schedule.days;
   }
-  if (typeof schedule.day === 'string') {
-    return schedule.day.split(',').map(d => d.trim()).filter(Boolean);
+  if (typeof schedule?.day === 'string') {
+    return extractDaysFromString(schedule.day);
   }
   return [];
 };
@@ -194,6 +189,10 @@ export const createCalendarEvent = async (schedule, instructorEmail) => {
       .filter(Boolean)
       .join(',');
 
+    const recurrenceRule = rruleDays
+      ? `RRULE:FREQ=WEEKLY;BYDAY=${rruleDays}`
+      : null;
+
     const event = {
       summary: `${schedule.subject}`,
       description: `Course: ${schedule.course}\nYear: ${schedule.year}\nSection: ${schedule.section}\nRoom: ${schedule.room}`,
@@ -206,9 +205,7 @@ export const createCalendarEvent = async (schedule, instructorEmail) => {
         dateTime: endDate.toISOString(),
         timeZone: 'Asia/Manila',
       },
-      recurrence: [
-        `RRULE:FREQ=DAILY`
-      ],
+      ...(recurrenceRule ? { recurrence: [recurrenceRule] } : {}),
     };
     
     const response = await calendar.events.insert({
@@ -351,6 +348,10 @@ export const updateCalendarEvent = async (eventId, schedule, instructorEmail) =>
       .filter(Boolean)
       .join(',');
 
+    const recurrenceRule = rruleDays
+      ? `RRULE:FREQ=WEEKLY;BYDAY=${rruleDays}`
+      : null;
+
     const event = {
       summary: `${schedule.subject}`,
       description: `Course: ${schedule.course}\nYear: ${schedule.year}\nSection: ${schedule.section}\nRoom: ${schedule.room}`,
@@ -363,9 +364,7 @@ export const updateCalendarEvent = async (eventId, schedule, instructorEmail) =>
         dateTime: endDate.toISOString(),
         timeZone: 'Asia/Manila',
       },
-      recurrence: [
-        `RRULE:FREQ=DAILY`
-      ],
+      ...(recurrenceRule ? { recurrence: [recurrenceRule] } : {}),
     };
     
     const response = await calendar.events.update({

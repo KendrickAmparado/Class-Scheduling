@@ -10,6 +10,12 @@ html {
   scroll-behavior: smooth;
   min-height: 100vh;
   background: linear-gradient(135deg, #0f2c63 0%, #1e3a72 20%, #2d4a81 40%, #ea580c 70%, #f97316 100%) fixed;
+  font-size: clamp(14px, 0.65vw + 12px, 16px);
+}
+
+:root {
+  --layout-max-width: 1280px;
+  --layout-gutter: clamp(16px, 3vw, 40px);
 }
 
 body {
@@ -20,10 +26,17 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
+  width: 100%;
 }
 
 #root {
   min-height: 100vh;
+}
+
+img,
+video {
+  max-width: 100%;
+  height: auto;
 }
 
 /* Custom scrollbar styling */
@@ -99,6 +112,18 @@ body {
   min-height: calc(100vh - 80px);
   overflow-y: auto;
   animation: fadeInUp 0.5s ease-out;
+}
+
+.dashboard-content.responsive-shell {
+  width: min(var(--layout-max-width), 100%);
+  margin: 0 auto;
+  padding: clamp(20px, 2.5vw, 40px);
+}
+
+@media (min-width: 1600px) {
+  .dashboard-content.responsive-shell {
+    width: min(1400px, 90%);
+  }
 }
 
 /* Mobile marginTop adjustment */

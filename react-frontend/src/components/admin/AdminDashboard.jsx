@@ -24,6 +24,7 @@ import {
   faInfoCircle,
   faSync,
 } from '@fortawesome/free-solid-svg-icons';
+import { formatRoomLabel } from '../../utils/roomUtils';
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -56,18 +57,8 @@ const AdminDashboard = () => {
       }
     };
 
-    // Initial fetch
     fetchAlerts();
     fetchRoomStatus();
-
-    // Auto-refresh every 30 seconds
-    const alertsInterval = setInterval(fetchAlerts, 30000);
-    const roomsInterval = setInterval(fetchRoomStatus, 30000);
-
-    return () => {
-      clearInterval(alertsInterval);
-      clearInterval(roomsInterval);
-    };
   }, []);
 
   // Fetch weather for Malaybalay City, Bukidnon
@@ -104,17 +95,8 @@ const AdminDashboard = () => {
       }
     };
 
-    // Initial fetch
     fetchWeather();
     fetchForecast();
-
-    // Auto-refresh every 30 minutes
-    const weatherInterval = setInterval(() => {
-      fetchWeather();
-      fetchForecast();
-    }, 30 * 60 * 1000);
-
-    return () => clearInterval(weatherInterval);
   }, [apiBase]);
 
   const renderAlertIcon = (type) => {
@@ -387,7 +369,7 @@ const AdminDashboard = () => {
                 <tbody>
                   {roomStatus.map((room, index) => (
                     <tr key={index} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                      <td style={{ padding: '15px 20px', color: '#374151' }}>{room.room}</td>
+                      <td style={{ padding: '15px 20px', color: '#374151' }}>{formatRoomLabel(room.room)}</td>
                       <td style={{ padding: '15px 20px', color: '#374151' }}>{room.area}</td>
                       <td style={{ padding: '15px 20px' }}>
                         <span

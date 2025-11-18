@@ -11,6 +11,7 @@ const scheduleSchema = new mongoose.Schema({
   time: { type: String, required: true },
   room: { type: String, required: true },
   googleCalendarEventId: { type: String, required: false },
+  archived: { type: Boolean, default: false },
 }, { timestamps: true });
 
 export default mongoose.model("Schedule", scheduleSchema);

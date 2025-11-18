@@ -95,15 +95,7 @@ const InstructorSettings = () => {
         });
     };
 
-    // Initial fetch
     fetchProfileData();
-
-    // Auto-refresh every 30 seconds
-    const autoRefreshInterval = setInterval(fetchProfileData, 30000);
-
-    return () => {
-      clearInterval(autoRefreshInterval);
-    };
   }, [userEmail, apiBase, resolveImageUrl]);
 
   const handleChange = (field) => (e) => {

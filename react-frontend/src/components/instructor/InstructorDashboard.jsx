@@ -1,10 +1,10 @@
 import InstructorSidebar from '../common/InstructorSidebar.jsx';
 import InstructorHeader from '../common/InstructorHeader.jsx';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faUser, faCalendarAlt, faClock, faMapMarkerAlt, faFilter, faCalendarWeek, faSync, faExternalLinkAlt, faCheckCircle, faExclamationCircle, faCloudSun, faCloudRain, faSun, faBolt, faWind, faTemperatureHigh, faExclamationTriangle, faInfoCircle } from '@fortawesome/free-solid-svg-icons';
+import { faUser, faCalendarAlt, faClock, faMapMarkerAlt, faFilter, faCalendarWeek, faSync, faExternalLinkAlt, faCheckCircle, faExclamationCircle, faCloudSun, faCloudRain, faSun, faBolt, faWind, faTemperatureHigh, faExclamationTriangle, faInfoCircle, faChevronDown, faChevronUp } from '@fortawesome/free-solid-svg-icons';
 import '../../styles/InstructorDashboard.css';
 import { AuthContext } from '../../context/AuthContext.jsx';
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useMemo } from 'react';
 
 const InstructorDashboard = () => {
   const { userEmail } = useContext(AuthContext);
@@ -20,8 +20,6 @@ const InstructorDashboard = () => {
   const apiBase = process.env.REACT_APP_API_BASE || 'http://localhost:5000';
 
   const [allSchedules, setAllSchedules] = useState([]);
-  const [selectedDay, setSelectedDay] = useState('all');
-  const [selectedDate] = useState(new Date());
   const [calendarEvents, setCalendarEvents] = useState([]);
   const [syncedSchedules, setSyncedSchedules] = useState([]);
   const [calendarConfigured, setCalendarConfigured] = useState(false);
@@ -30,24 +28,15 @@ const InstructorDashboard = () => {
   const [weatherForecast, setWeatherForecast] = useState(null);
   const [weatherAlert, setWeatherAlert] = useState(null);
   const [loadingWeather, setLoadingWeather] = useState(false);
-
-  // Days of the week for filtering
-  const daysOfWeek = [
-    { key: 'all', label: 'All Days', icon: faCalendarWeek },
-    { key: 'monday', label: 'Monday', icon: faCalendarAlt },
-    { key: 'tuesday', label: 'Tuesday', icon: faCalendarAlt },
-    { key: 'wednesday', label: 'Wednesday', icon: faCalendarAlt },
-    { key: 'thursday', label: 'Thursday', icon: faCalendarAlt },
-    { key: 'friday', label: 'Friday', icon: faCalendarAlt },
-    { key: 'saturday', label: 'Saturday', icon: faCalendarAlt },
-  ];
+  const [weeklyWorkload, setWeeklyWorkload] = useState({ classes: 0, totalMinutes: 0, averageDailyMinutes: 0, daysWithClasses: 0 });
+  const [calendarMinimized, setCalendarMinimized] = useState(true);
 
   // Filter schedules based on selected day
-  const filteredSchedules = selectedDay === 'all' 
+  const filteredSchedules = 'all' 
     ? allSchedules 
     : allSchedules.filter(schedule => {
         const scheduleDays = schedule.day.toLowerCase();
-        return scheduleDays.includes(selectedDay);
+        return scheduleDays.includes('');
       });
 
   useEffect(() => {
@@ -95,15 +84,7 @@ const InstructorDashboard = () => {
         });
     };
 
-    // Initial fetch
     fetchInstructorData();
-
-    // Auto-refresh every 30 seconds
-    const autoRefreshInterval = setInterval(fetchInstructorData, 30000);
-
-    return () => {
-      clearInterval(autoRefreshInterval);
-    };
   }, [userEmail]);
 
   useEffect(() => {
@@ -167,16 +148,107 @@ const InstructorDashboard = () => {
       }
     };
 
-    // Initial fetch
     fetchScheduleData();
-
-    // Auto-refresh schedules every 30 seconds
-    const scheduleRefreshInterval = setInterval(fetchScheduleData, 30000);
-
-    return () => {
-      clearInterval(scheduleRefreshInterval);
-    };
   }, [userEmail, instructorData.firstname, instructorData.lastname]); // ensure fallback by name has data
+
+  // Parse time range like "8:00 AM - 10:00 AM" into minutes duration
+  const parseDurationMinutes = (timeStr) => {
+    if (!timeStr || typeof timeStr !== 'string') return 0;
+    const parts = timeStr.split('-').map(p => p.trim());
+    if (parts.length < 2) return 0;
+
+    const parseTime = (t) => {
+      t = t.replace(/\s+/g, ' ').trim();
+      t = t.replace(/(AM|PM|am|pm)$/i, (m) => ' ' + m.toUpperCase());
+      const [timePart, modifier] = t.split(' ');
+      if (!timePart) return 0;
+      const [hStr, mStr] = timePart.split(':');
+      let h = parseInt(hStr || '0', 10);
+      let m = parseInt(mStr || '0', 10) || 0;
+      const mod = (modifier || '').toLowerCase();
+      if (mod === 'pm' && h !== 12) h += 12;
+      if (mod === 'am' && h === 12) h = 0;
+      return h * 60 + m;
+    };
+
+    try {
+      const start = parseTime(parts[0]);
+      const end = parseTime(parts[1]);
+      return Math.max(0, end - start);
+    } catch (e) {
+      return 0;
+    }
+  };
+
+  // Compute weekly workload from schedules (treat schedules as recurring weekly slots)
+  useEffect(() => {
+    if (!Array.isArray(allSchedules)) {
+      setWeeklyWorkload({ classes: 0, totalMinutes: 0, averageDailyMinutes: 0, daysWithClasses: 0 });
+      return;
+    }
+
+    const daySet = new Set();
+    let classes = 0;
+    let totalMinutes = 0;
+
+    allSchedules.forEach(s => {
+      if (!s) return;
+      const day = (s.day || '').toString().toLowerCase().trim();
+      if (!day) return;
+      const duration = parseDurationMinutes(s.time || '');
+      classes += 1;
+      totalMinutes += duration;
+      daySet.add(day);
+    });
+
+    const daysWithClasses = daySet.size;
+    const averageDailyMinutes = daysWithClasses > 0 ? Math.round(totalMinutes / daysWithClasses) : 0;
+
+    setWeeklyWorkload({ classes, totalMinutes, averageDailyMinutes, daysWithClasses });
+  }, [allSchedules]);
+
+  const workloadByDay = useMemo(() => {
+    const dayOrder = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    const summary = new Map();
+
+    allSchedules.forEach((schedule) => {
+      if (!schedule?.day) return;
+      const normalizedDay = schedule.day.toLowerCase();
+      const minutes = parseDurationMinutes(schedule.time);
+      const current = summary.get(normalizedDay) || { classes: 0, minutes: 0 };
+      summary.set(normalizedDay, {
+        classes: current.classes + 1,
+        minutes: current.minutes + minutes,
+      });
+    });
+
+    return dayOrder.map((day) => ({
+      key: day,
+      label: day.charAt(0).toUpperCase() + day.slice(1),
+      classes: summary.get(day)?.classes || 0,
+      minutes: summary.get(day)?.minutes || 0,
+    }));
+  }, [allSchedules]);
+
+  const busiestDay = useMemo(() => {
+    return workloadByDay.reduce(
+      (acc, day) => {
+        if (day.minutes === 0) return acc;
+        if (!acc || day.minutes > acc.minutes) return day;
+        return acc;
+      },
+      null
+    );
+  }, [workloadByDay]);
+
+  const formatMinutesVerbose = (minutes) => {
+    if (!minutes) return '0m';
+    const hrs = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    if (hrs && mins) return `${hrs}h ${mins}m`;
+    if (hrs) return `${hrs}h`;
+    return `${mins}m`;
+  };
 
   // Fetch Google Calendar events
   useEffect(() => {
@@ -214,11 +286,6 @@ const InstructorDashboard = () => {
     };
 
     fetchCalendarEvents();
-    
-    // Refresh every 5 minutes
-    const calendarInterval = setInterval(fetchCalendarEvents, 300000);
-    
-    return () => clearInterval(calendarInterval);
   }, [userEmail]);
 
   // Fetch weather for Malaybalay City, Bukidnon
@@ -255,17 +322,8 @@ const InstructorDashboard = () => {
       }
     };
 
-    // Initial fetch
     fetchWeather();
     fetchForecast();
-
-    // Auto-refresh every 30 minutes
-    const weatherInterval = setInterval(() => {
-      fetchWeather();
-      fetchForecast();
-    }, 30 * 60 * 1000);
-
-    return () => clearInterval(weatherInterval);
   }, [apiBase]);
 
   if (!userEmail) {
@@ -312,6 +370,7 @@ const InstructorDashboard = () => {
     });
   };
 
+
   // Get Google Calendar URL
   const getGoogleCalendarUrl = () => {
     return `https://calendar.google.com/calendar/u/0/r`;
@@ -322,7 +381,7 @@ const InstructorDashboard = () => {
       <InstructorSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <main className="main-content" style={{ flex: 1, padding: '1rem', overflowY: 'auto' }}>
         <InstructorHeader onMenuClick={() => setSidebarOpen(!sidebarOpen)} />
-        <div className="dashboard-content" style={{ marginTop: '140px' }}>
+        <div className="dashboard-content responsive-shell" style={{ marginTop: '140px' }}>
           {/* Welcome Section */}
           <div className="welcome-section" style={{ marginBottom: '30px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '8px' }}>
@@ -344,94 +403,66 @@ const InstructorDashboard = () => {
           </div>
 
 
-          {/* Schedule Section */}
-          <div style={{ background: '#fff', padding: '30px', borderRadius: '15px', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', borderLeft: '5px solid #f97316' }}>
-            {/* Header */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '25px', flexWrap: 'wrap', gap: '15px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                <FontAwesomeIcon icon={faCalendarAlt} style={{ color: '#f97316', fontSize: '24px' }} />
-                <h3 style={{ color: '#1e293b', fontSize: '24px', fontWeight: '600', margin: 0 }}>
-                  {selectedDay === 'all' ? 'All Schedules' : `${selectedDay.charAt(0).toUpperCase() + selectedDay.slice(1)} Schedule`}
-                </h3>
+          {/* Weekly Workload Summary */}
+          <div className="workload-grid">
+            <article className="workload-summary-card">
+              <div className="workload-summary-card__meta">
+                <p>Classes This Week</p>
+                <h3>{weeklyWorkload.classes}</h3>
+                <span>{weeklyWorkload.daysWithClasses} active day(s)</span>
               </div>
-              <span style={{ color: '#64748b', fontSize: '16px' }}>
-                {selectedDate.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-              </span>
-            </div>
+              <div className="workload-summary-card__icon workload-summary-card__icon--orange">
+                <FontAwesomeIcon icon={faCalendarWeek} />
+              </div>
+            </article>
 
-            {/* Day Filter */}
-            <div style={{ marginBottom: '30px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px' }}>
-                <FontAwesomeIcon icon={faFilter} style={{ color: '#f97316', fontSize: '16px' }} />
-                <span style={{ color: '#374151', fontSize: '16px', fontWeight: '600' }}>Filter by Day</span>
+            <article className="workload-summary-card">
+              <div className="workload-summary-card__meta">
+                <p>Total Hours</p>
+                <h3>{(weeklyWorkload.totalMinutes / 60).toFixed(1)}h</h3>
+                <span>{weeklyWorkload.totalMinutes} total minutes</span>
               </div>
-              
-              <div style={{ 
-                display: 'flex', 
-                gap: '10px', 
-                flexWrap: 'wrap',
-                padding: '15px',
-                background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)',
-                borderRadius: '12px',
-                border: '1px solid #e2e8f0'
-              }}>
-                {daysOfWeek.map((day) => (
-                  <button
-                    key={day.key}
-                    onClick={() => setSelectedDay(day.key)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      padding: '12px 20px',
-                      borderRadius: '8px',
-                      border: 'none',
-                      fontSize: '14px',
-                      fontWeight: '600',
-                      cursor: 'pointer',
-                      transition: 'all 0.3s ease',
-                      background: selectedDay === day.key 
-                        ? 'linear-gradient(135deg, #0f2c63 0%, #f97316 100%)' 
-                        : '#ffffff',
-                      color: selectedDay === day.key ? '#ffffff' : '#374151',
-                      boxShadow: selectedDay === day.key 
-                        ? '0 4px 15px rgba(249, 115, 22, 0.4)' 
-                        : '0 2px 4px rgba(0, 0, 0, 0.05)',
-                      transform: selectedDay === day.key ? 'translateY(-2px)' : 'translateY(0)',
-                    }}
-                    onMouseOver={(e) => {
-                      if (selectedDay !== day.key) {
-                        e.target.style.background = '#f1f5f9';
-                        e.target.style.transform = 'translateY(-1px)';
-                      }
-                    }}
-                    onMouseOut={(e) => {
-                      if (selectedDay !== day.key) {
-                        e.target.style.background = '#ffffff';
-                        e.target.style.transform = 'translateY(0)';
-                      }
-                    }}
-                  >
-                    <FontAwesomeIcon 
-                      icon={day.icon} 
-                      style={{ 
-                        fontSize: '14px',
-                        color: selectedDay === day.key ? '#ffffff' : '#f97316'
-                      }} 
-                    />
-                    {day.label}
-                  </button>
-                ))}
+              <div className="workload-summary-card__icon workload-summary-card__icon--sky">
+                <FontAwesomeIcon icon={faClock} />
               </div>
-            </div>
+            </article>
+
+            <article className="workload-summary-card">
+              <div className="workload-summary-card__meta">
+                <p>Avg Hours / Day</p>
+                <h3>{(weeklyWorkload.averageDailyMinutes / 60 || 0).toFixed(2)}h</h3>
+                <span>Based on teaching days</span>
+              </div>
+              <div className="workload-summary-card__icon workload-summary-card__icon--green">
+                <FontAwesomeIcon icon={faCalendarAlt} />
+              </div>
+            </article>
+
+            <article className="workload-summary-card">
+              <div className="workload-summary-card__meta">
+                <p>Busiest Day</p>
+                <h3>{busiestDay ? busiestDay.label : '—'}</h3>
+                <span>
+                  {busiestDay
+                    ? `${busiestDay.classes} class(es) · ${formatMinutesVerbose(busiestDay.minutes)}`
+                    : 'No classes yet'}
+                </span>
+              </div>
+              <div className="workload-summary-card__icon workload-summary-card__icon--slate">
+                <FontAwesomeIcon icon={faFilter} />
+              </div>
+            </article>
+          </div>
+
+          
 
             {/* Schedule Results */}
             <div style={{ marginBottom: '20px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
                 <span style={{ color: '#64748b', fontSize: '14px', fontWeight: '500' }}>
                   {filteredSchedules.length > 0 
-                    ? `Showing ${filteredSchedules.length} ${filteredSchedules.length === 1 ? 'class' : 'classes'} ${selectedDay === 'all' ? 'for all days' : `for ${selectedDay}`}`
-                    : `No classes found ${selectedDay === 'all' ? 'in your schedule' : `for ${selectedDay}`}`
+                    ? `Showing ${filteredSchedules.length} ${filteredSchedules.length === 1 ? 'class' : 'classes'} for all days`
+                    : `No classes found in your schedule`
                   }
                 </span>
                 {filteredSchedules.length > 0 && (
@@ -700,9 +731,9 @@ const InstructorDashboard = () => {
                   marginLeft: 'auto',
                   marginRight: 'auto'
                 }}>
-                  {selectedDay === 'all' 
+                  {'' === 'all' 
                     ? 'You don\'t have any classes scheduled yet. Contact your administrator to assign classes.'
-                    : `No classes are scheduled for ${selectedDay}. Try selecting a different day.`
+                    : `No classes are scheduled for . Try selecting a different day.`
                   }
                 </p>
               </div>
@@ -710,138 +741,97 @@ const InstructorDashboard = () => {
           </div>
 
           {/* Weather Section */}
-          <div style={{ 
-            background: '#fff', 
-            padding: '30px', 
-            borderRadius: '15px', 
-            boxShadow: '0 4px 20px rgba(0,0,0,0.08)', 
-            borderLeft: '5px solid #3b82f6', 
-            marginTop: '30px' 
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '25px', flexWrap: 'wrap', gap: '15px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                <FontAwesomeIcon icon={faCloudSun} style={{ color: '#3b82f6', fontSize: '24px' }} />
-                <h3 style={{ color: '#1e293b', fontSize: '24px', fontWeight: '600', margin: 0 }}>Weather Forecast - Malaybalay City</h3>
+          <div className="instructor-card weather-card">
+            <div className="section-header">
+              <div className="section-title">
+                <FontAwesomeIcon icon={faCloudSun} className="section-icon" />
+                <div>
+                  <p className="section-eyebrow">Weather Forecast</p>
+                  <h3 className="section-heading">Malaybalay City</h3>
+                </div>
               </div>
+              {!loadingWeather && weather && (
+                <span className="section-chip">Updated moments ago</span>
+              )}
             </div>
 
             {loadingWeather ? (
-              <div style={{ textAlign: 'center', padding: '40px' }}>
-                <FontAwesomeIcon icon={faSync} spin style={{ fontSize: '24px', color: '#3b82f6', marginBottom: '10px' }} />
-                <p style={{ color: '#64748b', margin: 0 }}>Loading weather data...</p>
+              <div className="card-loading">
+                <FontAwesomeIcon icon={faSync} spin className="card-loading__icon" />
+                <p>Loading weather data...</p>
               </div>
             ) : weather ? (
               <>
-                {/* Current Weather */}
-                <div style={{ 
-                  background: 'linear-gradient(135deg, #3b82f6 0%, #1e40af 100%)', 
-                  padding: '25px', 
-                  borderRadius: '12px', 
-                  color: 'white',
-                  marginBottom: '20px'
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '20px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-                      <FontAwesomeIcon icon={getWeatherIcon(weather.main)} style={{ fontSize: '64px' }} />
-                      <div>
-                        <div style={{ fontSize: '48px', fontWeight: '700', lineHeight: '1' }}>
-                          {weather.temperature}°C
-                        </div>
-                        <div style={{ fontSize: '18px', opacity: 0.9, marginTop: '5px', textTransform: 'capitalize' }}>
-                          {weather.description}
-                        </div>
-                        <div style={{ fontSize: '14px', opacity: 0.8, marginTop: '5px' }}>
-                          Feels like {weather.feelsLike}°C
-                        </div>
-                      </div>
+                <div className="weather-current">
+                  <div className="weather-current__primary">
+                    <FontAwesomeIcon icon={getWeatherIcon(weather.main)} className="weather-current__icon" />
+                    <div>
+                      <div className="weather-current__temp">{weather.temperature}°C</div>
+                      <div className="weather-current__description">{weather.description}</div>
+                      <div className="weather-current__feels">Feels like {weather.feelsLike}°C</div>
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '15px', flex: '1', maxWidth: '300px' }}>
-                      <div style={{ background: 'rgba(255,255,255,0.2)', padding: '12px', borderRadius: '8px', textAlign: 'center' }}>
-                        <FontAwesomeIcon icon={faWind} style={{ marginBottom: '5px' }} />
-                        <div style={{ fontSize: '12px', opacity: 0.9 }}>Wind</div>
-                        <div style={{ fontSize: '16px', fontWeight: '600' }}>{Math.round(weather.windSpeed * 3.6)} km/h</div>
-                      </div>
-                      <div style={{ background: 'rgba(255,255,255,0.2)', padding: '12px', borderRadius: '8px', textAlign: 'center' }}>
-                        <FontAwesomeIcon icon={faTemperatureHigh} style={{ marginBottom: '5px' }} />
-                        <div style={{ fontSize: '12px', opacity: 0.9 }}>Humidity</div>
-                        <div style={{ fontSize: '16px', fontWeight: '600' }}>{weather.humidity}%</div>
-                      </div>
+                  </div>
+                  <div className="weather-current__stats">
+                    <div className="weather-stat-card">
+                      <FontAwesomeIcon icon={faWind} />
+                      <span>Wind</span>
+                      <strong>{Math.round(weather.windSpeed * 3.6)} km/h</strong>
+                    </div>
+                    <div className="weather-stat-card">
+                      <FontAwesomeIcon icon={faTemperatureHigh} />
+                      <span>Humidity</span>
+                      <strong>{weather.humidity}%</strong>
                     </div>
                   </div>
                 </div>
 
-                {/* Weather Alert */}
                 {weatherAlert && weatherAlert.hasAlert && (
-                  <div style={{
-                    background: weatherAlert.severity === 'danger' ? '#fee2e2' : 
-                               weatherAlert.severity === 'warning' ? '#fef3c7' : '#dbeafe',
-                    border: `2px solid ${getSeverityColor(weatherAlert.severity)}`,
-                    padding: '15px',
-                    borderRadius: '10px',
-                    marginBottom: '20px'
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-                      <FontAwesomeIcon 
-                        icon={weatherAlert.severity === 'danger' || weatherAlert.severity === 'warning' ? faExclamationTriangle : faInfoCircle} 
-                        style={{ color: getSeverityColor(weatherAlert.severity), fontSize: '18px' }} 
-                      />
-                      <strong style={{ color: getSeverityColor(weatherAlert.severity), textTransform: 'uppercase', fontSize: '14px' }}>
+                  <div
+                    className="weather-alert"
+                    style={{
+                      background: weatherAlert.severity === 'danger' ? '#fee2e2' :
+                                 weatherAlert.severity === 'warning' ? '#fef3c7' : '#dbeafe',
+                      border: `2px solid ${getSeverityColor(weatherAlert.severity)}`
+                    }}
+                  >
+                    <FontAwesomeIcon
+                      icon={weatherAlert.severity === 'danger' || weatherAlert.severity === 'warning' ? faExclamationTriangle : faInfoCircle}
+                      style={{ color: getSeverityColor(weatherAlert.severity), fontSize: '16px', marginTop: '2px' }}
+                    />
+                    <div>
+                      <strong style={{ color: getSeverityColor(weatherAlert.severity), textTransform: 'uppercase', fontSize: '13px' }}>
                         {weatherAlert.severity} Alert
                       </strong>
+                      <p style={{ margin: '4px 0 0', color: '#0f172a', fontSize: '13px' }}>{weatherAlert.message}</p>
                     </div>
-                    <p style={{ margin: 0, color: '#1e293b', fontSize: '14px' }}>{weatherAlert.message}</p>
                   </div>
                 )}
 
-                {/* 5-Day Forecast */}
                 {weatherForecast && weatherForecast.forecast && weatherForecast.forecast.length > 0 && (
-                  <div>
-                    <h4 style={{ color: '#374151', fontSize: '16px', fontWeight: '600', marginBottom: '15px' }}>
-                      5-Day Forecast
-                    </h4>
-                    <div style={{ display: 'grid', gap: '10px' }}>
+                  <div className="weather-forecast">
+                    <p className="section-subtitle">Next 5 days</p>
+                    <div className="weather-forecast-list">
                       {weatherForecast.forecast.slice(0, 5).map((day, idx) => {
-                        const mainForecast = day.forecasts[0]; // Get first forecast of the day
+                        const mainForecast = day.forecasts[0];
                         return (
-                          <div
-                            key={idx}
-                            style={{
-                              padding: '15px',
-                              background: '#f8fafc',
-                              borderRadius: '10px',
-                              border: '1px solid #e2e8f0',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'space-between',
-                              flexWrap: 'wrap',
-                              gap: '15px'
-                            }}
-                          >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '15px', flex: '1' }}>
-                              <div style={{ width: '60px', textAlign: 'center' }}>
-                                <div style={{ fontSize: '14px', fontWeight: '600', color: '#1e293b' }}>
-                                  {day.dayName.slice(0, 3)}
-                                </div>
-                                <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
-                                  {new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                                </div>
+                          <div key={idx} className="weather-forecast-card">
+                            <div className="weather-forecast-card__day">
+                              <h5>{day.dayName.slice(0, 3)}</h5>
+                              <span>{new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                            </div>
+                            <FontAwesomeIcon
+                              icon={getWeatherIcon(mainForecast?.main || 'Clouds')}
+                              style={{ fontSize: '26px', color: '#0ea5e9' }}
+                            />
+                            <div className="weather-forecast-card__meta">
+                              <p>{mainForecast?.description || 'N/A'}</p>
+                              <div className="weather-forecast-card__details">
+                                <span><FontAwesomeIcon icon={faWind} /> {Math.round((mainForecast?.windSpeed || 0) * 3.6)} km/h</span>
+                                <span><FontAwesomeIcon icon={faTemperatureHigh} /> {mainForecast?.humidity || 0}%</span>
                               </div>
-                              <FontAwesomeIcon 
-                                icon={getWeatherIcon(mainForecast?.main || 'Clouds')} 
-                                style={{ fontSize: '32px', color: '#3b82f6' }} 
-                              />
-                              <div style={{ flex: '1' }}>
-                                <div style={{ fontSize: '14px', color: '#64748b', textTransform: 'capitalize', marginBottom: '3px' }}>
-                                  {mainForecast?.description || 'N/A'}
-                                </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '15px', fontSize: '12px', color: '#64748b' }}>
-                                  <span><FontAwesomeIcon icon={faWind} style={{ marginRight: '5px' }} /> {Math.round((mainForecast?.windSpeed || 0) * 3.6)} km/h</span>
-                                  <span><FontAwesomeIcon icon={faTemperatureHigh} style={{ marginRight: '5px' }} /> {mainForecast?.humidity || 0}%</span>
-                                </div>
-                              </div>
-                              <div style={{ fontSize: '24px', fontWeight: '700', color: '#1e293b' }}>
-                                {mainForecast?.temperature || 'N/A'}°C
-                              </div>
+                            </div>
+                            <div className="weather-forecast-card__temp">
+                              {mainForecast?.temperature || 'N/A'}°C
                             </div>
                           </div>
                         );
@@ -851,8 +841,8 @@ const InstructorDashboard = () => {
                 )}
               </>
             ) : (
-              <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
-                <FontAwesomeIcon icon={faCloudSun} style={{ fontSize: '48px', marginBottom: '15px', opacity: 0.5 }} />
+              <div className="weather-empty">
+                <FontAwesomeIcon icon={faCloudSun} style={{ fontSize: '42px', opacity: 0.4 }} />
                 <p>Weather data unavailable</p>
               </div>
             )}
@@ -860,153 +850,113 @@ const InstructorDashboard = () => {
 
           {/* Google Calendar Section */}
           {calendarConfigured && (
-            <div style={{ background: '#fff', padding: '30px', borderRadius: '15px', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', borderLeft: '5px solid #4285f4', marginTop: '30px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '25px', flexWrap: 'wrap', gap: '15px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                  <FontAwesomeIcon icon={faCalendarAlt} style={{ color: '#4285f4', fontSize: '24px' }} />
-                  <h3 style={{ color: '#1e293b', fontSize: '24px', fontWeight: '600', margin: 0 }}>Google Calendar</h3>
+            <div className="instructor-card calendar-card">
+              <div className="section-header">
+                <div className="section-title">
+                  <FontAwesomeIcon icon={faCalendarAlt} className="section-icon" />
+                  <div>
+                    <p className="section-eyebrow">Google Calendar</p>
+                    <h3 className="section-heading">Upcoming events</h3>
+                  </div>
                   {syncedSchedules.length > 0 && (
-                    <span style={{
-                      background: 'linear-gradient(135deg, #10b981 0%, #34d399 100%)',
-                      color: 'white',
-                      padding: '4px 12px',
-                      borderRadius: '12px',
-                      fontSize: '12px',
-                      fontWeight: '600',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px'
-                    }}>
-                      <FontAwesomeIcon icon={faCheckCircle} style={{ fontSize: '10px' }} />
-                      {syncedSchedules.length} Synced
+                    <span className="calendar-chip">
+                      <FontAwesomeIcon icon={faCheckCircle} style={{ fontSize: '11px' }} />
+                      {syncedSchedules.length} synced
                     </span>
                   )}
                 </div>
-                <a
-                  href={getGoogleCalendarUrl()}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    padding: '10px 20px',
-                    background: 'linear-gradient(135deg, #4285f4 0%, #1a73e8 100%)',
-                    color: 'white',
-                    textDecoration: 'none',
-                    borderRadius: '8px',
-                    fontWeight: '600',
-                    fontSize: '14px',
-                    transition: 'transform 0.2s ease',
-                  }}
-                  onMouseOver={(e) => (e.currentTarget.style.transform = 'translateY(-2px)')}
-                  onMouseOut={(e) => (e.currentTarget.style.transform = '')}
-                >
-                  <FontAwesomeIcon icon={faExternalLinkAlt} />
-                  Open Google Calendar
-                </a>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <a
+                    className="calendar-link"
+                    href={getGoogleCalendarUrl()}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+                  >
+                    <FontAwesomeIcon icon={faExternalLinkAlt} />
+                    Open Calendar
+                  </a>
+                  <button
+                    onClick={() => setCalendarMinimized(prev => !prev)}
+                    aria-expanded={!calendarMinimized}
+                    title={calendarMinimized ? 'Show calendar details' : 'Minimize calendar'}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                      color: '#374151',
+                      padding: '6px'
+                    }}
+                  >
+                    <FontAwesomeIcon icon={calendarMinimized ? faChevronDown : faChevronUp} />
+                  </button>
+                </div>
               </div>
 
               {loadingCalendar ? (
-                <div style={{ textAlign: 'center', padding: '40px' }}>
-                  <FontAwesomeIcon icon={faSync} spin style={{ fontSize: '24px', color: '#4285f4', marginBottom: '10px' }} />
-                  <p style={{ color: '#64748b', margin: 0 }}>Loading calendar events...</p>
+                <div className="card-loading">
+                  <FontAwesomeIcon icon={faSync} spin className="card-loading__icon" />
+                  <p>Loading calendar events...</p>
                 </div>
-              ) : calendarEvents.length > 0 ? (
-                <div style={{ marginTop: '20px' }}>
-                  <h4 style={{ color: '#374151', fontSize: '16px', fontWeight: '600', marginBottom: '15px' }}>
-                    Upcoming Events ({calendarEvents.length})
-                  </h4>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    {calendarEvents.slice(0, 5).map((event, index) => (
-                      <div
-                        key={event.id || index}
-                        style={{
-                          padding: '15px',
-                          background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)',
-                          borderRadius: '10px',
-                          border: '1px solid #e2e8f0',
-                          transition: 'all 0.2s ease'
-                        }}
-                        onMouseOver={(e) => {
-                          e.currentTarget.style.background = 'linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%)';
-                          e.currentTarget.style.transform = 'translateX(5px)';
-                        }}
-                        onMouseOut={(e) => {
-                          e.currentTarget.style.background = 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)';
-                          e.currentTarget.style.transform = 'translateX(0)';
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
-                          <div style={{ flex: 1 }}>
-                            <h5 style={{ color: '#1e293b', fontSize: '16px', fontWeight: '600', margin: '0 0 5px 0' }}>
-                              {event.summary || 'Untitled Event'}
-                            </h5>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '15px', flexWrap: 'wrap', marginTop: '8px' }}>
-                              <span style={{ color: '#64748b', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                <FontAwesomeIcon icon={faClock} style={{ fontSize: '12px' }} />
-                                {formatEventDate(event.start?.dateTime || event.start?.date || '')}
-                              </span>
-                              {event.location && (
-                                <span style={{ color: '#64748b', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                  <FontAwesomeIcon icon={faMapMarkerAlt} style={{ fontSize: '12px' }} />
-                                  {event.location}
-                                </span>
-                              )}
-                            </div>
-                            {event.description && (
-                              <p style={{ color: '#475569', fontSize: '13px', margin: '8px 0 0 0', lineHeight: '1.5' }}>
-                                {event.description.split('\n')[0]}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                    {calendarEvents.length > 5 && (
-                      <p style={{ color: '#64748b', fontSize: '13px', textAlign: 'center', marginTop: '10px' }}>
-                        And {calendarEvents.length - 5} more events. View all in Google Calendar.
-                      </p>
-                    )}
+              ) : calendarMinimized ? (
+                <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <strong style={{ color: '#0f172a' }}>{calendarEvents[0]?.summary || (calendarEvents.length > 0 ? 'Upcoming event' : 'No events')}</strong>
+                    <span style={{ color: '#64748b', fontSize: '13px' }}>{calendarEvents.length > 0 ? formatEventDate(calendarEvents[0]?.start?.dateTime || calendarEvents[0]?.start?.date || '') : 'No upcoming calendar events'}</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <span style={{ color: '#94a3b8', fontSize: '13px' }}>{calendarEvents.length} events</span>
+                    <button onClick={() => setCalendarMinimized(false)} style={{ background: '#f3f4f6', border: '1px solid #e5e7eb', padding: '6px 10px', borderRadius: '8px', cursor: 'pointer' }}>Show details</button>
                   </div>
                 </div>
+              ) : calendarEvents.length > 0 ? (
+                <div className="calendar-events">
+                  {calendarEvents.slice(0, 5).map((event, index) => (
+                    <div key={event.id || index} className="calendar-event">
+                      <h5>{event.summary || 'Untitled Event'}</h5>
+                      <div className="calendar-event__meta">
+                        <span>
+                          <FontAwesomeIcon icon={faClock} /> {formatEventDate(event.start?.dateTime || event.start?.date || '')}
+                        </span>
+                        {event.location && (
+                          <span>
+                            <FontAwesomeIcon icon={faMapMarkerAlt} /> {event.location}
+                          </span>
+                        )}
+                      </div>
+                      {event.description && (
+                        <p className="calendar-event__description">
+                          {event.description.split('\n')[0]}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                  {calendarEvents.length > 5 && (
+                    <p className="calendar-more">
+                      And {calendarEvents.length - 5} more events. View all in Google Calendar.
+                    </p>
+                  )}
+                </div>
               ) : (
-                <div style={{ textAlign: 'center', padding: '40px', background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)', borderRadius: '12px' }}>
-                  <FontAwesomeIcon icon={faCalendarAlt} style={{ fontSize: '48px', color: '#cbd5e1', marginBottom: '15px' }} />
-                  <p style={{ color: '#64748b', fontSize: '14px', margin: 0 }}>
-                    No upcoming calendar events. Your schedules will be automatically synced to Google Calendar.
-                  </p>
+                <div className="calendar-empty">
+                  <FontAwesomeIcon icon={faCalendarAlt} style={{ fontSize: '36px', color: '#cbd5f5', marginBottom: '8px' }} />
+                  <p>No upcoming calendar events. Your schedules sync automatically.</p>
                 </div>
               )}
 
               {syncedSchedules.length > 0 && (
-                <div style={{ marginTop: '25px', paddingTop: '25px', borderTop: '2px solid #e2e8f0' }}>
-                  <h4 style={{ color: '#374151', fontSize: '16px', fontWeight: '600', marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div className="synced-schedules">
+                  <h4>
                     <FontAwesomeIcon icon={faSync} style={{ color: '#4285f4', fontSize: '14px' }} />
                     Synced Schedules ({syncedSchedules.length})
                   </h4>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '12px' }}>
+                  <div className="synced-schedule-list">
                     {syncedSchedules.map((schedule) => (
-                      <div
-                        key={schedule._id}
-                        style={{
-                          padding: '12px',
-                          background: '#f0fdf4',
-                          borderRadius: '8px',
-                          border: '1px solid #86efac',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '10px'
-                        }}
-                      >
+                      <div key={schedule._id} className="synced-schedule-card">
                         <FontAwesomeIcon icon={faCheckCircle} style={{ color: '#10b981', fontSize: '14px' }} />
-                        <div style={{ flex: 1 }}>
-                          <p style={{ color: '#1e293b', fontSize: '13px', fontWeight: '600', margin: 0 }}>
-                            {schedule.subject}
-                          </p>
-                          <p style={{ color: '#64748b', fontSize: '11px', margin: '4px 0 0 0' }}>
-                            {schedule.day} • {schedule.time}
-                          </p>
+                        <div>
+                          <p>{schedule.subject}</p>
+                          <p>{schedule.day} • {schedule.time}</p>
                         </div>
                       </div>
                     ))}
@@ -1017,18 +967,20 @@ const InstructorDashboard = () => {
           )}
 
           {!calendarConfigured && !loadingCalendar && (
-            <div style={{ background: '#fff', padding: '30px', borderRadius: '15px', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', borderLeft: '5px solid #f59e0b', marginTop: '30px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '15px' }}>
-                <FontAwesomeIcon icon={faExclamationCircle} style={{ color: '#f59e0b', fontSize: '24px' }} />
-                <h3 style={{ color: '#1e293b', fontSize: '20px', fontWeight: '600', margin: 0 }}>Google Calendar Integration</h3>
+            <div className="instructor-card calendar-notice">
+              <div className="section-title">
+                <FontAwesomeIcon icon={faExclamationCircle} className="section-icon" />
+                <div>
+                  <p className="section-eyebrow">Google Calendar</p>
+                  <h3 className="section-heading">Integration unavailable</h3>
+                </div>
               </div>
-              <p style={{ color: '#64748b', fontSize: '14px', margin: 0, lineHeight: '1.6' }}>
-                Google Calendar integration is not currently configured. When enabled, your schedules will be automatically synced to your Google Calendar.
-                Please contact your administrator for more information.
+              <p style={{ color: '#475569', fontSize: '13px', marginTop: '10px', lineHeight: '1.6' }}>
+                Google Calendar integration is not yet configured for your account. Once enabled, your schedules will sync automatically to Google Calendar.
+                Please contact your administrator for assistance.
               </p>
             </div>
           )}
-        </div>
       </main>
     </div>
   );

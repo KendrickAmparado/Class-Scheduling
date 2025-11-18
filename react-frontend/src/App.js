@@ -25,6 +25,7 @@ const FacultyManagement = lazy(() => import('./components/admin/FacultyManagemen
 const RoomManagement = lazy(() => import('./components/admin/RoomManagement.jsx'));
 const RoomSchedule = lazy(() => import('./components/admin/RoomSchedule.jsx'));
 const Reports = lazy(() => import('./components/admin/Reports.jsx'));
+const InstructorWorkload = lazy(() => import('./components/admin/InstructorWorkload.jsx'));
 const Search = lazy(() => import('./components/admin/Search.jsx'));
 const ActivityLogs = lazy(() => import('./components/admin/ActivityLogs.jsx'));
 
@@ -62,6 +63,7 @@ function App() {
                     <Route path="/admin/schedule-management/:course/:year" element={<ScheduleManagementDetails />} />
                     <Route path="/admin/schedule/:course/:year" element={<ScheduleCalendar />} />
                     <Route path="/admin/faculty-management" element={<FacultyManagement />} />
+                    <Route path="/admin/instructor/:id/workload" element={<InstructorWorkload />} />
                     <Route path="/admin/room-management" element={<RoomManagement />} />
                     <Route path="/admin/room-schedule/:roomId" element={<RoomSchedule />} />
                     <Route path="/admin/reports" element={<Reports />} />
