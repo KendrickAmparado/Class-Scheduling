@@ -1,223 +1,374 @@
-import React, { useEffect, useState, useMemo } from 'react';
-import {
-  ResponsiveContainer,
-  BarChart as ReBarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip as ReTooltip,
-  PieChart as RePieChart,
-  Pie,
-  Cell,
-  Legend,
-} from 'recharts';
+
+import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import Sidebar from '../common/Sidebar.jsx';
-import Header from '../common/Header.jsx';
+import { FaArrowLeft, FaInfoCircle, FaUserCircle, FaDownload, FaCheckCircle, FaClock } from 'react-icons/fa';
+import html2canvas from 'html2canvas';
+import { Bar, Pie } from 'react-chartjs-2';
+import 'chart.js/auto';
+import '../../styles/InstructorWorkload.css';
 
-// Helper: parse duration minutes from schedule.time like "08:00 AM - 09:30 AM"
-const parseDurationMinutes = (timeStr) => {
-  if (!timeStr || !timeStr.includes('-')) return 0;
-  const [startRaw, endRaw] = timeStr.split('-').map(s => s.trim());
-  const toMinutes = (t) => {
-    if (!t) return 0;
-    const parts = t.split(' ');
-    let hm = parts[0];
-    let ampm = parts[1] || '';
-    const [h, m] = hm.split(':').map(n => parseInt(n, 10));
-    let H = Number.isNaN(h) ? 0 : h;
-    if (ampm.toLowerCase() === 'pm' && H !== 12) H += 12;
-    if (ampm.toLowerCase() === 'am' && H === 12) H = 0;
-    return H * 60 + (Number.isNaN(m) ? 0 : m);
-  };
-  const s = toMinutes(startRaw);
-  const e = toMinutes(endRaw);
-  if (e <= s) return 0;
-  return e - s;
-};
-
-const dayOrder = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
 
 const InstructorWorkload = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [workloadData, setWorkloadData] = useState(null);
   const [instructor, setInstructor] = useState(null);
-  const [schedules, setSchedules] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const cardRef = useRef(null);
+  const [downloading, setDownloading] = useState(false);
+  // Helper for department color
+  const getDeptColor = (dept) => {
+    if (!dept) return '#64748b';
+    const map = {
+      Math: '#2563eb',
+      Science: '#10b981',
+      English: '#f97316',
+      IT: '#a21caf',
+      Engineering: '#f59e42',
+      Business: '#f43f5e',
+      Education: '#0ea5e9',
+      // Add more as needed
+    };
+    return map[dept] || '#64748b';
+  };
+
+  // Download as PNG
+  const handleDownload = async () => {
+    if (!cardRef.current) return;
+    setDownloading(true);
+    try {
+      const canvas = await html2canvas(cardRef.current, { backgroundColor: null });
+      const link = document.createElement('a');
+      link.download = `instructor-workload-${id}.png`;
+      link.href = canvas.toDataURL();
+      link.click();
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   useEffect(() => {
-    let mounted = true;
-    const fetchData = async () => {
+    const fetchAll = async () => {
+      setLoading(true);
       try {
-        setLoading(true);
-        // fetch instructors and find by id
-        const instRes = await fetch('http://localhost:5000/api/instructors');
-        if (!instRes.ok) throw new Error('Failed to load instructors');
-        const instList = await instRes.json();
-        const found = instList.find(i => String(i._id) === String(id));
-        if (!found) {
-          throw new Error('Instructor not found');
+        // Fetch workload data
+        const workloadRes = await fetch(`http://localhost:5000/api/instructors/${id}/workload`);
+        if (!workloadRes.ok) throw new Error('Failed to fetch workload data');
+        const workload = await workloadRes.json();
+        setWorkloadData(workload);
+        // Fetch instructor info
+        const instructorRes = await fetch(`http://localhost:5000/api/instructors/${id}`);
+        if (instructorRes.ok) {
+          const inst = await instructorRes.json();
+          setInstructor(inst);
         }
-        if (!mounted) return;
-        setInstructor(found);
-
-        // fetch schedules (use the existing /api/schedule/all endpoint)
-        const schedulesRes = await fetch('http://localhost:5000/api/schedule/all');
-        if (!schedulesRes.ok) throw new Error('Failed to load schedules');
-        const schedulesBody = await schedulesRes.json();
-        const allSchedules = Array.isArray(schedulesBody) ? schedulesBody : (schedulesBody.schedules || []);
-
-        // match by instructor email when possible, otherwise fall back to name matching
-        const email = (found.email || '').toLowerCase();
-        const fullName = ((found.firstname || '') + ' ' + (found.lastname || '')).trim().toLowerCase();
-
-        const matched = allSchedules.filter(s => {
-          if (!s) return false;
-          if (s.instructorEmail && String(s.instructorEmail).toLowerCase() === email && email) return true;
-          if (s.instructor && String(s.instructor).toLowerCase().includes(fullName) && fullName) return true;
-          return false;
-        });
-
-        if (!mounted) return;
-        setSchedules(matched);
-        setLoading(false);
       } catch (err) {
-        console.error(err);
-        if (!mounted) return;
         setError(err.message);
+      } finally {
         setLoading(false);
       }
     };
-    fetchData();
-    return () => { mounted = false; };
+    fetchAll();
   }, [id]);
 
-  const stats = useMemo(() => {
-    const totalClasses = schedules.length;
-    const totalMinutes = schedules.reduce((sum, s) => sum + parseDurationMinutes(s.time), 0);
-    const totalHours = +(totalMinutes / 60).toFixed(2);
-    const avgHoursPerClass = totalClasses ? +(totalHours / totalClasses).toFixed(2) : 0;
-    const daysSet = new Set(schedules.map(s => (s.day || '').toLowerCase()));
-    const classesByDay = dayOrder.map(d => schedules.filter(s => (s.day || '').toLowerCase() === d).length);
+  if (loading) {
+    return (
+      <div className="workload-loading-state" style={{
+        minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'linear-gradient(135deg, #0f2c63 0%, #1e3a72 20%, #2d4a81 40%, #ea580c 70%, #f97316 100%)',
+      }}>
+        <div style={{ textAlign: 'center', color: '#fff' }}>
+          <div className="spinner" style={{ margin: '0 auto 24px', width: 48, height: 48, border: '6px solid #fff', borderTop: '6px solid #2563eb', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+          <div style={{ fontSize: 22, fontWeight: 600 }}>Loading workload data...</div>
+        </div>
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div className="workload-error-state" style={{
+        minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'linear-gradient(135deg, #0f2c63 0%, #1e3a72 20%, #2d4a81 40%, #ea580c 70%, #f97316 100%)',
+      }}>
+        <div style={{ textAlign: 'center', color: '#fff' }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>😕</div>
+          <div style={{ fontSize: 22, fontWeight: 600 }}>Error: {error}</div>
+        </div>
+      </div>
+    );
+  }
+  if (!workloadData) {
+    return (
+      <div className="workload-no-data" style={{
+        minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'linear-gradient(135deg, #0f2c63 0%, #1e3a72 20%, #2d4a81 40%, #ea580c 70%, #f97316 100%)',
+      }}>
+        <div style={{ textAlign: 'center', color: '#fff' }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>📊</div>
+          <div style={{ fontSize: 22, fontWeight: 600 }}>No workload data available</div>
+        </div>
+      </div>
+    );
+  }
 
-    // subject distribution
-    const subjectCounts = {};
-    schedules.forEach(s => {
-      const key = (s.subject || 'Unknown').trim();
-      subjectCounts[key] = (subjectCounts[key] || 0) + 1;
-    });
+  const { weeklySummary, dailyBreakdown } = workloadData;
 
-    return { totalClasses, totalHours, avgHoursPerClass, daysTeaching: daysSet.size, classesByDay, subjectCounts };
-  }, [schedules]);
+  const barChartData = {
+    labels: dailyBreakdown.map((day) => day.day),
+    datasets: [
+      {
+        label: 'Hours per Day',
+        data: dailyBreakdown.map((day) => day.hours),
+        backgroundColor: '#2563eb',
+      },
+    ],
+  };
 
-  // Convert classesByDay into chart friendly data
-  const classesByDayData = stats.classesByDay.map((count, i) => ({ name: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][i], count }));
-
-  const subjectPieData = Object.entries(stats.subjectCounts || {}).sort((a,b) => b[1]-a[1]).slice(0,6).map(([name, value]) => ({ name, value }));
-  const PIE_COLORS = ['#0f2c63','#1e40af','#0ea5a0','#f97316','#d97706','#ef4444'];
+  const pieChartData = {
+    labels: ['Classes', 'Free Time'],
+    datasets: [
+      {
+        data: [weeklySummary.totalClasses, 7 - weeklySummary.totalClasses],
+        backgroundColor: ['#10b981', '#f97316'],
+      },
+    ],
+  };
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh' }}>
-      <Sidebar />
-      <main style={{ flex: 1, padding: 20 }}>
-        <Header title={instructor ? `${instructor.firstname || ''} ${instructor.lastname || ''}`.trim() || 'Instructor Workload' : 'Instructor Workload'} />
-        <div style={{ marginTop: 120 }}>
-          <button onClick={() => navigate(-1)} style={{ marginBottom: 12, padding: '8px 12px', borderRadius: 8, background: '#e5e7eb', border: 'none', cursor: 'pointer' }}>← Back</button>
-
-          {loading ? (
-            <div style={{ padding: 24, background: '#fff', borderRadius: 12 }}>Loading...</div>
-          ) : error ? (
-            <div style={{ padding: 24, background: '#fee2e2', borderRadius: 12 }}>{error}</div>
-          ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: 16 }}>
-              <div style={{ background: '#fff', padding: 18, borderRadius: 12, boxShadow: '0 6px 20px rgba(2,6,23,0.06)' }}>
-                <h3 style={{ marginTop: 0 }}>Summary</h3>
-                <div style={{ display: 'flex', gap: 12, marginBottom: 14 }}>
-                  <div style={{ flex: 1, background: '#f8fafc', padding: 12, borderRadius: 8 }}>
-                    <div style={{ fontSize: 12, color: '#6b7280' }}>Total Classes</div>
-                    <div style={{ fontSize: 20, fontWeight: 800 }}>{stats.totalClasses}</div>
-                  </div>
-                  <div style={{ flex: 1, background: '#f8fafc', padding: 12, borderRadius: 8 }}>
-                    <div style={{ fontSize: 12, color: '#6b7280' }}>Total Hours</div>
-                    <div style={{ fontSize: 20, fontWeight: 800 }}>{stats.totalHours}</div>
-                  </div>
-                  <div style={{ flex: 1, background: '#f8fafc', padding: 12, borderRadius: 8 }}>
-                    <div style={{ fontSize: 12, color: '#6b7280' }}>Days Teaching</div>
-                    <div style={{ fontSize: 20, fontWeight: 800 }}>{stats.daysTeaching}</div>
-                  </div>
-                </div>
-
-                <div style={{ marginBottom: 8 }}>
-                  <h4 style={{ margin: '6px 0' }}>Classes by Day</h4>
-                    <div style={{ background: '#fff', padding: 12, borderRadius: 10 }}>
-                      <ResponsiveContainer width="100%" height={160}>
-                        <ReBarChart data={classesByDayData} margin={{ top: 8, right: 12, left: 0, bottom: 8 }}>
-                          <XAxis dataKey="name" tick={{ fill: '#334155', fontSize: 12 }} />
-                          <YAxis allowDecimals={false} tick={{ fill: '#334155', fontSize: 12 }} />
-                          <ReTooltip />
-                          <Bar dataKey="count" fill="#0f2c63" radius={[6,6,0,0]} />
-                        </ReBarChart>
-                      </ResponsiveContainer>
-                    </div>
-                </div>
-
-                <div style={{ marginTop: 14 }}>
-                  <h4 style={{ margin: '6px 0' }}>Top Subjects</h4>
-                  <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                    <div style={{ width: 140, height: 140 }}>
-                      <ResponsiveContainer width="100%" height="100%">
-                        <RePieChart>
-                          <Pie data={subjectPieData} dataKey="value" nameKey="name" innerRadius={28} outerRadius={56} paddingAngle={4} label={(entry) => entry.name.length > 10 ? entry.name.slice(0,10)+'...' : entry.name}>
-                            {subjectPieData.map((entry, idx) => (
-                              <Cell key={`cell-${idx}`} fill={PIE_COLORS[idx % PIE_COLORS.length]} />
-                            ))}
-                          </Pie>
-                          <Legend verticalAlign="bottom" height={24} wrapperStyle={{ fontSize: 12 }} />
-                          <ReTooltip />
-                        </RePieChart>
-                      </ResponsiveContainer>
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      {Object.entries(stats.subjectCounts).sort((a,b) => b[1]-a[1]).slice(0,6).map(([subj, count]) => (
-                        <div key={subj} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '4px 0' }}>
-                          <div style={{ color: '#0f1724' }}>{subj}</div>
-                          <div style={{ color: '#6b7280' }}>{count}</div>
-                        </div>
-                      ))}
-                      {Object.keys(stats.subjectCounts).length === 0 && <div style={{ color: '#6b7280' }}>No subjects found</div>}
-                    </div>
-                  </div>
-                </div>
+    <div className="workload-container" style={{
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #0f2c63 0%, #1e3a72 20%, #2d4a81 40%, #ea580c 70%, #f97316 100%)',
+      color: '#1f2937',
+      fontFamily: 'Segoe UI, Tahoma, Geneva, Verdana, sans-serif',
+      padding: 0,
+      margin: 0
+    }}>
+      <div style={{ maxWidth: 900, margin: '0 auto', padding: '2rem' }}>
+        <button
+          onClick={() => navigate('/admin/faculty-management')}
+          style={{
+            background: 'rgba(37,99,235,0.9)',
+            color: '#fff',
+            border: 'none',
+            borderRadius: 12,
+            padding: '10px 28px',
+            fontWeight: 600,
+            fontSize: 17,
+            marginBottom: 32,
+            boxShadow: '0 2px 12px rgba(37,99,235,0.13)',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            transition: 'background 0.2s, transform 0.2s',
+            outline: 'none',
+          }}
+          onMouseOver={e => e.currentTarget.style.background = 'rgba(30,64,175,0.95)'}
+          onMouseOut={e => e.currentTarget.style.background = 'rgba(37,99,235,0.9)'}
+        >
+          <FaArrowLeft style={{ fontSize: 18, marginRight: 6 }} />
+          Back to Faculty Management
+        </button>
+        <div ref={cardRef} style={{
+          background: 'rgba(255,255,255,0.18)',
+          borderRadius: 24,
+          boxShadow: '0 8px 32px 0 rgba(31,38,135,0.18)',
+          backdropFilter: 'blur(8px)',
+          WebkitBackdropFilter: 'blur(8px)',
+          border: '2.5px solid',
+          borderImage: 'linear-gradient(120deg, #2563eb 10%, #10b981 40%, #f97316 90%) 1',
+          padding: '2.5rem 2rem 2rem 2rem',
+          marginBottom: 24,
+          position: 'relative',
+          overflow: 'hidden',
+          animation: 'fadeInCard 0.7s cubic-bezier(.4,0,.2,1)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 18, marginBottom: 18, justifyContent: 'center', flexWrap: 'wrap' }}>
+            {instructor && instructor.image ? (
+              <img src={instructor.image} alt="Instructor" style={{ width: 64, height: 64, borderRadius: '50%', objectFit: 'cover', border: '3px solid #2563eb', background: '#fff' }} />
+            ) : (
+              <FaUserCircle style={{ fontSize: 64, color: '#2563eb', background: '#fff', borderRadius: '50%' }} />
+            )}
+            <div>
+              <div style={{ fontSize: 24, fontWeight: 700, color: '#1e293b', display: 'flex', alignItems: 'center', gap: 10 }}>
+                {instructor ? `${instructor.firstname || ''} ${instructor.lastname || ''}`.trim() : 'Instructor'}
+                {instructor?.status && (
+                  <span style={{
+                    marginLeft: 6,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: instructor.status === 'active' ? '#10b981' : instructor.status === 'pending' ? '#f59e42' : '#64748b',
+                    background: instructor.status === 'active' ? 'rgba(16,185,129,0.13)' : instructor.status === 'pending' ? 'rgba(245,158,66,0.13)' : 'rgba(100,116,139,0.13)',
+                    borderRadius: 8,
+                    padding: '2px 10px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                  }}>
+                    {instructor.status === 'active' ? <FaCheckCircle style={{ color: '#10b981' }} /> : <FaClock style={{ color: '#f59e42' }} />}
+                    {instructor.status.charAt(0).toUpperCase() + instructor.status.slice(1)}
+                  </span>
+                )}
               </div>
-
-              <aside style={{ background: '#fff', padding: 18, borderRadius: 12, boxShadow: '0 6px 20px rgba(2,6,23,0.06)' }}>
-                <h4 style={{ marginTop: 0 }}>Details</h4>
-                <div style={{ fontSize: 14, marginBottom: 8 }}><strong>Name:</strong> {instructor.firstname} {instructor.lastname}</div>
-                <div style={{ fontSize: 14, marginBottom: 8 }}><strong>Email:</strong> {instructor.email}</div>
-                <div style={{ fontSize: 14, marginBottom: 8 }}><strong>Department:</strong> {instructor.department || '—'}</div>
-                <div style={{ fontSize: 14, marginBottom: 8 }}><strong>Average Hours / Class:</strong> {stats.avgHoursPerClass}</div>
-
-                <div style={{ marginTop: 12 }}>
-                  <h5 style={{ margin: '6px 0' }}>Recent Schedules</h5>
-                  <div style={{ maxHeight: 320, overflowY: 'auto' }}>
-                    {schedules.length === 0 ? (
-                      <div style={{ color: '#6b7280' }}>No schedules available</div>
-                    ) : (
-                      schedules.slice(0, 20).map((s) => (
-                        <div key={s._id} style={{ padding: 8, borderBottom: '1px solid #f1f5f9' }}>
-                          <div style={{ fontWeight: 700 }}>{s.subject || 'Untitled'}</div>
-                          <div style={{ fontSize: 13, color: '#6b7280' }}>{s.course} {s.year} • {s.section} • {s.day} • {s.time} • {s.room}</div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              </aside>
+              <div style={{ fontSize: 15, color: '#334155', opacity: 0.85 }}>{instructor?.email}</div>
+              {instructor?.department && <div style={{ fontSize: 14, color: getDeptColor(instructor.department), marginTop: 2, fontWeight: 600, display: 'inline-block', background: getDeptColor(instructor.department)+'22', borderRadius: 8, padding: '2px 10px' }}>{instructor.department}</div>}
             </div>
-          )}
+            <button
+              onClick={handleDownload}
+              disabled={downloading}
+              style={{
+                marginLeft: 24,
+                background: 'linear-gradient(90deg, #2563eb 60%, #10b981 100%)',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 8,
+                padding: '8px 18px',
+                fontWeight: 600,
+                fontSize: 15,
+                boxShadow: '0 2px 8px rgba(37,99,235,0.08)',
+                cursor: downloading ? 'not-allowed' : 'pointer',
+                transition: 'background 0.2s, transform 0.2s',
+                outline: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                opacity: downloading ? 0.7 : 1,
+              }}
+              title="Download workload report as image"
+            >
+              <FaDownload /> {downloading ? 'Downloading...' : 'Download Report'}
+            </button>
+          </div>
+          <header className="workload-header" style={{ textAlign: 'center', marginBottom: '2rem' }}>
+            <h1 style={{ fontSize: '2.2rem', color: '#fff', textShadow: '0 2px 8px #1e293b33', marginBottom: 0 }}>Workload Overview</h1>
+            <p style={{ fontSize: '1.1rem', color: '#e0e7ef', marginTop: 6 }}>Summary and breakdown of teaching load</p>
+          </header>
+          <section className="workload-summary" style={{ display: 'flex', gap: 18, justifyContent: 'center', marginBottom: 32, flexWrap: 'wrap' }}>
+            <div className="summary-card" style={{
+              background: 'rgba(255,255,255,0.85)',
+              borderRadius: 16,
+              boxShadow: '0 4px 16px rgba(37,99,235,0.07)',
+              padding: '1.5rem 2.2rem',
+              textAlign: 'center',
+              minWidth: 180,
+              margin: '0 0.5rem',
+              transition: 'transform 0.18s',
+              cursor: 'pointer',
+            }} title="Total number of classes assigned">
+              <h2 style={{ fontSize: '1.15rem', color: '#374151', marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                Total Classes <FaInfoCircle style={{ color: '#2563eb', fontSize: 15 }} />
+              </h2>
+              <p style={{ fontSize: '2.1rem', fontWeight: 700, color: '#2563eb', margin: 0 }}>{weeklySummary.totalClasses}</p>
+            </div>
+            <div className="summary-card" style={{
+              background: 'rgba(255,255,255,0.85)',
+              borderRadius: 16,
+              boxShadow: '0 4px 16px rgba(16,185,129,0.07)',
+              padding: '1.5rem 2.2rem',
+              textAlign: 'center',
+              minWidth: 180,
+              margin: '0 0.5rem',
+              transition: 'transform 0.18s',
+              cursor: 'pointer',
+            }} title="Total teaching hours this week">
+              <h2 style={{ fontSize: '1.15rem', color: '#374151', marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                Total Hours <FaInfoCircle style={{ color: '#10b981', fontSize: 15 }} />
+              </h2>
+              <p style={{ fontSize: '2.1rem', fontWeight: 700, color: '#10b981', margin: 0 }}>{weeklySummary.totalHours} hrs</p>
+            </div>
+            <div className="summary-card" style={{
+              background: 'rgba(255,255,255,0.85)',
+              borderRadius: 16,
+              boxShadow: '0 4px 16px rgba(249,115,22,0.07)',
+              padding: '1.5rem 2.2rem',
+              textAlign: 'center',
+              minWidth: 180,
+              margin: '0 0.5rem',
+              transition: 'transform 0.18s',
+              cursor: 'pointer',
+            }} title="Day with the most teaching hours">
+              <h2 style={{ fontSize: '1.15rem', color: '#374151', marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                Busiest Day <FaInfoCircle style={{ color: '#f97316', fontSize: 15 }} />
+              </h2>
+              <p style={{ fontSize: '2.1rem', fontWeight: 700, color: '#f97316', margin: 0 }}>{weeklySummary.busiestDay}</p>
+            </div>
+          </section>
+          <section className="charts" style={{ display: 'flex', gap: 24, flexWrap: 'wrap', justifyContent: 'center' }}>
+            <div className="chart" style={{
+              background: 'rgba(255,255,255,0.92)',
+              borderRadius: 18,
+              boxShadow: '0 4px 16px rgba(37,99,235,0.09)',
+              padding: '1.5rem',
+              minWidth: 320,
+              flex: 1,
+              margin: '1rem 0.5rem',
+              maxWidth: 400,
+              transition: 'box-shadow 0.18s',
+              animation: 'fadeInChart 0.7s cubic-bezier(.4,0,.2,1)',
+            }}>
+              <h2 style={{ fontSize: '1.15rem', color: '#374151', marginBottom: 16, textAlign: 'center' }}>Daily Breakdown</h2>
+              <Bar data={barChartData} options={{ animation: { duration: 1200 } }} />
+            </div>
+            <div className="chart" style={{
+              background: 'rgba(255,255,255,0.92)',
+              borderRadius: 18,
+              boxShadow: '0 4px 16px rgba(16,185,129,0.09)',
+              padding: '1.5rem',
+              minWidth: 320,
+              flex: 1,
+              margin: '1rem 0.5rem',
+              maxWidth: 400,
+              transition: 'box-shadow 0.18s',
+              animation: 'fadeInChart 0.7s cubic-bezier(.4,0,.2,1)',
+            }}>
+              <h2 style={{ fontSize: '1.15rem', color: '#374151', marginBottom: 16, textAlign: 'center' }}>Weekly Overview</h2>
+              <Pie data={pieChartData} options={{ animation: { duration: 1200 } }} />
+            </div>
+          </section>
+
+          {/* Weekly Schedule Table */}
+          <section style={{ marginTop: 36 }}>
+            <h2 style={{ fontSize: '1.1rem', color: '#374151', marginBottom: 12, textAlign: 'center' }}>Weekly Schedule</h2>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', background: 'rgba(255,255,255,0.97)', borderRadius: 12, boxShadow: '0 2px 8px rgba(37,99,235,0.06)', fontSize: 15 }}>
+                <thead>
+                  <tr style={{ background: '#2563eb22', color: '#2563eb' }}>
+                    <th style={{ padding: 10, borderRadius: '12px 0 0 0' }}>Day</th>
+                    <th style={{ padding: 10 }}>Hours</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {workloadData.dailyBreakdown.map((d, i) => (
+                    <tr key={d.day} style={{ background: i % 2 === 0 ? '#f1f5f9' : '#fff' }}>
+                      <td style={{ padding: 10, fontWeight: 600 }}>{d.day}</td>
+                      <td style={{ padding: 10 }}>{d.hours}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          {/* Motivational Tip */}
+          <div style={{ marginTop: 32, textAlign: 'center', color: '#64748b', fontStyle: 'italic', fontSize: 15, opacity: 0.95 }}>
+            "Great teachers inspire hope, ignite the imagination, and instill a love of learning." – Brad Henry
+          </div>
         </div>
-      </main>
+      </div>
+      <style>{`
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        @keyframes fadeInCard { from { opacity: 0; transform: translateY(40px) scale(0.98); } to { opacity: 1; transform: none; } }
+        @keyframes fadeInChart { from { opacity: 0; transform: translateY(30px) scale(0.98); } to { opacity: 1; transform: none; } }
+        @media (max-width: 900px) {
+          .workload-summary { flex-direction: column !important; align-items: stretch !important; }
+          .charts { flex-direction: column !important; align-items: stretch !important; }
+        }
+        @media (max-width: 600px) {
+          .workload-container { padding: 0.5rem !important; }
+          .chart { min-width: 0 !important; max-width: 100% !important; }
+        }
+      `}</style>
     </div>
   );
 };

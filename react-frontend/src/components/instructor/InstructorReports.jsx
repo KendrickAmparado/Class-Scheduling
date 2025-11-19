@@ -15,6 +15,7 @@ import {
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import XLSX from 'xlsx-js-style';
+import axios from 'axios';
 
 const InstructorReports = () => {
   const { userEmail } = useContext(AuthContext);
@@ -288,6 +289,21 @@ const InstructorReports = () => {
 
   // removed dayHasSchedules (not used)
 
+  // Log report download activity
+  const logReportDownload = async (reportType) => {
+    try {
+      await axios.post('http://localhost:5000/api/instructors/log-activity', {
+        type: 'report-downloaded',
+        reportType: reportType,
+        message: `Downloaded ${reportType} report`,
+        email: userEmail
+      });
+    } catch (error) {
+      console.error('Failed to log report download:', error);
+      // Don't fail the download if logging fails
+    }
+  };
+
   // Download CSV report
   const downloadReport = () => {
     const properLabel = {
@@ -334,6 +350,9 @@ const InstructorReports = () => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    
+    // Log the download activity
+    logReportDownload('CSV');
   };
 
   // Helper function to expand multi-day schedules
@@ -512,6 +531,9 @@ const InstructorReports = () => {
 
     // Save the PDF
     doc.save(`Teaching_Schedule_${instructorData.firstname}_${instructorData.lastname}.pdf`);
+    
+    // Log the download activity
+    logReportDownload('PDF');
   };
 
   // Excel Export
@@ -623,6 +645,9 @@ const InstructorReports = () => {
 
     // Save file
     XLSX.writeFile(wb, `Teaching_Schedule_${instructorData.firstname}_${instructorData.lastname}.xlsx`);
+    
+    // Log the download activity
+    logReportDownload('Excel');
   };
 
   const displayedWeekdays = filterDay !== "All Days"

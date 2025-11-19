@@ -100,36 +100,24 @@ router.get('/alerts', async (req, res) => {
   }
 });
 
-// GET /api/admin/activity - Get all activities (admin alerts + instructor notifications) with pagination
+// GET /api/admin/activity - Get all activities (admin and instructor) with pagination
 router.get('/activity', async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 50;
     const skip = (page - 1) * limit;
 
-    const [alerts, instructorNotifs] = await Promise.all([
-      Alert.find({}).sort({ createdAt: -1 }).lean(),
-      InstructorNotification.find({}).sort({ createdAt: -1 }).lean(),
-    ]);
+    // Fetch all alerts (both admin and instructor activities are stored as alerts with source field)
+    const alerts = await Alert.find({}).sort({ createdAt: -1 }).lean();
 
-    const normalized = [
-      ...alerts.map((a) => ({
-        id: String(a._id),
-        source: 'admin',
-        type: a.type || 'alert',
-        message: a.message,
-        link: a.link || null,
-        createdAt: a.createdAt || a.updatedAt,
-      })),
-      ...instructorNotifs.map((n) => ({
-        id: String(n._id),
-        source: 'instructor',
-        type: 'instructor-notification',
-        message: n.title ? `${n.title} — ${n.message}` : n.message,
-        link: n.link || null,
-        createdAt: n.createdAt || n.updatedAt,
-      })),
-    ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    const normalized = alerts.map((a) => ({
+      id: String(a._id),
+      source: a.source || 'admin', // Use the source field from the alert
+      type: a.type || 'alert',
+      message: a.message,
+      link: a.link || null,
+      createdAt: a.createdAt || a.updatedAt,
+    })).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
     const total = normalized.length;
     const paginated = normalized.slice(skip, skip + limit);

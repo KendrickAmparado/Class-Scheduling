@@ -174,6 +174,11 @@ const ActivityLogs = () => {
       case 'availability-update':
         return <FontAwesomeIcon icon={faCheckCircle} style={{ color: '#059669', fontSize: 16 }} />;
       case 'instructor-notification':
+      case 'instructor-login':
+      case 'instructor-logout':
+      case 'instructor-profile-updated':
+      case 'instructor-image-uploaded':
+      case 'report-downloaded':
         return <FontAwesomeIcon icon={faClipboardList} style={{ color: '#4f46e5', fontSize: 16 }} />;
       default:
         return source === 'instructor'
@@ -190,6 +195,12 @@ const ActivityLogs = () => {
         return { bg: '#fee2e2', color: '#dc2626' };
       case 'room-conflict':
         return { bg: '#fef3c7', color: '#d97706' };
+      case 'instructor-login':
+      case 'instructor-profile-updated':
+      case 'report-downloaded':
+        return { bg: '#dbeafe', color: '#0369a1' };
+      case 'instructor-logout':
+      case 'instructor-image-uploaded':
       case 'instructor-notification':
         return { bg: '#e0e7ff', color: '#4f46e5' };
       default:
@@ -524,6 +535,11 @@ const ActivityLogs = () => {
                     <option value="schedule-deleted">Schedule Deleted</option>
                     <option value="instructor-added">Instructor Added</option>
                     <option value="instructor-notification">Instructor Notification</option>
+                    <option value="instructor-login">Instructor Login</option>
+                    <option value="instructor-logout">Instructor Logout</option>
+                    <option value="instructor-profile-updated">Profile Updated</option>
+                    <option value="instructor-image-uploaded">Image Uploaded</option>
+                    <option value="report-downloaded">Report Downloaded</option>
                     <option value="room-conflict">Room Conflict</option>
                     <option value="availability-update">Availability Update</option>
                   </select>

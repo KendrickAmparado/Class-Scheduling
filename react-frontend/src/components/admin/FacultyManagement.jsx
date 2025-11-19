@@ -990,6 +990,14 @@ const FacultyManagement = () => {
                                 </button>
                               </>
                             )}
+                            <button
+                              onClick={() => window.open(`/admin/instructor/${inst._id}/workload`, '_blank')}
+                              style={btnStyle("#2563eb")}
+                              onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.05)")}
+                              onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
+                            >
+                              <FontAwesomeIcon icon={faListCheck} /> View Workload
+                            </button>
                           </div>
                         </td>
                       </tr>

@@ -6,7 +6,10 @@ import Alert from '../models/Alert.js';
 import validator from 'validator';
 import { createCalendarEvent, updateCalendarEvent, deleteCalendarEvent, isGoogleCalendarConfigured } from '../services/googleCalendarService.js';
 import { logActivity } from '../utils/activityLogger.js';
+import { detectAndEmitChange } from '../utils/dataChangeDetector.js';
 import { verifyToken } from '../middleware/authMiddleware.js';
+import { sendEmail, emailTemplates } from '../services/emailService.js';
+import EmailNotification from '../models/EmailNotification.js';
 
 const router = express.Router();
 
@@ -205,6 +208,15 @@ router.post("/create", async (req, res) => {
       console.error('Failed to create instructor notification:', e);
     }
 
+    // Send email notification if preferences allow
+    if (instructorEmailFinal) {
+      const preferences = await EmailNotification.findOne({ instructorEmail: instructorEmailFinal });
+      if (preferences?.preferencesEnabled && preferences?.scheduleChanges) {
+        const emailContent = emailTemplates.scheduleChange(instructorNameFinal, `${course} ${year} - ${section} (${subject}) on ${day} at ${time}`);
+        await sendEmail(instructorEmailFinal, "New Schedule Created", emailContent);
+      }
+    }
+
     // Create and emit alert
     await logActivity({
       type: 'schedule-created',
@@ -227,6 +239,10 @@ router.get('/', async (req, res) => {
   try {
     const { course, year } = req.query;
     const schedules = await Schedule.find({ course, year });
+    
+    // Emit data change event if schedules have changed
+    detectAndEmitChange('schedules', schedules, req.io, 'data-updated:schedules');
+    
     res.json(schedules);
   } catch (err) {
     console.error('Error fetching schedules:', err);
@@ -238,6 +254,10 @@ router.get('/', async (req, res) => {
 router.get('/all', async (req, res) => {
   try {
     const schedules = await Schedule.find({});
+    
+    // Emit data change event if schedules have changed
+    detectAndEmitChange('schedules', schedules, req.io, 'data-updated:schedules');
+    
     res.json(schedules);
   } catch (err) {
     console.error('Error fetching all schedules:', err);
@@ -585,6 +605,15 @@ router.put('/:id', async (req, res) => {
       }
     } catch (e) {
       console.error('Failed to create instructor notification:', e);
+    }
+
+    // Send email notification if preferences allow
+    if (instructorEmailFinal) {
+      const preferences = await EmailNotification.findOne({ instructorEmail: instructorEmailFinal });
+      if (preferences?.preferencesEnabled && preferences?.scheduleChanges) {
+        const emailContent = emailTemplates.scheduleChange(instructorNameFinal, `${course} ${year} - ${section} (${subject}) on ${day} at ${time}`);
+        await sendEmail(instructorEmailFinal, "Schedule Updated", emailContent);
+      }
     }
 
     // Create activity log

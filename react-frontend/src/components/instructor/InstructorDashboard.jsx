@@ -5,9 +5,12 @@ import { faUser, faCalendarAlt, faClock, faMapMarkerAlt, faFilter, faCalendarWee
 import '../../styles/InstructorDashboard.css';
 import { AuthContext } from '../../context/AuthContext.jsx';
 import React, { useState, useEffect, useContext, useMemo } from 'react';
+import { io } from 'socket.io-client';
+import { useToast } from '../common/ToastProvider.jsx';
 
 const InstructorDashboard = () => {
   const { userEmail } = useContext(AuthContext);
+  const { showToast } = useToast();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   
   // 🟢 CHANGED: separated fields for first and last name
@@ -325,6 +328,33 @@ const InstructorDashboard = () => {
     fetchWeather();
     fetchForecast();
   }, [apiBase]);
+
+  // Setup Socket.io for real-time room status notifications
+  useEffect(() => {
+    const socket = io('http://localhost:5000', { autoConnect: true });
+
+    socket.on('connect', () => {
+      console.log('✅ Connected to server for notifications');
+    });
+
+    socket.on('connect_error', (error) => {
+      console.error('❌ Socket.io connection error:', error);
+    });
+
+    socket.on('room-status-changed', (data) => {
+      console.log('📢 Room status changed event received:', data);
+      // Show toast notification to instructor
+      showToast(data.message, 'info');
+    });
+
+    socket.on('disconnect', () => {
+      console.log('❌ Disconnected from server');
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [showToast]);
 
   if (!userEmail) {
     return <p>Loading user information...</p>;

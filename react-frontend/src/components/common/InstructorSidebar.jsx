@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import axios from 'axios';
 import {
   faHome,
   faSignOutAlt,
@@ -9,10 +10,12 @@ import {
   faBell,
   faTimes
 } from '@fortawesome/free-solid-svg-icons';
+import { AuthContext } from '../../context/AuthContext.jsx';
 
 const InstructorSidebar = ({ isOpen, onClose }) => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { logout, userEmail } = useContext(AuthContext);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
 
   useEffect(() => {
@@ -34,8 +37,22 @@ const InstructorSidebar = ({ isOpen, onClose }) => {
     { path: '/instructor/settings', icon: faCog, label: 'Settings' }
   ];
 
-  const handleLogout = () => {
-    // Add logout logic here
+  const handleLogout = async () => {
+    try {
+      // Log the logout activity
+      if (userEmail) {
+        await axios.post('http://localhost:5000/api/instructor-auth/logout', {
+          email: userEmail
+        });
+      }
+    } catch (error) {
+      console.error('Error logging logout activity:', error);
+    }
+    
+    // Clear auth context and local storage
+    logout();
+    
+    // Navigate to login
     navigate('/login');
   };
 

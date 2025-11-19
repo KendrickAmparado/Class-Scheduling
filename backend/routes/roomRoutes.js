@@ -1,13 +1,44 @@
 import express from 'express';
 import Room from '../models/Room.js';
 import Alert from '../models/Alert.js';
+import InstructorNotification from '../models/InstructorNotification.js';
+import Instructor from '../models/Instructor.js';
 import { logActivity } from '../utils/activityLogger.js';
+import { detectAndEmitChange } from '../utils/dataChangeDetector.js';
 
 const router = express.Router();
+
+// Test endpoint to trigger room status notification
+router.get('/test/notify-status-change', async (req, res) => {
+  try {
+    console.log('🧪 Testing room status change notification...');
+    const testData = {
+      roomId: 'test-id',
+      roomName: 'Lab A (TEST)',
+      area: 'Building A',
+      newStatus: 'maintenance',
+      oldStatus: 'available',
+      message: 'The room Lab A (TEST) is currently on maintenance.',
+      timestamp: new Date()
+    };
+    
+    console.log('📢 Broadcasting test notification:', testData);
+    req.io.emit('room-status-changed', testData);
+    
+    res.json({ success: true, message: 'Test notification sent', data: testData });
+  } catch (err) {
+    console.error('Test notification error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 router.get('/', async (req, res) => {
   try {
     const rooms = await Room.find({});
+    
+    // Emit data change event only if rooms have changed
+    detectAndEmitChange('rooms', rooms, req.io, 'data-updated:rooms');
+    
     res.json({ rooms });
   } catch (err) {
     console.error('Error fetching rooms:', err);
@@ -51,6 +82,7 @@ router.post('/', async (req, res) => {
 // PUT update room
 router.put('/:id', async (req, res) => {
   try {
+    const originalRoom = await Room.findById(req.params.id);
     const updatedRoom = await Room.findByIdAndUpdate(req.params.id, req.body, { new: true });
     if (!updatedRoom) {
       return res.status(404).json({ success: false, message: 'Room not found.' });
@@ -64,6 +96,50 @@ router.put('/:id', async (req, res) => {
       meta: { room: updatedRoom.room, area: updatedRoom.area, status: updatedRoom.status },
       io: req.io
     });
+
+    // Emit room status change notification to all instructors via Socket.io
+    if (originalRoom.status !== updatedRoom.status) {
+      const statusMessages = {
+        maintenance: `The room ${updatedRoom.room} is currently on maintenance.`,
+        available: `The room ${updatedRoom.room} is now available.`,
+        occupied: `The room ${updatedRoom.room} is now occupied.`
+      };
+
+      const notificationData = {
+        roomId: updatedRoom._id,
+        roomName: updatedRoom.room,
+        area: updatedRoom.area,
+        newStatus: updatedRoom.status,
+        oldStatus: originalRoom.status,
+        message: statusMessages[updatedRoom.status] || `Room ${updatedRoom.room} status has been updated.`,
+        timestamp: new Date()
+      };
+
+      console.log('📢 Broadcasting room status change:', notificationData);
+      req.io.emit('room-status-changed', notificationData);
+
+      // Save notification to database for all instructors
+      try {
+        const allInstructors = await Instructor.find({ status: 'active' });
+        const instructorEmails = allInstructors.map(inst => inst.email);
+
+        if (instructorEmails.length > 0) {
+          await InstructorNotification.insertMany(
+            instructorEmails.map(email => ({
+              instructorEmail: email,
+              title: `Room Status Updated: ${updatedRoom.room}`,
+              message: notificationData.message,
+              link: '/instructor/rooms',
+              read: false,
+              createdAt: new Date()
+            }))
+          );
+          console.log(`✅ Saved room notification to ${instructorEmails.length} instructors`);
+        }
+      } catch (err) {
+        console.error('❌ Error saving room notification:', err);
+      }
+    }
 
     res.json({ success: true, room: updatedRoom });
   } catch (error) {

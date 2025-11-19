@@ -1,18 +1,75 @@
-import express from "express";
-import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
 import Instructor from "../models/Instructor.js";
 import Counter from "../models/Counter.js";
-import Alert from "../models/Alert.js";
 import Schedule from "../models/Schedule.js";
 import { verifyToken } from "../middleware/authMiddleware.js";
 import { listCalendarEvents, isGoogleCalendarConfigured } from "../services/googleCalendarService.js";
+import { detectAndEmitChange } from "../utils/dataChangeDetector.js";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { logActivity, getUserEmailFromRequest } from '../utils/activityLogger.js';
 
+import express from "express";
+
 const router = express.Router();
+
+
+// GET workload summary for a specific instructor by ID
+router.get('/:id/workload', async (req, res) => {
+  try {
+    const instructor = await Instructor.findById(req.params.id);
+    if (!instructor) {
+      return res.status(404).json({ message: 'Instructor not found' });
+    }
+
+    // Find all schedules for this instructor
+    const schedules = await Schedule.find({ instructorEmail: instructor.email });
+
+    // Helper to parse time string like "08:00 AM - 09:30 AM" to hours
+    function parseHours(timeStr) {
+      if (!timeStr || typeof timeStr !== 'string') return 0;
+      const parts = timeStr.split('-').map(p => p.trim());
+      if (parts.length < 2) return 0;
+      const parseTime = (t) => {
+        let [time, modifier] = t.split(' ');
+        let [h, m] = time.split(':').map(Number);
+        if (modifier && modifier.toLowerCase() === 'pm' && h !== 12) h += 12;
+        if (modifier && modifier.toLowerCase() === 'am' && h === 12) h = 0;
+        return h * 60 + (m || 0);
+      };
+      try {
+        const start = parseTime(parts[0]);
+        const end = parseTime(parts[1]);
+        return Math.max(0, (end - start) / 60);
+      } catch {
+        return 0;
+      }
+    }
+
+    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const dailyBreakdown = days.map(day => {
+      const daySchedules = schedules.filter(s => (s.day || '').toLowerCase() === day.toLowerCase());
+      const hours = daySchedules.reduce((sum, s) => sum + parseHours(s.time), 0);
+      return { day, hours: Math.round(hours * 100) / 100 };
+    });
+
+    const totalClasses = schedules.length;
+    const totalHours = dailyBreakdown.reduce((sum, d) => sum + d.hours, 0);
+    const busiestDay = dailyBreakdown.reduce((a, b) => (a.hours > b.hours ? a : b), { day: '', hours: 0 }).day;
+
+    res.json({
+      weeklySummary: {
+        totalClasses,
+        totalHours: Math.round(totalHours * 100) / 100,
+        busiestDay: busiestDay || 'N/A'
+      },
+      dailyBreakdown
+    });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to fetch workload data', error: err.message });
+  }
+});
+
 // Multer storage for profile images
 const uploadsRoot = path.join(process.cwd(), "uploads", "profiles");
 if (!fs.existsSync(uploadsRoot)) {
@@ -212,8 +269,14 @@ router.get("/", async (req, res) => {
         .select("instructorId firstname lastname email contact department status")
         .sort({ status: 1, lastname: 1, firstname: 1 });
       
+      // Emit data change event if instructors have changed
+      detectAndEmitChange('instructors', updatedInstructors, req.io, 'data-updated:instructors');
+      
       return res.json(updatedInstructors);
     }
+
+    // Emit data change event if instructors have changed
+    detectAndEmitChange('instructors', instructors, req.io, 'data-updated:instructors');
 
     res.json(instructors);
   } catch (error) {
@@ -641,5 +704,34 @@ router.post('/activate', async (req, res) => {
   }
 });
 
+// Log instructor activity (reports downloaded, etc.)
+router.post('/log-activity', async (req, res) => {
+  try {
+    const { type, message, reportType, email } = req.body;
+    
+    if (!email || !type) {
+      return res.status(400).json({ message: 'Email and type are required' });
+    }
+
+    const messageText = message || `${type.replace(/-/g, ' ').toUpperCase()} - ${reportType || ''}`.trim();
+    
+    // Log the activity
+    await logActivity({
+      type: type,
+      message: messageText,
+      source: 'instructor',
+      userEmail: email,
+      link: '/instructor/reports',
+      meta: { reportType },
+      io: req.io
+    });
+
+    res.json({ success: true, message: 'Activity logged' });
+  } catch (error) {
+    console.error('Error logging instructor activity:', error);
+    res.status(500).json({ message: 'Failed to log activity', error: error.message });
+  }
+});
 
 export default router;
+

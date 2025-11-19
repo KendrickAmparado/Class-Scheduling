@@ -1,0 +1,74 @@
+/* Instructor Workload Page Styles */
+
+.workload-container {
+  padding: 2rem;
+  font-family: Arial, sans-serif;
+  background-color: #f9fafb;
+  color: #1f2937;
+}
+
+.workload-header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.workload-header h1 {
+  font-size: 2.5rem;
+  color: #2563eb;
+}
+
+.workload-header p {
+  font-size: 1rem;
+  color: #6b7280;
+}
+
+.workload-summary {
+  display: flex;
+  justify-content: space-around;
+  margin-bottom: 2rem;
+}
+
+.summary-card {
+  background: #ffffff;
+  padding: 1.5rem;
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  text-align: center;
+  flex: 1;
+  margin: 0 1rem;
+}
+
+.summary-card h2 {
+  font-size: 1.25rem;
+  color: #374151;
+  margin-bottom: 0.5rem;
+}
+
+.summary-card p {
+  font-size: 2rem;
+  font-weight: bold;
+  color: #2563eb;
+}
+
+.charts {
+  display: flex;
+  justify-content: space-around;
+  flex-wrap: wrap;
+}
+
+.chart {
+  background: #ffffff;
+  padding: 1.5rem;
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  flex: 1;
+  margin: 1rem;
+  min-width: 300px;
+}
+
+.chart h2 {
+  font-size: 1.25rem;
+  color: #374151;
+  margin-bottom: 1rem;
+  text-align: center;
+}

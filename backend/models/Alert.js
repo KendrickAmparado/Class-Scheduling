@@ -4,9 +4,11 @@ import mongoose from "mongoose";
 const alertSchema = new mongoose.Schema({
   type: { type: String }, // e.g. 'availability-update'
   message: { type: String, required: true },
+  source: { type: String, enum: ['admin', 'instructor'], default: 'admin' }, // Track source of activity
   link: { type: String, default: null },
   createdAt: { type: Date, default: Date.now },
   meta: { type: mongoose.Schema.Types.Mixed }, // optional extra info
 }, { timestamps: true });
 
 export default mongoose.model("Alert", alertSchema);
+

@@ -2,6 +2,7 @@ import express from 'express';
 import Section from '../models/Section.js';
 import Schedule from '../models/Schedule.js'; // Import Schedule model
 import Alert from '../models/Alert.js';
+import { detectAndEmitChange } from '../utils/dataChangeDetector.js';
 
 const router = express.Router();
 
@@ -37,6 +38,10 @@ router.get('/', async (req, res) => {
   }
   try {
     const sections = await Section.find({ course, year });
+    
+    // Emit data change event if sections have changed
+    detectAndEmitChange('sections', sections, req.io, 'data-updated:sections');
+    
     res.json(sections);
   } catch (error) {
     console.error('Error fetching sections:', error);

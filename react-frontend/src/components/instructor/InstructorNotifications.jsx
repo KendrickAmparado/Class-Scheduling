@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useCallback } from 'react';
 import InstructorSidebar from '../common/InstructorSidebar.jsx';
 import InstructorHeader from '../common/InstructorHeader.jsx';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faBell, faCheckCircle, faCheckDouble, faClock } from '@fortawesome/free-solid-svg-icons';
 import { AuthContext } from '../../context/AuthContext.jsx';
 import { useToast } from '../common/ToastProvider.jsx';
+import { io } from 'socket.io-client';
 
 const InstructorNotifications = () => {
   const { userEmail } = useContext(AuthContext);
@@ -29,7 +30,7 @@ const InstructorNotifications = () => {
     return localStorage.getItem('token') || localStorage.getItem('instructorToken') || '';
   };
 
-  const fetchNotifications = async (page = 1) => {
+  const fetchNotifications = useCallback(async (page = 1) => {
     setLoading(true);
     try {
       const token = getToken();
@@ -86,7 +87,7 @@ const InstructorNotifications = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [apiBase, filter, pagination, showToast]);
 
   useEffect(() => {
     // Check backend connectivity first
@@ -110,6 +111,34 @@ const InstructorNotifications = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userEmail, pagination.page, filter]);
+
+  // Setup Socket.io for real-time notification updates
+  useEffect(() => {
+    const socket = io('http://localhost:5000', { autoConnect: true });
+
+    socket.on('connect', () => {
+      console.log('✅ Connected to server for real-time notifications');
+    });
+
+    socket.on('connect_error', (error) => {
+      console.error('❌ Socket.io connection error:', error);
+    });
+
+    socket.on('room-status-changed', (data) => {
+      console.log('📢 Room status changed event received - refreshing notifications:', data);
+      // Refresh notifications when a new room notification is created
+      fetchNotifications(1);
+      showToast(data.message, 'info');
+    });
+
+    socket.on('disconnect', () => {
+      console.log('❌ Disconnected from server');
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [fetchNotifications, showToast]);
 
   const markAsRead = async (id) => {
     try {

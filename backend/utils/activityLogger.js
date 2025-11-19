@@ -14,10 +14,11 @@ import InstructorNotification from '../models/InstructorNotification.js';
  */
 export const logActivity = async ({ type, message, source, link = null, userEmail = null, meta = null, io = null }) => {
   try {
-    // Create alert for admin activity log
+    // Create alert for admin activity log with source field
     const alert = await Alert.create({
       type: type || 'activity',
       message,
+      source: source || 'admin', // Store the source (admin or instructor)
       link,
       meta: meta || undefined,
       createdAt: new Date()
@@ -26,22 +27,6 @@ export const logActivity = async ({ type, message, source, link = null, userEmai
     // Emit real-time notification if Socket.IO is available
     if (io) {
       io.emit('new-alert', alert);
-    }
-
-    // If this is an instructor activity, also create an instructor notification
-    if (source === 'instructor' && userEmail) {
-      try {
-        await InstructorNotification.create({
-          instructorEmail: userEmail,
-          title: 'Activity Logged',
-          message: message,
-          link: link,
-          createdAt: new Date()
-        });
-      } catch (notifError) {
-        // Don't fail the activity log if notification creation fails
-        console.error('Failed to create instructor notification:', notifError);
-      }
     }
 
     return alert;
