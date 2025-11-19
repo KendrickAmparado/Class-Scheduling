@@ -5,13 +5,13 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
   faDesktop, 
   faPlus, 
-  faTrash, 
   faTimes, 
   faDoorOpen,
   faEdit,
   faCheckCircle,
   faExclamationTriangle,
-  faTools
+  faTools,
+  faArchive
 } from '@fortawesome/free-solid-svg-icons';
 import axios from 'axios';
 import { useToast } from '../common/ToastProvider.jsx';
@@ -31,6 +31,11 @@ const RoomManagement = () => {
   const [areaFilter, setAreaFilter] = useState('all');
   const [sortConfig, setSortConfig] = useState({ key: 'room', direction: 'asc' });
   const [confirmDialog, setConfirmDialog] = useState({ show: false, title: '', message: '', onConfirm: null, destructive: false });
+
+  // Archived rooms state
+  const [archivedRooms, setArchivedRooms] = useState([]);
+  const [loadingArchived, setLoadingArchived] = useState(false);
+  const [showArchivedModal, setShowArchivedModal] = useState(false);
 
   // Add Room form state
   const [newRoom, setNewRoom] = useState({ room: '', area: '', status: 'available' });
@@ -124,18 +129,59 @@ const RoomManagement = () => {
     setEditLoading(false);
   };
 
-  // Delete Room handlers
-  const handleDeleteRoom = (room) => {
+  // Archive/Delete Room handlers
+  const handleArchiveRoom = (room) => {
     setConfirmDialog({
       show: true,
-      title: 'Delete Room',
-      message: `Are you sure you want to delete room "${room.room}"? This action cannot be undone.`,
+      title: 'Archive Room',
+      message: `Are you sure you want to archive room "${room.room}"? You can restore it later from the archived list.`,
       onConfirm: async () => {
         try {
-          const res = await axios.delete(`http://localhost:5000/api/rooms/${room._id}`);
+          const res = await axios.patch(`http://localhost:5000/api/rooms/${room._id}/archive`);
           if (res.data.success) {
-            showToast('Room deleted successfully!', 'success');
+            showToast('Room archived successfully!', 'success');
             fetchRooms();
+          } else {
+            showToast(res.data.message || 'Failed to archive room', 'error');
+          }
+        } catch (err) {
+          console.error('Archive room failed:', err);
+          showToast('Server error while archiving room.', 'error');
+        }
+        setConfirmDialog({ show: false, title: '', message: '', onConfirm: null, destructive: false });
+      },
+      destructive: false,
+    });
+  };
+
+  const handleRestoreRoom = async (room) => {
+    try {
+      const res = await axios.patch(`http://localhost:5000/api/rooms/${room._id}/restore`);
+      if (res.data.success) {
+        showToast('Room restored successfully!', 'success');
+        fetchRooms();
+        fetchArchivedRooms();
+      } else {
+        showToast(res.data.message || 'Failed to restore room', 'error');
+      }
+    } catch (err) {
+      console.error('Restore room failed:', err);
+      showToast('Server error while restoring room.', 'error');
+    }
+  };
+
+  const handleDeleteRoomPermanent = (room) => {
+    setConfirmDialog({
+      show: true,
+      title: 'Delete Room Permanently',
+      message: `Are you sure you want to permanently delete room "${room.room}"? This action cannot be undone.`,
+      onConfirm: async () => {
+        try {
+          const res = await axios.delete(`http://localhost:5000/api/rooms/${room._id}/permanent`);
+          if (res.data.success) {
+            showToast('Room deleted permanently!', 'success');
+            fetchRooms();
+            fetchArchivedRooms();
           } else {
             showToast(res.data.message || 'Failed to delete room', 'error');
           }
@@ -147,6 +193,31 @@ const RoomManagement = () => {
       },
       destructive: true,
     });
+  };
+
+  const fetchArchivedRooms = async () => {
+    setLoadingArchived(true);
+    try {
+      const res = await axios.get('http://localhost:5000/api/rooms/archived/list');
+      setArchivedRooms(Array.isArray(res.data) ? res.data : []);
+    } catch (err) {
+      console.error('Error fetching archived rooms', err);
+      showToast('Error loading archived rooms.', 'error');
+      setArchivedRooms([]);
+    } finally {
+      setLoadingArchived(false);
+    }
+  };
+
+  const handleOpenArchivedModal = () => {
+    setShowArchivedModal(true);
+    if (archivedRooms.length === 0) {
+      fetchArchivedRooms();
+    }
+  };
+
+  const closeArchivedModal = () => {
+    setShowArchivedModal(false);
   };
 
   // Get unique areas for filter
@@ -261,6 +332,32 @@ const RoomManagement = () => {
                   >
                     <FontAwesomeIcon icon={faPlus} />
                     Add Room
+                  </button>
+                  <button
+                    onClick={handleOpenArchivedModal}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '12px 20px',
+                      background: '#f3f4f6',
+                      color: '#374151',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '10px',
+                      cursor: 'pointer',
+                      fontSize: '15px',
+                      fontWeight: '600',
+                      transition: 'all 0.3s ease',
+                    }}
+                    onMouseOver={(e) => {
+                      e.currentTarget.style.background = '#e5e7eb';
+                    }}
+                    onMouseOut={(e) => {
+                      e.currentTarget.style.background = '#f3f4f6';
+                    }}
+                  >
+                    <FontAwesomeIcon icon={faArchive} />
+                    Archived
                   </button>
                 </div>
               </div>
@@ -494,32 +591,32 @@ const RoomManagement = () => {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleDeleteRoom(room);
+                            handleArchiveRoom(room);
                           }}
                           style={{
                             width: '36px',
                             height: '36px',
                             borderRadius: '50%',
-                            background: 'rgba(239, 68, 68, 0.1)',
+                            background: 'rgba(251, 146, 60, 0.1)',
                             border: 'none',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            color: '#ef4444',
+                            color: '#f97316',
                             cursor: 'pointer',
                             transition: 'all 0.2s',
                           }}
                           onMouseOver={(e) => {
-                            e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)';
+                            e.currentTarget.style.background = 'rgba(251, 146, 60, 0.2)';
                             e.currentTarget.style.transform = 'scale(1.1)';
                           }}
                           onMouseOut={(e) => {
-                            e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
+                            e.currentTarget.style.background = 'rgba(251, 146, 60, 0.1)';
                             e.currentTarget.style.transform = 'scale(1)';
                           }}
-                          title="Delete Room"
+                          title="Archive Room"
                         >
-                          <FontAwesomeIcon icon={faTrash} style={{ fontSize: '14px' }} />
+                          <FontAwesomeIcon icon={faArchive} style={{ fontSize: '14px' }} />
                         </button>
                       </div>
                     </div>
@@ -869,6 +966,57 @@ const RoomManagement = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Archived Rooms Modal */}
+      {showArchivedModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 10000,
+        }}>
+          <div style={{ background: '#fff', borderRadius: 12, width: '92%', maxWidth: 900, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(2,6,23,0.3)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px', borderBottom: '1px solid #eef2ff' }}>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 800 }}>Archived Rooms</div>
+                <div style={{ fontSize: 13, color: '#6b7280' }}>{archivedRooms.length} archived room(s)</div>
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <button onClick={closeArchivedModal} style={{ padding: '8px 12px', background: '#f3f4f6', border: 'none', borderRadius: 8, cursor: 'pointer' }}>Close</button>
+              </div>
+            </div>
+
+            <div style={{ padding: 18 }}>
+              {loadingArchived ? (
+                <div style={{ padding: 24, textAlign: 'center', color: '#64748b' }}>Loading archived rooms...</div>
+              ) : archivedRooms.length === 0 ? (
+                <div style={{ padding: 24, textAlign: 'center', color: '#64748b' }}>No archived rooms.</div>
+              ) : (
+                <div style={{ display: 'grid', gap: 12 }}>
+                  {archivedRooms.map((r) => (
+                    <div key={r._id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 12, borderRadius: 8, border: '1px solid #e6eefb' }}>
+                      <div>
+                        <div style={{ fontWeight: 800 }}>{formatRoomLabel(r.room)}</div>
+                        <div style={{ fontSize: 13, color: '#64748b' }}>Area: {r.area} • Status: {r.status}</div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button onClick={() => handleRestoreRoom(r)} style={{ padding: '8px 12px', background: 'linear-gradient(90deg,#059669,#047857)', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer' }}>Restore</button>
+                        <button onClick={() => handleDeleteRoomPermanent(r)} style={{ padding: '8px 12px', background: '#ffe4e6', color: '#b91c1c', border: '1px solid #fecaca', borderRadius: 8, cursor: 'pointer' }}>Delete Permanently</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

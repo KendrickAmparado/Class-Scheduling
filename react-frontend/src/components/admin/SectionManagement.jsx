@@ -6,7 +6,7 @@ import {
   faGraduationCap, 
   faCode, 
   faPlus,
-  faTrash,
+  faArchive,
   faTimes,
   faUsers,
   faExclamationCircle
@@ -32,6 +32,9 @@ const SectionManagement = () => {
     onConfirm: null, 
     destructive: false 
   });
+  const [archivedSections, setArchivedSections] = useState([]);
+  const [loadingArchived, setLoadingArchived] = useState(false);
+  const [showArchivedModal, setShowArchivedModal] = useState(false);
 
   const courses = [
     {
@@ -57,20 +60,20 @@ const SectionManagement = () => {
     { id: '4th year', label: '4th Year' }
   ];
 
+
   const fetchSections = useCallback(async () => {
     if (!selectedCourse || !selectedYear) {
       setSections([]);
       setError(null);
+      setLoadingArchived(false);
       return;
     }
-
     setLoading(true);
     setError(null);
     try {
       const response = await axios.get(
         `http://localhost:5000/api/sections?course=${selectedCourse}&year=${selectedYear}`
       );
-      
       if (Array.isArray(response.data)) {
         const sortedSections = response.data.sort((a, b) => 
           a.name.localeCompare(b.name)
@@ -79,18 +82,20 @@ const SectionManagement = () => {
       } else if (response.data.success === false) {
         setError(response.data.message || 'Error fetching sections');
         setSections([]);
-      } else {
-        setSections([]);
       }
+      setLoadingArchived(true);
+      const archivedRes = await axios.get(`http://localhost:5000/api/sections/archived/list?course=${selectedCourse}&year=${selectedYear}`);
+      setArchivedSections(Array.isArray(archivedRes.data) ? archivedRes.data : []);
+      setLoadingArchived(false);
     } catch (err) {
-      console.error('Error fetching sections:', err);
-      setError(err.response?.data?.message || 'Error to fetch data');
+      setError('Error fetching sections');
       setSections([]);
-      showToast('Error to fetch data', 'error');
+      setArchivedSections([]);
+      setLoadingArchived(false);
     } finally {
       setLoading(false);
     }
-  }, [selectedCourse, selectedYear, showToast]);
+  }, [selectedCourse, selectedYear]);
 
   useEffect(() => {
     fetchSections();
@@ -98,17 +103,14 @@ const SectionManagement = () => {
 
   const handleAddSection = async (e) => {
     e.preventDefault();
-    
     if (!newSectionName.trim()) {
       showToast('Please enter a section name', 'error');
       return;
     }
-
     if (!selectedCourse || !selectedYear) {
       showToast('Please select a course and year level', 'error');
       return;
     }
-
     setAddingSection(true);
     try {
       const response = await axios.post('http://localhost:5000/api/sections/create', {
@@ -116,7 +118,6 @@ const SectionManagement = () => {
         year: selectedYear,
         name: newSectionName.trim(),
       });
-
       if (response.data.success) {
         showToast('Section added successfully!', 'success');
         setNewSectionName('');
@@ -133,27 +134,76 @@ const SectionManagement = () => {
     }
   };
 
-  const handleDeleteSection = (section) => {
+  const handleDeleteSectionPermanent = (section) => {
     setConfirmDialog({
       show: true,
-      title: 'Delete Section',
-      message: `Are you sure you want to delete section "${section.name}"? This will also delete all associated schedules. This action cannot be undone.`,
+      title: 'Delete Section Permanently',
+      message: `Are you sure you want to permanently delete section "${section.name}" and all its associated schedules? This cannot be undone.`,
       onConfirm: async () => {
         try {
-          const response = await axios.delete(`http://localhost:5000/api/sections/${section._id}`);
-          if (response.data.success) {
-            showToast('Section deleted successfully!', 'success');
-            await fetchSections();
-          } else {
-            showToast(response.data.message || 'Failed to delete section', 'error');
-          }
-        } catch (err) {
-          console.error('Error deleting section:', err);
-          showToast(err.response?.data?.message || 'Error deleting section', 'error');
+          await axios.delete(`http://localhost:5000/api/sections/${section._id}/permanent`);
+          showToast('Section deleted permanently', 'success');
+          fetchSections();
+          setArchivedSections(archivedSections.filter(s => s._id !== section._id));
+        } catch {
+          showToast('Failed to delete section', 'error');
         }
-        setConfirmDialog({ show: false, title: '', message: '', onConfirm: null, destructive: false });
       },
-      destructive: true,
+      destructive: true
+    });
+  };
+
+  const handleRestoreSection = async (section) => {
+    try {
+      await axios.patch(`http://localhost:5000/api/sections/${section._id}/restore`);
+      showToast('Section restored successfully', 'success');
+      fetchSections();
+      setArchivedSections(archivedSections.filter(s => s._id !== section._id));
+    } catch {
+      showToast('Failed to restore section', 'error');
+    }
+  };
+
+  const handleOpenArchivedModal = () => {
+    setShowArchivedModal(true);
+    if (archivedSections.length === 0) {
+      fetchArchivedSections();
+    }
+  };
+
+  const closeArchivedModal = () => {
+    setShowArchivedModal(false);
+  };
+
+  const fetchArchivedSections = async () => {
+    setLoadingArchived(true);
+    try {
+      const res = await axios.get(`http://localhost:5000/api/sections/archived/list?course=${selectedCourse}&year=${selectedYear}`);
+      setArchivedSections(Array.isArray(res.data) ? res.data : []);
+    } catch (err) {
+      console.error('Error fetching archived sections', err);
+      showToast('Error loading archived sections.', 'error');
+      setArchivedSections([]);
+    } finally {
+      setLoadingArchived(false);
+    }
+  };
+
+  const handleArchiveSection = (section) => {
+    setConfirmDialog({
+      show: true,
+      title: 'Archive Section',
+      message: `Are you sure you want to archive section "${section.name}"? You can restore it later from the archived list.`,
+      onConfirm: async () => {
+        try {
+          await axios.patch(`http://localhost:5000/api/sections/${section._id}/archive`);
+          showToast('Section archived successfully', 'success');
+          fetchSections();
+        } catch {
+          showToast('Failed to archive section', 'error');
+        }
+      },
+      destructive: false
     });
   };
 
@@ -347,6 +397,32 @@ const SectionManagement = () => {
                   <FontAwesomeIcon icon={faPlus} />
                   Add Section
                 </button>
+                <button
+                  onClick={handleOpenArchivedModal}
+                  style={{
+                    padding: '12px 20px',
+                    background: '#f3f4f6',
+                    color: '#374151',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '10px',
+                    cursor: 'pointer',
+                    fontWeight: '600',
+                    fontSize: '14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    transition: 'all 0.3s ease',
+                  }}
+                  onMouseOver={(e) => {
+                    e.currentTarget.style.background = '#e5e7eb';
+                  }}
+                  onMouseOut={(e) => {
+                    e.currentTarget.style.background = '#f3f4f6';
+                  }}
+                >
+                  <FontAwesomeIcon icon={faArchive} />
+                  Archived
+                </button>
               </div>
 
               {loading ? (
@@ -417,24 +493,24 @@ const SectionManagement = () => {
                         {section.name}
                       </span>
                       <button
-                        onClick={() => handleDeleteSection(section)}
+                        onClick={() => handleArchiveSection(section)}
                         style={{
                           padding: '8px 12px',
-                          background: '#fee2e2',
-                          color: '#dc2626',
+                          background: '#fef3c7',
+                          color: '#b45309',
                           border: 'none',
                           borderRadius: '6px',
                           cursor: 'pointer',
                           transition: 'all 0.2s ease',
                         }}
                         onMouseOver={(e) => {
-                          e.currentTarget.style.background = '#fecaca';
+                          e.currentTarget.style.background = '#fde68a';
                         }}
                         onMouseOut={(e) => {
-                          e.currentTarget.style.background = '#fee2e2';
+                          e.currentTarget.style.background = '#fef3c7';
                         }}
                       >
-                        <FontAwesomeIcon icon={faTrash} />
+                        <FontAwesomeIcon icon={faArchive} />
                       </button>
                     </div>
                   ))}
@@ -463,6 +539,56 @@ const SectionManagement = () => {
               <p style={{ color: '#64748b', fontSize: '16px', margin: 0 }}>
                 Please select a course and year level above to view and manage sections
               </p>
+            </div>
+          )}
+
+          {/* Archived Sections Modal */}
+          {showArchivedModal && (
+            <div style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0,0,0,0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 10000,
+            }}>
+              <div style={{ background: '#fff', borderRadius: 12, width: '92%', maxWidth: 900, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(2,6,23,0.3)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px', borderBottom: '1px solid #eef2ff' }}>
+                  <div>
+                    <div style={{ fontSize: 16, fontWeight: 800 }}>Archived Sections</div>
+                    <div style={{ fontSize: 13, color: '#6b7280' }}>{archivedSections.length} archived section(s)</div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <button onClick={closeArchivedModal} style={{ padding: '8px 12px', background: '#f3f4f6', border: 'none', borderRadius: 8, cursor: 'pointer' }}>Close</button>
+                  </div>
+                </div>
+
+                <div style={{ padding: 18 }}>
+                  {loadingArchived ? (
+                    <div style={{ padding: 24, textAlign: 'center', color: '#64748b' }}>Loading archived sections...</div>
+                  ) : archivedSections.length === 0 ? (
+                    <div style={{ padding: 24, textAlign: 'center', color: '#64748b' }}>No archived sections.</div>
+                  ) : (
+                    <div style={{ display: 'grid', gap: 12 }}>
+                      {archivedSections.map((s) => (
+                        <div key={s._id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 12, borderRadius: 8, border: '1px solid #e6eefb' }}>
+                          <div>
+                            <div style={{ fontWeight: 800 }}>{s.name}</div>
+                          </div>
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <button onClick={() => handleRestoreSection(s)} style={{ padding: '8px 12px', background: 'linear-gradient(90deg,#059669,#047857)', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer' }}>Restore</button>
+                            <button onClick={() => handleDeleteSectionPermanent(s)} style={{ padding: '8px 12px', background: '#ffe4e6', color: '#b91c1c', border: '1px solid #fecaca', borderRadius: 8, cursor: 'pointer' }}>Delete Permanently</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           )}
 

@@ -9,6 +9,7 @@ const roomSchema = new mongoose.Schema({
     required: true,
     default: 'available',
   },
+  archived: { type: Boolean, default: false },
 });
 
 const Room = mongoose.model('Room', roomSchema);

@@ -30,18 +30,16 @@ router.post('/create', async (req, res) => {
   }
 });
 
-// Get sections filtered by course and year
+
+// Get sections filtered by course and year (not archived)
 router.get('/', async (req, res) => {
   const { course, year } = req.query;
   if (!course || !year) {
     return res.json({ success: false, message: 'Missing course or year query' });
   }
   try {
-    const sections = await Section.find({ course, year });
-    
-    // Emit data change event if sections have changed
+    const sections = await Section.find({ course, year, archived: false });
     detectAndEmitChange('sections', sections, req.io, 'data-updated:sections');
-    
     res.json(sections);
   } catch (error) {
     console.error('Error fetching sections:', error);
@@ -49,61 +47,64 @@ router.get('/', async (req, res) => {
   }
 });
 
-// DELETE section by ID (and cascade delete associated schedules)
-router.delete('/:id', async (req, res) => {
+// Get archived sections
+router.get('/archived/list', async (req, res) => {
+  try {
+    const { course, year } = req.query;
+    const filter = { archived: true };
+    if (course) filter.course = course;
+    if (year) filter.year = year;
+    const archivedSections = await Section.find(filter);
+    res.json(archivedSections);
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error fetching archived sections', error: error.message });
+  }
+});
+
+// Archive section by ID (soft delete)
+router.patch('/:id/archive', async (req, res) => {
+  try {
+    const section = await Section.findByIdAndUpdate(req.params.id, { archived: true }, { new: true });
+    if (!section) return res.status(404).json({ success: false, message: 'Section not found' });
+    res.json({ success: true, section });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error archiving section', error: error.message });
+  }
+});
+
+// Restore archived section
+router.patch('/:id/restore', async (req, res) => {
+  try {
+    const section = await Section.findByIdAndUpdate(req.params.id, { archived: false }, { new: true });
+    if (!section) return res.status(404).json({ success: false, message: 'Section not found' });
+    res.json({ success: true, section });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error restoring section', error: error.message });
+  }
+});
+
+// Permanently delete section by ID (and cascade delete associated schedules)
+router.delete('/:id/permanent', async (req, res) => {
   try {
     const sectionId = req.params.id;
-    
-    console.log('Attempting to delete section with ID:', sectionId);
-    
-    // First, find the section to get its details
     const section = await Section.findById(sectionId);
-    
     if (!section) {
-      console.log('Section not found:', sectionId);
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Section not found' 
-      });
+      return res.status(404).json({ success: false, message: 'Section not found' });
     }
-    
-    console.log('Found section:', section);
-    
     // Delete all schedules associated with this section
     const deleteSchedulesResult = await Schedule.deleteMany({ 
       section: section.name,
       course: section.course,
       year: section.year
     });
-    
-    console.log('Deleted schedules:', deleteSchedulesResult);
-    
-    // Delete the section itself
     await Section.findByIdAndDelete(sectionId);
-    
-    console.log('Section deleted successfully');
-    
-    // Create alert for section deletion
-    const alert = await Alert.create({
-      type: 'section-deleted',
-      message: `Section ${section.name} deleted from ${section.course} ${section.year}.`,
-      link: '/admin/section-management'
-    });
-    req.io?.emit('new-alert', alert);
-    
     res.json({ 
       success: true, 
-      message: 'Section and associated schedules deleted successfully',
+      message: 'Section and associated schedules permanently deleted',
       deletedSchedules: deleteSchedulesResult.deletedCount
     });
-    
   } catch (error) {
-    console.error('Error deleting section:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Error deleting section',
-      error: error.message 
-    });
+    res.status(500).json({ success: false, message: 'Error permanently deleting section', error: error.message });
   }
 });
 

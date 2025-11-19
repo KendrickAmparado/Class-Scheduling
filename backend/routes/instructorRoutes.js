@@ -8,6 +8,8 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { logActivity, getUserEmailFromRequest } from '../utils/activityLogger.js';
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
 
 import express from "express";
 

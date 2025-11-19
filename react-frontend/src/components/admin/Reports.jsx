@@ -572,38 +572,345 @@ const Reports = () => {
 
   const exportRoomsToPDF = () => {
     if (!rooms || rooms.length === 0) return;
-    const doc = new jsPDF();
-    const head = [['Room', 'Area/Location', 'Status']];
-    const body = rooms.map(r => [r.name || r.room || '', r.area || r.location || '', r.status || '']);
-    doc.autoTable({ head, body });
+    
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 15;
+    const headerColor = [15, 44, 99]; // #0f2c63
+
+    // Report Header
+    doc.setFillColor(...headerColor);
+    doc.rect(0, 0, pageWidth, 35, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(18);
+    doc.setFont(undefined, 'bold');
+    doc.text('ROOMS REPORT', margin, 18);
+    
+    doc.setFontSize(11);
+    doc.setFont(undefined, 'normal');
+    doc.text('All Available Facilities', margin, 26);
+    
+    doc.setFontSize(9);
+    doc.text(`Generated: ${new Date().toLocaleString()}`, pageWidth - margin, 26, { align: 'right' });
+
+    // Summary Information Box
+    const availableRooms = rooms.filter(r => r.status === 'available').length;
+    const maintenanceRooms = rooms.filter(r => r.status === 'maintenance').length;
+    const uniqueAreas = new Set(rooms.map(r => r.area)).size;
+
+    const summaryY = 45;
+    doc.setDrawColor(200, 200, 200);
+    doc.setFillColor(248, 250, 252);
+    doc.roundedRect(margin, summaryY, pageWidth - (margin * 2), 25, 3, 3, 'FD');
+    
+    doc.setTextColor(30, 41, 59);
+    doc.setFontSize(10);
+    doc.setFont(undefined, 'bold');
+    doc.text('Summary Information', margin + 3, summaryY + 8);
+    
+    doc.setFont(undefined, 'normal');
+    doc.setFontSize(9);
+    const summaryText = [
+      `Total Rooms: ${rooms.length}`,
+      `• Available: ${availableRooms}`,
+      `• Under Maintenance: ${maintenanceRooms}`,
+      `• Areas: ${uniqueAreas}`
+    ];
+    doc.text(summaryText.join('  '), margin + 3, summaryY + 16);
+
+    // Prepare detailed room data with usage statistics
+    const tableData = rooms.map(room => {
+      const roomSchedules = schedules.filter(s => s.room === room.room);
+      const sectionsUsing = [...new Set(roomSchedules.map(s => s.section).filter(Boolean))];
+      const subjectsUsing = [...new Set(roomSchedules.map(s => s.subject).filter(Boolean))];
+      
+      return [
+        room.room || '-',
+        room.area || '-',
+        room.status || 'available',
+        roomSchedules.length,
+        sectionsUsing.join(', ') || '-',
+        subjectsUsing.join(', ') || '-'
+      ];
+    });
+
+    // Generate table using autoTable
+    doc.autoTable({
+      startY: summaryY + 30,
+      head: [['Room', 'Area', 'Status', 'Classes', 'Sections Using', 'Subjects Using']],
+      body: tableData,
+      theme: 'striped',
+      headStyles: {
+        fillColor: headerColor,
+        textColor: [255, 255, 255],
+        fontStyle: 'bold',
+        fontSize: 10,
+        halign: 'left',
+        valign: 'middle',
+      },
+      bodyStyles: {
+        textColor: [30, 41, 59],
+        fontSize: 8,
+        halign: 'left',
+        valign: 'top',
+      },
+      alternateRowStyles: {
+        fillColor: [248, 250, 252],
+      },
+      columnStyles: {
+        0: { cellWidth: 20 }, // Room
+        1: { cellWidth: 25 }, // Area
+        2: { cellWidth: 20 }, // Status
+        3: { cellWidth: 15 }, // Classes
+        4: { cellWidth: 'auto' }, // Sections
+        5: { cellWidth: 'auto' }, // Subjects
+      },
+      margin: { left: margin, right: margin },
+      styles: {
+        lineColor: [229, 231, 235],
+        lineWidth: 0.5,
+        cellPadding: { top: 4, bottom: 4, left: 5, right: 5 },
+      },
+      didDrawPage: (data) => {
+        if (data.pageNumber > 1) {
+          doc.setFillColor(...headerColor);
+          doc.rect(0, 0, pageWidth, 20, 'F');
+          doc.setTextColor(255, 255, 255);
+          doc.setFontSize(10);
+          doc.setFont(undefined, 'bold');
+          doc.text('ROOMS REPORT - All Available Facilities', margin, 12);
+        }
+      },
+    });
+
+    // Add page numbers
+    const totalPages = doc.internal.pages.length - 1;
+    for (let i = 1; i <= totalPages; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);
+      doc.text(
+        `Page ${i} of ${totalPages}`,
+        pageWidth - margin,
+        doc.internal.pageSize.getHeight() - 10,
+        { align: 'right' }
+      );
+    }
+
     doc.save('Rooms_Report.pdf');
   };
 
   const exportRoomsToExcel = () => {
     if (!rooms || rooms.length === 0) return;
+    
+    // Prepare detailed room data with usage statistics
+    const data = rooms.map(room => {
+      const roomSchedules = schedules.filter(s => s.room === room.room);
+      const sectionsUsing = [...new Set(roomSchedules.map(s => s.section).filter(Boolean))];
+      const subjectsUsing = [...new Set(roomSchedules.map(s => s.subject).filter(Boolean))];
+      
+      return [
+        room.room || '-',
+        room.area || '-',
+        room.status || 'available',
+        roomSchedules.length,
+        sectionsUsing.join(', ') || '-',
+        subjectsUsing.join(', ') || '-'
+      ];
+    });
+
+    const header = ['Room', 'Area', 'Status', 'Classes', 'Sections Using', 'Subjects Using'];
+    const aoa = [header, ...data];
+    
     const wb = XLSX.utils.book_new();
-    const aoa = [[ 'Room', 'Area/Location', 'Status' ], ...rooms.map(r => [r.name || r.room || '', r.area || r.location || '', r.status || ''])];
     const ws = XLSX.utils.aoa_to_sheet(aoa);
+    
+    // Style header row
+    const headerStyle = {
+      fill: { fgColor: { rgb: 'FF0F2C63' } },
+      font: { bold: true, color: { rgb: 'FFFFFFFF' } },
+      alignment: { horizontal: 'left', vertical: 'center' }
+    };
+    
+    for (let i = 0; i < header.length; i++) {
+      const cellRef = XLSX.utils.encode_col(i) + '1';
+      ws[cellRef].s = headerStyle;
+    }
+    
+    // Set column widths
+    ws['!cols'] = [
+      { wch: 15 },  // Room
+      { wch: 15 },  // Area
+      { wch: 15 },  // Status
+      { wch: 12 },  // Classes
+      { wch: 30 },  // Sections
+      { wch: 35 }   // Subjects
+    ];
+    
     XLSX.utils.book_append_sheet(wb, ws, 'Rooms');
     XLSX.writeFile(wb, 'Rooms_Report.xlsx');
   };
 
   const exportSectionsToPDF = () => {
     if (!sections || sections.length === 0) return;
-    const doc = new jsPDF();
-    const head = [['Section', 'Course', 'Year', 'Schedules']];
-    const body = sections.map(s => [s.name || '', s.course || selectedCourse, s.year || selectedYear, (s._id ? (s._id && schedules.filter(sc => sc.section === s.name).length) : schedules.filter(sc => sc.section === s.name).length)]);
-    doc.autoTable({ head, body });
-    doc.save('Sections_Report.pdf');
+    
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 15;
+    const headerColor = [15, 44, 99]; // #0f2c63
+
+    // Report Header
+    doc.setFillColor(...headerColor);
+    doc.rect(0, 0, pageWidth, 35, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(18);
+    doc.setFont(undefined, 'bold');
+    doc.text('SECTIONS REPORT', margin, 18);
+    
+    doc.setFontSize(11);
+    doc.setFont(undefined, 'normal');
+    doc.text(
+      `${currentCourse.shortName} • ${selectedYear.toUpperCase()}`,
+      margin,
+      26
+    );
+    
+    doc.setFontSize(9);
+    doc.text(`Generated: ${new Date().toLocaleString()}`, pageWidth - margin, 26, { align: 'right' });
+
+    // Prepare detailed section data
+    const tableData = sections.map(section => {
+      const sectionSchedules = schedules.filter(s => s.section === section.name);
+      const subjects = [...new Set(sectionSchedules.map(s => s.subject).filter(Boolean))].join(', ');
+      const rooms = [...new Set(sectionSchedules.map(s => s.room).filter(Boolean))].join(', ');
+      const instructors = [...new Set(sectionSchedules.map(s => s.instructor).filter(Boolean))].join(', ');
+      
+      return [
+        section.name,
+        sectionSchedules.length,
+        subjects || '-',
+        rooms || '-',
+        instructors || '-'
+      ];
+    });
+
+    // Generate table using autoTable
+    doc.autoTable({
+      startY: 45,
+      head: [['Section', 'Total Classes', 'Subjects', 'Rooms Used', 'Instructors']],
+      body: tableData,
+      theme: 'striped',
+      headStyles: {
+        fillColor: headerColor,
+        textColor: [255, 255, 255],
+        fontStyle: 'bold',
+        fontSize: 10,
+        halign: 'left',
+        valign: 'middle',
+      },
+      bodyStyles: {
+        textColor: [30, 41, 59],
+        fontSize: 9,
+        halign: 'left',
+        valign: 'top',
+      },
+      alternateRowStyles: {
+        fillColor: [248, 250, 252],
+      },
+      columnStyles: {
+        0: { cellWidth: 20 }, // Section
+        1: { cellWidth: 25 }, // Total Classes
+        2: { cellWidth: 'auto' }, // Subjects
+        3: { cellWidth: 'auto' }, // Rooms
+        4: { cellWidth: 'auto' }, // Instructors
+      },
+      margin: { left: margin, right: margin },
+      styles: {
+        lineColor: [229, 231, 235],
+        lineWidth: 0.5,
+        cellPadding: { top: 4, bottom: 4, left: 5, right: 5 },
+      },
+      didDrawPage: (data) => {
+        if (data.pageNumber > 1) {
+          doc.setFillColor(...headerColor);
+          doc.rect(0, 0, pageWidth, 20, 'F');
+          doc.setTextColor(255, 255, 255);
+          doc.setFontSize(10);
+          doc.setFont(undefined, 'bold');
+          doc.text(
+            `${currentCourse.shortName} • ${selectedYear.toUpperCase()}`,
+            margin,
+            12
+          );
+        }
+      },
+    });
+
+    // Add page numbers
+    const totalPages = doc.internal.pages.length - 1;
+    for (let i = 1; i <= totalPages; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);
+      doc.text(
+        `Page ${i} of ${totalPages}`,
+        pageWidth - margin,
+        doc.internal.pageSize.getHeight() - 10,
+        { align: 'right' }
+      );
+    }
+
+    doc.save(`Sections_Report_${currentCourse.shortName}_${selectedYear}.pdf`);
   };
 
   const exportSectionsToExcel = () => {
     if (!sections || sections.length === 0) return;
+    
+    // Prepare detailed section data
+    const data = sections.map(section => {
+      const sectionSchedules = schedules.filter(s => s.section === section.name);
+      const subjects = [...new Set(sectionSchedules.map(s => s.subject).filter(Boolean))].join(', ');
+      const rooms = [...new Set(sectionSchedules.map(s => s.room).filter(Boolean))].join(', ');
+      const instructors = [...new Set(sectionSchedules.map(s => s.instructor).filter(Boolean))].join(', ');
+      
+      return [
+        section.name,
+        sectionSchedules.length,
+        subjects || '-',
+        rooms || '-',
+        instructors || '-'
+      ];
+    });
+
+    const header = ['Section', 'Total Classes', 'Subjects', 'Rooms Used', 'Instructors'];
+    const aoa = [header, ...data];
+    
     const wb = XLSX.utils.book_new();
-    const aoa = [[ 'Section', 'Course', 'Year', 'Schedules' ], ...sections.map(s => [s.name || '', s.course || selectedCourse, s.year || selectedYear, schedules.filter(sc => sc.section === s.name).length])];
     const ws = XLSX.utils.aoa_to_sheet(aoa);
+    
+    // Style header row
+    const headerStyle = {
+      fill: { fgColor: { rgb: 'FF0F2C63' } },
+      font: { bold: true, color: { rgb: 'FFFFFFFF' } },
+      alignment: { horizontal: 'left', vertical: 'center' }
+    };
+    
+    for (let i = 0; i < header.length; i++) {
+      const cellRef = XLSX.utils.encode_col(i) + '1';
+      ws[cellRef].s = headerStyle;
+    }
+    
+    // Set column widths
+    ws['!cols'] = [
+      { wch: 15 },  // Section
+      { wch: 15 },  // Total Classes
+      { wch: 30 },  // Subjects
+      { wch: 30 },  // Rooms
+      { wch: 30 }   // Instructors
+    ];
+    
     XLSX.utils.book_append_sheet(wb, ws, 'Sections');
-    XLSX.writeFile(wb, 'Sections_Report.xlsx');
+    XLSX.writeFile(wb, `Sections_Report_${currentCourse.shortName}_${selectedYear}.xlsx`);
   };
 
 

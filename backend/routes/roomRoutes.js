@@ -34,7 +34,7 @@ router.get('/test/notify-status-change', async (req, res) => {
 
 router.get('/', async (req, res) => {
   try {
-    const rooms = await Room.find({});
+    const rooms = await Room.find({ archived: { $ne: true } });
     
     // Emit data change event only if rooms have changed
     detectAndEmitChange('rooms', rooms, req.io, 'data-updated:rooms');
@@ -43,6 +43,17 @@ router.get('/', async (req, res) => {
   } catch (err) {
     console.error('Error fetching rooms:', err);
     res.status(500).json({ message: 'Server error fetching rooms' });
+  }
+});
+
+// GET archived rooms
+router.get('/archived/list', async (req, res) => {
+  try {
+    const archivedRooms = await Room.find({ archived: true });
+    res.json(archivedRooms);
+  } catch (err) {
+    console.error('Error fetching archived rooms:', err);
+    res.status(500).json({ success: false, message: 'Error fetching archived rooms', error: err.message });
   }
 });
 
@@ -148,7 +159,7 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// DELETE room
+// DELETE room (permanent)
 router.delete('/:id', async (req, res) => {
   try {
     const deletedRoom = await Room.findByIdAndDelete(req.params.id);
@@ -169,6 +180,78 @@ router.delete('/:id', async (req, res) => {
   } catch (error) {
     console.error('Error deleting room:', error);
     res.status(500).json({ success: false, message: 'Server error while deleting room.' });
+  }
+});
+
+// ARCHIVE room (soft delete)
+router.patch('/:id/archive', async (req, res) => {
+  try {
+    const room = await Room.findByIdAndUpdate(req.params.id, { archived: true }, { new: true });
+    if (!room) {
+      return res.status(404).json({ success: false, message: 'Room not found.' });
+    }
+
+    await logActivity({
+      type: 'room-archived',
+      message: `Room ${room.room} (${room.area}) archived`,
+      source: 'admin',
+      link: '/admin/room-management',
+      meta: { room: room.room, area: room.area },
+      io: req.io
+    });
+
+    res.json({ success: true, message: 'Room archived successfully.', room });
+  } catch (error) {
+    console.error('Error archiving room:', error);
+    res.status(500).json({ success: false, message: 'Server error while archiving room.' });
+  }
+});
+
+// RESTORE archived room
+router.patch('/:id/restore', async (req, res) => {
+  try {
+    const room = await Room.findByIdAndUpdate(req.params.id, { archived: false }, { new: true });
+    if (!room) {
+      return res.status(404).json({ success: false, message: 'Room not found.' });
+    }
+
+    await logActivity({
+      type: 'room-restored',
+      message: `Room ${room.room} (${room.area}) restored`,
+      source: 'admin',
+      link: '/admin/room-management',
+      meta: { room: room.room, area: room.area },
+      io: req.io
+    });
+
+    res.json({ success: true, message: 'Room restored successfully.', room });
+  } catch (error) {
+    console.error('Error restoring room:', error);
+    res.status(500).json({ success: false, message: 'Server error while restoring room.' });
+  }
+});
+
+// PERMANENTLY DELETE archived room
+router.delete('/:id/permanent', async (req, res) => {
+  try {
+    const deletedRoom = await Room.findByIdAndDelete(req.params.id);
+    if (!deletedRoom) {
+      return res.status(404).json({ success: false, message: 'Room not found.' });
+    }
+
+    await logActivity({
+      type: 'room-deleted-permanent',
+      message: `Room ${deletedRoom.room} (${deletedRoom.area}) permanently deleted`,
+      source: 'admin',
+      link: '/admin/room-management',
+      meta: { room: deletedRoom.room, area: deletedRoom.area },
+      io: req.io
+    });
+
+    res.json({ success: true, message: 'Room permanently deleted.' });
+  } catch (error) {
+    console.error('Error permanently deleting room:', error);
+    res.status(500).json({ success: false, message: 'Server error while permanently deleting room.' });
   }
 });
 
