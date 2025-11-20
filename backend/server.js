@@ -28,6 +28,11 @@ import passwordResetRoutes from './routes/passwordResetRoutes.js';
 import publicRoutes from './routes/publicRoutes.js';
 import weatherRoutes from './routes/weatherRoutes.js';
 import adminMessageRoutes from './routes/adminMessageRoutes.js';
+import mvccScheduleRoutes from './routes/mvccScheduleRoutes.js';
+import mvccSectionRoutes from './routes/mvccSectionRoutes.js';
+import mvccRoomRoutes from './routes/mvccRoomRoutes.js';
+import mvccInstructorRoutes from './routes/mvccInstructorRoutes.js';
+import { versionConflictHandler } from './middleware/mvccTransaction.js';
 import { startWeatherScheduler } from './services/weatherScheduler.js';
 import Instructor from './models/Instructor.js'; // Import the model for index management
 
@@ -118,6 +123,13 @@ mongoose
     startWeatherScheduler(io);
 
     // Route Mounting
+    // ============== MVCC ROUTES (Concurrency Control) ==============
+    app.use('/api/schedule/mvcc', mvccScheduleRoutes);
+    app.use('/api/section/mvcc', mvccSectionRoutes);
+    app.use('/api/room/mvcc', mvccRoomRoutes);
+    app.use('/api/instructor/mvcc', mvccInstructorRoutes);
+    
+    // ============== EXISTING ROUTES ==============
     app.use('/api/admin', adminRoutes);
     app.use('/api/admin', alertsRoutes);
     app.use('/api/instructor', instructorNotificationRoutes);
@@ -135,6 +147,10 @@ mongoose
     app.use('/api/admin-message', adminMessageRoutes);
     app.use("/uploads", express.static("uploads"));
 
+    // ============== ERROR HANDLING ==============
+    // MVCC version conflict handler (must come first)
+    app.use(versionConflictHandler);
+    
     // Sentry error handler (must be before other error handlers)
     // Only use if Sentry is properly initialized
     if (isSentryReady()) {

@@ -24,10 +24,14 @@ const instructorSchema = new mongoose.Schema({
     default: 'pending' 
   }
 }, { 
-  timestamps: true 
+  timestamps: true,
+  versionKey: '__v',
+  optimisticConcurrency: true
 });
 
-// Use correct schema variable name here
+// Index for email lookups
 instructorSchema.index({ email: 1 }, { unique: true });
+instructorSchema.index({ status: 1 });
+instructorSchema.index({ instructorId: 1 });
 
 export default mongoose.model('Instructor', instructorSchema);

@@ -10,7 +10,16 @@ const roomSchema = new mongoose.Schema({
     default: 'available',
   },
   archived: { type: Boolean, default: false },
+}, {
+  timestamps: true,
+  versionKey: '__v',
+  optimisticConcurrency: true
 });
+
+// Index for room queries
+roomSchema.index({ room: 1 });
+roomSchema.index({ status: 1 });
+roomSchema.index({ archived: 1 });
 
 const Room = mongoose.model('Room', roomSchema);
 

@@ -419,12 +419,23 @@ router.get('/instructor/by-name/:name', verifyToken, async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const scheduleId = req.params.id;
-    const { course, year, section, subject, instructor, instructorEmail, day, time, room } = req.body;
+    const { course, year, section, subject, instructor, instructorEmail, day, time, room, version } = req.body;
 
     // Find the existing schedule
     const existingSchedule = await Schedule.findById(scheduleId);
     if (!existingSchedule) {
       return res.status(404).json({ success: false, message: "Schedule not found." });
+    }
+
+    // MVCC Version check - if version is provided, validate it matches
+    if (version !== undefined && version !== null) {
+      if (existingSchedule.__v !== version) {
+        return res.status(409).json({ 
+          success: false, 
+          message: "Schedule was modified by another user. Please refresh and try again.",
+          currentVersion: existingSchedule.__v
+        });
+      }
     }
 
     let instructorEmailFinal = instructorEmail ? String(instructorEmail).trim().toLowerCase() : undefined;

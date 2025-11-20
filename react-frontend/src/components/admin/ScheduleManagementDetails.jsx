@@ -670,12 +670,21 @@ const ScheduleManagementDetails = () => {
     if (!rescheduleModal.schedule) return;
     setRescheduleModal(prev => ({ ...prev, loading: true }));
     try {
+      const schedule = rescheduleModal.schedule;
+      // Send all required fields for the backend update endpoint
       const update = {
+        course: schedule.course,
+        year: schedule.year,
+        section: schedule.section,
+        subject: schedule.subject,
+        instructor: schedule.instructor,
+        instructorEmail: schedule.instructorEmail,
         day: suggestion.day,
         time: suggestion.time,
         room: suggestion.room,
+        version: schedule.__v, // Include current version for MVCC conflict detection
       };
-      const res = await axios.put(`http://localhost:5000/api/schedule/${rescheduleModal.schedule._id}`, update);
+      const res = await axios.put(`http://localhost:5000/api/schedule/${schedule._id}`, update);
       if (res.data.success) {
         showToast('Schedule rescheduled successfully.', 'success');
         await fetchData();

@@ -12,6 +12,15 @@ const scheduleSchema = new mongoose.Schema({
   room: { type: String, required: true },
   googleCalendarEventId: { type: String, required: false },
   archived: { type: Boolean, default: false },
-}, { timestamps: true });
+}, { 
+  timestamps: true,
+  versionKey: '__v',
+  optimisticConcurrency: true
+});
+
+// Index for conflict detection
+scheduleSchema.index({ room: 1, day: 1, time: 1 });
+scheduleSchema.index({ instructor: 1, day: 1, time: 1 });
+scheduleSchema.index({ archived: 1 });
 
 export default mongoose.model("Schedule", scheduleSchema);
