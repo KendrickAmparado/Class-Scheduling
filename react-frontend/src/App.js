@@ -28,6 +28,7 @@ const Reports = lazy(() => import('./components/admin/Reports.jsx'));
 const InstructorWorkload = lazy(() => import('./components/admin/InstructorWorkload.jsx'));
 const Search = lazy(() => import('./components/admin/Search.jsx'));
 const ActivityLogs = lazy(() => import('./components/admin/ActivityLogs.jsx'));
+const AdminSettings = lazy(() => import('./components/admin/AdminSettings.jsx'));
 
 // Lazy load instructor components
 const InstructorDashboard = lazy(() => import('./components/instructor/InstructorDashboard.jsx'));
@@ -69,6 +70,7 @@ function App() {
                     <Route path="/admin/reports" element={<Reports />} />
                     <Route path="/admin/search" element={<Search />} />
                     <Route path="/admin/activity-logs" element={<ActivityLogs />} />
+                    <Route path="/admin/settings" element={<AdminSettings />} />
                     
                     {/* Instructor routes - lazy loaded */}
                     <Route path="/instructor/dashboard" element={<InstructorDashboard />} />

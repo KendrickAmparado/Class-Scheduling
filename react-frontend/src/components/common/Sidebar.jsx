@@ -10,7 +10,8 @@ import {
   faChartBar, 
   faSignOutAlt,
   faUserShield,
-  faTimes
+  faTimes,
+  faGear
 } from '@fortawesome/free-solid-svg-icons';
 
 const Sidebar = ({ isOpen, onClose }) => {
@@ -37,6 +38,7 @@ const Sidebar = ({ isOpen, onClose }) => {
     { path: '/admin/faculty-management', icon: faUsers, label: 'Faculty Management' },
     { path: '/admin/room-management', icon: faDoorOpen, label: 'Room Management' },
     { path: '/admin/reports', icon: faChartBar, label: 'Reports' },
+    { path: '/admin/settings', icon: faGear, label: 'Settings' },
   ];
 
   const handleLogout = () => {
