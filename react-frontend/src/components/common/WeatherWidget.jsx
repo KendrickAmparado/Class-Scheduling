@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faCloudSun, faCloudRain, faSun, faCloud, faBolt, faWind, faTemperatureHigh } from '@fortawesome/free-solid-svg-icons';
+import { faCloudSun, faCloudRain, faSun, faCloud, faBolt } from '@fortawesome/free-solid-svg-icons';
 
 const WeatherWidget = () => {
   const [weather, setWeather] = useState(null);

@@ -1,7 +1,7 @@
 import InstructorSidebar from '../common/InstructorSidebar.jsx';
 import InstructorHeader from '../common/InstructorHeader.jsx';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faUser, faCalendarAlt, faClock, faMapMarkerAlt, faFilter, faCalendarWeek, faSync, faExternalLinkAlt, faCheckCircle, faExclamationCircle, faCloudSun, faCloudRain, faSun, faBolt, faWind, faTemperatureHigh, faExclamationTriangle, faInfoCircle, faChevronDown, faChevronUp } from '@fortawesome/free-solid-svg-icons';
+import { faUser, faCalendarAlt, faClock, faMapMarkerAlt, faFilter, faCalendarWeek, faSync, faExternalLinkAlt, faCheckCircle, faExclamationCircle, faChevronDown, faChevronUp } from '@fortawesome/free-solid-svg-icons';
 import '../../styles/InstructorDashboard.css';
 import { AuthContext } from '../../context/AuthContext.jsx';
 import React, { useState, useEffect, useContext, useMemo } from 'react';
@@ -27,10 +27,6 @@ const InstructorDashboard = () => {
   const [syncedSchedules, setSyncedSchedules] = useState([]);
   const [calendarConfigured, setCalendarConfigured] = useState(false);
   const [loadingCalendar, setLoadingCalendar] = useState(false);
-  const [weather, setWeather] = useState(null);
-  const [weatherForecast, setWeatherForecast] = useState(null);
-  const [weatherAlert, setWeatherAlert] = useState(null);
-  const [loadingWeather, setLoadingWeather] = useState(false);
   const [weeklyWorkload, setWeeklyWorkload] = useState({ classes: 0, totalMinutes: 0, averageDailyMinutes: 0, daysWithClasses: 0 });
   const [calendarMinimized, setCalendarMinimized] = useState(true);
 
@@ -359,34 +355,6 @@ const InstructorDashboard = () => {
   if (!userEmail) {
     return <p>Loading user information...</p>;
   }
-
-  // Helper functions for weather display
-  const getWeatherIcon = (main) => {
-    switch (main) {
-      case 'Thunderstorm':
-        return faBolt;
-      case 'Rain':
-      case 'Drizzle':
-        return faCloudRain;
-      case 'Clear':
-        return faSun;
-      default:
-        return faCloudSun;
-    }
-  };
-
-  const getSeverityColor = (severity) => {
-    switch (severity) {
-      case 'danger':
-        return '#dc2626';
-      case 'warning':
-        return '#f59e0b';
-      case 'info':
-        return '#3b82f6';
-      default:
-        return '#6b7280';
-    }
-  };
 
   // Format date for display
   const formatEventDate = (dateString) => {

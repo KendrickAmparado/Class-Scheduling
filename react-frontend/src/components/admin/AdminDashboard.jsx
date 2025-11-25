@@ -15,14 +15,6 @@ import {
   faTrash,
   faUserPlus,
   faLayerGroup,
-  faCloudSun,
-  faCloudRain,
-  faSun,
-  faBolt,
-  faWind,
-  faTemperatureHigh,
-  faInfoCircle,
-  faSync,
 } from '@fortawesome/free-solid-svg-icons';
 import { formatRoomLabel } from '../../utils/roomUtils';
 
@@ -31,10 +23,6 @@ const AdminDashboard = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [alerts, setAlerts] = useState([]);
   const [roomStatus, setRoomStatus] = useState([]);
-  const [weather, setWeather] = useState(null);
-  const [weatherForecast, setWeatherForecast] = useState(null);
-  const [weatherAlert, setWeatherAlert] = useState(null);
-  const [loadingWeather, setLoadingWeather] = useState(false);
   const apiBase = process.env.REACT_APP_API_BASE || 'http://localhost:5000';
 
   useEffect(() => {
@@ -139,34 +127,6 @@ const AdminDashboard = () => {
     if (diffDays < 7) return `${diffDays}d ago`;
     
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  };
-
-  // Helper functions for weather display
-  const getWeatherIcon = (main) => {
-    switch (main) {
-      case 'Thunderstorm':
-        return faBolt;
-      case 'Rain':
-      case 'Drizzle':
-        return faCloudRain;
-      case 'Clear':
-        return faSun;
-      default:
-        return faCloudSun;
-    }
-  };
-
-  const getSeverityColor = (severity) => {
-    switch (severity) {
-      case 'danger':
-        return '#dc2626';
-      case 'warning':
-        return '#f59e0b';
-      case 'info':
-        return '#3b82f6';
-      default:
-        return '#6b7280';
-    }
   };
 
   return (
