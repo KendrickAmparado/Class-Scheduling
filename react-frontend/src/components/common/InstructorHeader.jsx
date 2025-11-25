@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faSearch, faBars, faTimes } from '@fortawesome/free-solid-svg-icons';
+import WeatherWidget from './WeatherWidget';
 
 const InstructorHeader = ({ onMenuClick }) => {
   const navigate = useNavigate();
@@ -266,6 +267,7 @@ const InstructorHeader = ({ onMenuClick }) => {
           gap: isMobile ? '10px' : '16px',
           flexShrink: 0
         }}>
+          <WeatherWidget />
           <div className="header-logos" style={{
             display: 'flex',
             alignItems: 'center',

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faSearch, faBars, faTimes } from '@fortawesome/free-solid-svg-icons';
+import WeatherWidget from './WeatherWidget';
 
 const Header = ({ title, onMenuClick }) => {
   const navigate = useNavigate();
@@ -284,6 +285,7 @@ const Header = ({ title, onMenuClick }) => {
             flexShrink: 0,
           }}
         >
+          <WeatherWidget />
           <div
             className="header-logos"
             style={{
