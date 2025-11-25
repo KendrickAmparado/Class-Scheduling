@@ -60,7 +60,7 @@ const AdminSettings = () => {
   };
 
   return (
-    <div style={{ display: 'flex', height: '100vh', background: '#f8fafc' }}>
+    <div style={{ display: 'flex', height: '100vh', background: 'transparent' }}>
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       
       <main
@@ -70,6 +70,7 @@ const AdminSettings = () => {
           flexDirection: 'column',
           overflowY: 'auto',
           marginLeft: 0,
+          background: 'transparent',
         }}
       >
         <Header onMenuClick={() => setSidebarOpen(!sidebarOpen)} />
