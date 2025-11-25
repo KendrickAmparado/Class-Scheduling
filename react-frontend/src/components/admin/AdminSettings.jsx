@@ -6,16 +6,6 @@ import {
   faGear,
   faClipboardList,
   faDownload,
-  faDatabase,
-  faCog,
-  faShieldAlt,
-  faHistory,
-  faArchive,
-  faSync,
-  faFileExport,
-  faServer,
-  faKey,
-  faBell,
 } from '@fortawesome/free-solid-svg-icons';
 import Sidebar from '../common/Sidebar.jsx';
 import Header from '../common/Header.jsx';
@@ -27,7 +17,6 @@ const AdminSettings = () => {
   const navigate = useNavigate();
   const { showToast } = useToast();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
   const apiBase = process.env.REACT_APP_API_BASE || 'http://localhost:5000';
 
   const settingsOptions = [
@@ -47,74 +36,9 @@ const AdminSettings = () => {
       color: '#10b981',
       action: () => handleBackupData(),
     },
-    {
-      id: 'database-maintenance',
-      title: 'Database Maintenance',
-      description: 'Optimize database, clear cache, and perform maintenance tasks',
-      icon: faDatabase,
-      color: '#8b5cf6',
-      action: () => handleDatabaseMaintenance(),
-    },
-    {
-      id: 'data-sync',
-      title: 'Data Synchronization',
-      description: 'Sync data with external services and verify data integrity',
-      icon: faSync,
-      color: '#f59e0b',
-      action: () => handleDataSync(),
-    },
-    {
-      id: 'export-reports',
-      title: 'Export Reports',
-      description: 'Generate and export comprehensive system reports in various formats',
-      icon: faFileExport,
-      color: '#ec4899',
-      action: () => navigate('/admin/reports'),
-    },
-    {
-      id: 'security-settings',
-      title: 'Security Settings',
-      description: 'Configure system security, permissions, and access control',
-      icon: faShieldAlt,
-      color: '#ef4444',
-      action: () => handleSecuritySettings(),
-    },
-    {
-      id: 'system-configuration',
-      title: 'System Configuration',
-      description: 'Manage system settings, localization, and application preferences',
-      icon: faCog,
-      color: '#0ea5e9',
-      action: () => handleSystemConfig(),
-    },
-    {
-      id: 'data-archival',
-      title: 'Data Archival',
-      description: 'Archive old records and manage historical data',
-      icon: faArchive,
-      color: '#6366f1',
-      action: () => handleDataArchival(),
-    },
-    {
-      id: 'system-status',
-      title: 'System Status',
-      description: 'Monitor system health, uptime, and performance metrics',
-      icon: faServer,
-      color: '#14b8a6',
-      action: () => handleSystemStatus(),
-    },
-    {
-      id: 'notifications',
-      title: 'Notifications',
-      description: 'Configure system notifications and alert preferences',
-      icon: faBell,
-      color: '#f97316',
-      action: () => handleNotifications(),
-    },
   ];
 
   const handleBackupData = async () => {
-    setLoading(true);
     try {
       const response = await axios.get(`${apiBase}/api/admin/backup`, {
         responseType: 'blob',
@@ -132,74 +56,7 @@ const AdminSettings = () => {
     } catch (error) {
       console.error('Error backing up data:', error);
       showToast('Failed to backup data. Please try again.', 'error');
-    } finally {
-      setLoading(false);
     }
-  };
-
-  const handleDatabaseMaintenance = async () => {
-    if (!window.confirm('This will optimize the database. Continue?')) return;
-    
-    setLoading(true);
-    try {
-      const response = await axios.post(`${apiBase}/api/admin/maintenance`);
-      showToast(response.data.message || 'Database maintenance completed successfully!', 'success');
-    } catch (error) {
-      console.error('Error performing maintenance:', error);
-      showToast('Failed to perform maintenance. Please try again.', 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDataSync = async () => {
-    setLoading(true);
-    try {
-      const response = await axios.post(`${apiBase}/api/admin/sync`);
-      showToast(response.data.message || 'Data synchronized successfully!', 'success');
-    } catch (error) {
-      console.error('Error syncing data:', error);
-      showToast('Failed to sync data. Please try again.', 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSecuritySettings = () => {
-    showToast('Security settings page coming soon!', 'info');
-    // TODO: Navigate to security settings page
-  };
-
-  const handleSystemConfig = () => {
-    showToast('System configuration page coming soon!', 'info');
-    // TODO: Navigate to system configuration page
-  };
-
-  const handleDataArchival = () => {
-    showToast('Data archival page coming soon!', 'info');
-    // TODO: Navigate to data archival page
-  };
-
-  const handleSystemStatus = async () => {
-    setLoading(true);
-    try {
-      const response = await axios.get(`${apiBase}/api/admin/system-status`);
-      const status = response.data;
-      showToast(
-        `System Status: ${status.status}\nUptime: ${status.uptime}\nDatabase: ${status.database}`,
-        'info'
-      );
-    } catch (error) {
-      console.error('Error fetching system status:', error);
-      showToast('Failed to fetch system status.', 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleNotifications = () => {
-    showToast('Notification settings page coming soon!', 'info');
-    // TODO: Navigate to notification settings page
   };
 
   return (
@@ -269,9 +126,10 @@ const AdminSettings = () => {
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))',
               gap: '24px',
               marginBottom: '40px',
+              maxWidth: '800px',
             }}
           >
             {settingsOptions.map((option) => (
