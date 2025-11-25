@@ -25,7 +25,7 @@ const AdminSettings = () => {
       title: 'Activity Logs',
       description: 'View and manage system activity logs, user actions, and audit trails',
       icon: faClipboardList,
-      color: '#3b82f6',
+      color: '#0f2c63',
       action: () => navigate('/admin/activity-logs'),
     },
     {
@@ -33,7 +33,7 @@ const AdminSettings = () => {
       title: 'Backup Data',
       description: 'Export and backup all system data including schedules, users, and settings',
       icon: faDownload,
-      color: '#10b981',
+      color: '#f97316',
       action: () => handleBackupData(),
     },
   ];
@@ -138,7 +138,7 @@ const AdminSettings = () => {
                 onClick={option.action}
                 style={{
                   background: '#ffffff',
-                  border: '2px solid #e5e7eb',
+                  border: `2px solid #e5e7eb`,
                   borderRadius: '16px',
                   padding: '28px 24px',
                   cursor: 'pointer',
@@ -152,7 +152,7 @@ const AdminSettings = () => {
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.transform = 'translateY(-4px)';
-                  e.currentTarget.style.boxShadow = '0 12px 24px rgba(0, 0, 0, 0.15)';
+                  e.currentTarget.style.boxShadow = '0 12px 24px rgba(15, 44, 99, 0.15)';
                   e.currentTarget.style.borderColor = option.color;
                 }}
                 onMouseLeave={(e) => {
