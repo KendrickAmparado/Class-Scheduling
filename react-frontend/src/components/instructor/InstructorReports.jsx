@@ -781,7 +781,7 @@ const InstructorReports = () => {
                   })}
             </div>
               ) : (
-                <div style={{ padding: '36px 24px 24px 24px', maxWidth: 1250, margin: '0 auto', background: '#fff', borderRadius: 22, boxShadow: '0 8px 32px #0f2c6312', overflowX: 'auto' }}>
+                <div style={{ padding: '36px 24px 24px 24px', maxWidth: 1600, margin: '0 auto', background: '#fff', borderRadius: 22, boxShadow: '0 8px 32px #0f2c6312', overflowX: 'auto' }}>
                   {/* Compute displayedWeekdays based on filterDay */}
                   <div style={{ display: 'grid', gridTemplateColumns: '120px repeat(' + displayedWeekdays.length + ', 1fr)', minWidth: 900 }}>
                     {/* Grid Header */}

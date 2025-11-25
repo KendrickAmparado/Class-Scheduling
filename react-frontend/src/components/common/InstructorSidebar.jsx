@@ -8,7 +8,8 @@ import {
   faChartBar,
   faCog,
   faBell,
-  faTimes
+  faTimes,
+  faUser
 } from '@fortawesome/free-solid-svg-icons';
 import { AuthContext } from '../../context/AuthContext.jsx';
 
@@ -17,6 +18,13 @@ const InstructorSidebar = ({ isOpen, onClose }) => {
   const navigate = useNavigate();
   const { logout, userEmail } = useContext(AuthContext);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  const [profileData, setProfileData] = useState({
+    firstname: '',
+    lastname: '',
+    image: ''
+  });
+
+  const apiBase = process.env.REACT_APP_API_BASE || 'http://localhost:5000';
 
   useEffect(() => {
     const handleResize = () => {
@@ -29,6 +37,32 @@ const InstructorSidebar = ({ isOpen, onClose }) => {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, [isOpen, onClose]);
+
+  useEffect(() => {
+    const fetchProfileData = async () => {
+      if (!userEmail) return;
+      
+      try {
+        const token = localStorage.getItem('token') || localStorage.getItem('instructorToken');
+        const res = await fetch(`${apiBase}/api/instructors/profile/me`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        if (res.ok) {
+          const data = await res.json();
+          setProfileData({
+            firstname: data.firstname || '',
+            lastname: data.lastname || '',
+            image: data.image || ''
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching profile:', error);
+      }
+    };
+
+    fetchProfileData();
+  }, [userEmail, apiBase]);
 
   const menuItems = [
     { path: '/instructor/dashboard', icon: faHome, label: 'Dashboard' },
@@ -78,7 +112,7 @@ const InstructorSidebar = ({ isOpen, onClose }) => {
       <aside
         className="sidebar"
         style={{
-          width: isMobile ? '280px' : '200px',
+          width: isMobile ? '280px' : '250px',
           background: 'linear-gradient(135deg, #0f2c63 60%, #ea580c 100%)',
           color: 'white',
           display: 'flex',
@@ -116,9 +150,88 @@ const InstructorSidebar = ({ isOpen, onClose }) => {
             <FontAwesomeIcon icon={faTimes} />
           </button>
         )}
+
+        {/* Profile Section */}
+        <div style={{
+          padding: isMobile ? '70px 20px 20px' : '30px 20px 20px',
+          borderBottom: '2px solid rgba(255, 255, 255, 0.2)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '12px'
+        }}>
+          <div style={{
+            width: '80px',
+            height: '80px',
+            borderRadius: '50%',
+            overflow: 'hidden',
+            border: '3px solid rgba(255, 255, 255, 0.3)',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
+            background: 'rgba(255, 255, 255, 0.1)'
+          }}>
+            {profileData.image ? (
+              <img
+                src={profileData.image.startsWith('http') 
+                  ? profileData.image 
+                  : `${apiBase}${profileData.image.startsWith('/') ? '' : '/'}${profileData.image}`}
+                alt="Profile"
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover'
+                }}
+              />
+            ) : (
+              <div style={{
+                width: '100%',
+                height: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'rgba(255, 255, 255, 0.2)'
+              }}>
+                <FontAwesomeIcon icon={faUser} style={{ fontSize: '36px', color: 'rgba(255, 255, 255, 0.7)' }} />
+              </div>
+            )}
+          </div>
+          <div style={{
+            textAlign: 'center',
+            width: '100%'
+          }}>
+            <h3 style={{
+              margin: 0,
+              fontSize: '16px',
+              fontWeight: '700',
+              color: 'white',
+              textShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              padding: '0 10px'
+            }}>
+              {profileData.firstname && profileData.lastname 
+                ? `${profileData.firstname} ${profileData.lastname}`
+                : 'Instructor'}
+            </h3>
+            {userEmail && (
+              <p style={{
+                margin: '4px 0 0',
+                fontSize: '12px',
+                color: 'rgba(255, 255, 255, 0.8)',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                padding: '0 10px'
+              }}>
+                {userEmail}
+              </p>
+            )}
+          </div>
+        </div>
+
       <nav className="sidebar-menu" style={{
         flex: 1,
-        padding: '60px 0 10px 0'
+        padding: '20px 0 10px 0'
       }}>
         {menuItems.map((item, index) => (
           <Link
@@ -202,43 +315,41 @@ const InstructorSidebar = ({ isOpen, onClose }) => {
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '8px',
-            padding: '10px 15px',
-            background: 'rgba(239, 68, 68, 0.2)',
-            color: '#fca5a5',
+            justifyContent: 'center',
+            gap: '10px',
+            padding: '14px 24px',
+            background: 'linear-gradient(135deg, #dc2626 0%, #991b1b 100%)',
+            color: 'white',
             textDecoration: 'none',
-            borderRadius: '8px',
-            fontWeight: '500',
-            border: '1px solid rgba(239, 68, 68, 0.3)',
+            borderRadius: '12px',
+            fontWeight: '600',
+            fontSize: '14px',
+            border: 'none',
             cursor: 'pointer',
-            width: 'auto',
-            maxWidth: '120px',
-            margin: '0 auto',
+            width: '100%',
             position: 'relative',
-            overflow: 'hidden'
+            overflow: 'hidden',
+            boxShadow: '0 4px 12px rgba(220, 38, 38, 0.3)',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'rgba(239, 68, 68, 0.35)';
-            e.currentTarget.style.color = 'white';
-            e.currentTarget.style.transform = 'translateY(-2px)';
-            e.currentTarget.style.boxShadow = '0 4px 12px rgba(239, 68, 68, 0.3)';
-            e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.5)';
+            e.currentTarget.style.background = 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)';
+            e.currentTarget.style.transform = 'translateY(-3px)';
+            e.currentTarget.style.boxShadow = '0 8px 20px rgba(220, 38, 38, 0.4)';
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)';
-            e.currentTarget.style.color = '#fca5a5';
+            e.currentTarget.style.background = 'linear-gradient(135deg, #dc2626 0%, #991b1b 100%)';
             e.currentTarget.style.transform = 'translateY(0)';
-            e.currentTarget.style.boxShadow = 'none';
-            e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+            e.currentTarget.style.boxShadow = '0 4px 12px rgba(220, 38, 38, 0.3)';
           }}
           onMouseDown={(e) => {
-            e.currentTarget.style.transform = 'translateY(0) scale(0.98)';
+            e.currentTarget.style.transform = 'translateY(-1px) scale(0.98)';
           }}
           onMouseUp={(e) => {
-            e.currentTarget.style.transform = 'translateY(-2px) scale(1)';
+            e.currentTarget.style.transform = 'translateY(-3px) scale(1)';
           }}
         >
-          <FontAwesomeIcon icon={faSignOutAlt} />
+          <FontAwesomeIcon icon={faSignOutAlt} style={{ fontSize: '16px' }} />
           <span>Log Out</span>
         </button>
       </div>

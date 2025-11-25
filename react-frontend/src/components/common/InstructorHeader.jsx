@@ -1,21 +1,16 @@
-import React, { useEffect, useState, useContext, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AuthContext } from '../../context/AuthContext';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faBell, faSearch, faBars, faTimes } from '@fortawesome/free-solid-svg-icons';
+import { faSearch, faBars, faTimes } from '@fortawesome/free-solid-svg-icons';
 
 const InstructorHeader = ({ onMenuClick }) => {
   const navigate = useNavigate();
-  const [showNotifications, setShowNotifications] = useState(false);
-  const [notifications, setNotifications] = useState([]);
-  const { userEmail } = useContext(AuthContext);
   const [search, setSearch] = useState('');
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [showMobileSearch, setShowMobileSearch] = useState(false);
   const searchInputRef = useRef(null);
   const mobileSearchRef = useRef(null);
-  const notificationRef = useRef(null);
 
   useEffect(() => {
     const handleResize = () => {
@@ -25,23 +20,6 @@ const InstructorHeader = ({ onMenuClick }) => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Close notifications when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (notificationRef.current && !notificationRef.current.contains(event.target)) {
-        setShowNotifications(false);
-      }
-    };
-
-    if (showNotifications) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [showNotifications]);
-
   // Auto-focus mobile search when opened
   useEffect(() => {
     if (showMobileSearch && mobileSearchRef.current) {
@@ -50,39 +28,6 @@ const InstructorHeader = ({ onMenuClick }) => {
       }, 100);
     }
   }, [showMobileSearch]);
-
-  const apiBase = process.env.REACT_APP_API_BASE || 'http://localhost:5000';
-
-  const fetchNotifications = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${apiBase}/api/instructor/notifications`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (data.success) {
-        // normalize to component shape
-        const mapped = data.notifications.map((n) => ({
-          id: n._id,
-          title: n.title,
-          message: n.message,
-          time: new Date(n.createdAt).toLocaleString(),
-          read: n.read,
-        }));
-        setNotifications(mapped);
-      }
-    } catch (e) {
-      // eslint-disable-next-line no-console
-      console.error('Failed to fetch notifications', e);
-    }
-  };
-
-  useEffect(() => {
-    if (userEmail) {
-      fetchNotifications();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userEmail]);
 
   const handleSearchFocus = () => {
     setIsSearchFocused(true);
@@ -104,38 +49,6 @@ const InstructorHeader = ({ onMenuClick }) => {
     }
   };
 
-  const toggleNotifications = () => {
-    setShowNotifications(!showNotifications);
-  };
-
-  const markAsRead = async (id) => {
-    try {
-      const token = localStorage.getItem('token');
-      await fetch(`${apiBase}/api/instructor/notifications/${id}/read`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      });
-      setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
-    } catch (e) {
-      // eslint-disable-next-line no-console
-      console.error('Failed to mark as read', e);
-    }
-  };
-
-  const markAllAsRead = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      await fetch(`${apiBase}/api/instructor/notifications/read-all`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      });
-      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-    } catch (e) {
-      // eslint-disable-next-line no-console
-      console.error('Failed to mark all as read', e);
-    }
-  };
-
   const handleSearchKeyDown = (e) => {
     if (e.key === 'Enter') {
       const q = search.trim();
@@ -149,23 +62,20 @@ const InstructorHeader = ({ onMenuClick }) => {
       setShowMobileSearch(false);
     }
   };
-
-  const unreadCount = notifications.filter(notification => !notification.read).length;
   
   return (
     <header className="top-header" style={{
-      background: 'linear-gradient(135deg, #0f2c63 0%, #1e40af 50%, #f97316 100%)',
+      background: 'linear-gradient(135deg, #0f2c63 45%, #f97316 100%)',
       padding: isMobile ? '18px 20px' : '26px 40px',
       display: 'flex',
       justifyContent: 'space-between',
       alignItems: 'center',
       boxShadow: '0 6px 24px rgba(0, 0, 0, 0.18)',
-      borderBottom: '3px solid rgba(255, 255, 255, 0.25)',
       position: 'fixed',
       top: 0,
-      left: isMobile ? '0' : '200px',
+      left: isMobile ? '0' : '250px',
       right: 0,
-      width: isMobile ? '100%' : 'calc(100% - 200px)',
+      width: isMobile ? '100%' : 'calc(100% - 250px)',
       zIndex: 999,
       boxSizing: 'border-box',
       minHeight: isMobile ? '72px' : '92px',
@@ -356,71 +266,6 @@ const InstructorHeader = ({ onMenuClick }) => {
           gap: isMobile ? '10px' : '16px',
           flexShrink: 0
         }}>
-          <div
-            ref={notificationRef}
-            className="notification-icon"
-            onClick={toggleNotifications}
-            style={{
-              position: 'relative',
-              cursor: 'pointer',
-              padding: isMobile ? '11px 13px' : '13px 15px',
-              borderRadius: '12px',
-              background: showNotifications ? 'rgba(255, 255, 255, 0.28)' : 'rgba(255, 255, 255, 0.18)',
-              backdropFilter: 'blur(10px)',
-              border: '2px solid rgba(255, 255, 255, 0.25)',
-              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-              boxShadow: showNotifications 
-                ? '0 4px 12px rgba(0, 0, 0, 0.15)' 
-                : '0 2px 8px rgba(0, 0, 0, 0.1)',
-            }}
-            onMouseEnter={(e) => {
-              if (!showNotifications) {
-                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.28)';
-                e.currentTarget.style.transform = 'scale(1.05)';
-                e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (!showNotifications) {
-                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.18)';
-                e.currentTarget.style.transform = 'scale(1)';
-                e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.1)';
-              }
-            }}
-          >
-            <FontAwesomeIcon
-              icon={faBell}
-              style={{
-                fontSize: isMobile ? '18px' : '20px',
-                color: '#ffffff',
-                transition: 'transform 0.2s ease',
-                transform: showNotifications ? 'scale(1.1)' : 'scale(1)',
-              }}
-            />
-            {unreadCount > 0 && (
-              <span
-                className="notification-badge"
-                style={{
-                  position: 'absolute',
-                  top: '6px',
-                  right: '6px',
-                  background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
-                  color: 'white',
-                  fontSize: '10px',
-                  fontWeight: '700',
-                  padding: '3px 6px',
-                  borderRadius: '10px',
-                  minWidth: '18px',
-                  textAlign: 'center',
-                  boxShadow: '0 2px 6px rgba(239, 68, 68, 0.4)',
-                  animation: unreadCount > 0 ? 'pulse 2s infinite' : 'none',
-                }}
-              >
-                {unreadCount > 99 ? '99+' : unreadCount}
-              </span>
-            )}
-          </div>
-
           <div className="header-logos" style={{
             display: 'flex',
             alignItems: 'center',
@@ -606,184 +451,6 @@ const InstructorHeader = ({ onMenuClick }) => {
         </div>
       )}
 
-      {/* Notification Dropdown */}
-      {showNotifications && (
-        <div
-          ref={notificationRef}
-          className="notification-dropdown"
-          style={{
-            position: 'absolute',
-            top: isMobile ? '72px' : '102px',
-            right: isMobile ? '10px' : '40px',
-            width: isMobile ? 'calc(100% - 20px)' : '400px',
-            maxWidth: isMobile ? '400px' : '400px',
-            background: 'white',
-            borderRadius: '16px',
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.25)',
-            zIndex: 1001,
-            maxHeight: '500px',
-            overflow: 'hidden',
-            border: '2px solid rgba(15, 44, 99, 0.1)',
-            animation: 'slideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-          }}
-        >
-          <div
-            className="notification-header"
-            style={{
-              padding: '18px 20px',
-              borderBottom: '2px solid #f1f5f9',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              background: 'linear-gradient(135deg, #f8fafc 0%, #ffffff 100%)',
-            }}
-          >
-            <h4 style={{ 
-              margin: 0, 
-              color: '#1f2937', 
-              fontSize: '18px',
-              fontWeight: '700'
-            }}>
-              Notifications
-              {unreadCount > 0 && (
-                <span style={{
-                  marginLeft: '8px',
-                  background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
-                  color: 'white',
-                  padding: '2px 8px',
-                  borderRadius: '10px',
-                  fontSize: '12px',
-                  fontWeight: '700',
-                }}>
-                  {unreadCount}
-                </span>
-              )}
-            </h4>
-            {unreadCount > 0 && (
-              <button
-                onClick={markAllAsRead}
-                style={{
-                  background: 'linear-gradient(135deg, #0f2c63 0%, #1e40af 100%)',
-                  color: 'white',
-                  border: 'none',
-                  padding: '6px 12px',
-                  borderRadius: '8px',
-                  fontSize: '13px',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease',
-                  boxShadow: '0 2px 8px rgba(15, 44, 99, 0.2)',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = 'scale(1.05)';
-                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(15, 44, 99, 0.3)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = 'scale(1)';
-                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(15, 44, 99, 0.2)';
-                }}
-              >
-                Mark all read
-              </button>
-            )}
-          </div>
-
-          <div
-            className="notification-list"
-            style={{
-              maxHeight: '420px',
-              overflowY: 'auto',
-              scrollbarWidth: 'thin',
-              scrollbarColor: '#cbd5e1 transparent',
-            }}
-          >
-            {notifications.length === 0 ? (
-              <div style={{ 
-                padding: '40px 20px', 
-                textAlign: 'center', 
-                color: '#6b7280',
-                fontSize: '15px'
-              }}>
-                <FontAwesomeIcon 
-                  icon={faBell} 
-                  style={{ 
-                    fontSize: '32px', 
-                    color: '#cbd5e1', 
-                    marginBottom: '12px',
-                    opacity: 0.5
-                  }} 
-                />
-                <div>No notifications</div>
-              </div>
-            ) : (
-              notifications.map(notification => (
-                <div
-                  key={notification.id}
-                  className={`notification-item ${!notification.read ? 'unread' : ''}`}
-                  onClick={() => markAsRead(notification.id)}
-                  style={{
-                    padding: '16px 20px',
-                    borderBottom: '1px solid #f3f4f6',
-                    cursor: 'pointer',
-                    background: notification.read ? 'white' : '#f0f9ff',
-                    transition: 'all 0.2s ease',
-                    position: 'relative',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = '#f9fafb';
-                    e.currentTarget.style.paddingLeft = '24px';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = notification.read ? 'white' : '#f0f9ff';
-                    e.currentTarget.style.paddingLeft = '20px';
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
-                    <div style={{ flex: 1 }}>
-                      <h5 style={{
-                        margin: '0 0 6px 0',
-                        color: '#1f2937',
-                        fontSize: '15px',
-                        fontWeight: notification.read ? '600' : '700',
-                        lineHeight: '1.4'
-                      }}>
-                        {notification.title}
-                      </h5>
-                      <p style={{
-                        margin: '0 0 8px 0',
-                        color: '#6b7280',
-                        fontSize: '14px',
-                        lineHeight: '1.5'
-                      }}>
-                        {notification.message}
-                      </p>
-                      <span style={{
-                        color: '#9ca3af',
-                        fontSize: '12px',
-                        fontWeight: '500'
-                      }}>
-                        {notification.time}
-                      </span>
-                    </div>
-                    {!notification.read && (
-                      <div style={{
-                        width: '10px',
-                        height: '10px',
-                        background: 'linear-gradient(135deg, #0f2c63 0%, #1e40af 100%)',
-                        borderRadius: '50%',
-                        flexShrink: 0,
-                        marginTop: '4px',
-                        boxShadow: '0 2px 4px rgba(15, 44, 99, 0.3)',
-                      }}></div>
-                    )}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
-
       <style>{`
         @keyframes slideDown {
           from {
@@ -794,27 +461,6 @@ const InstructorHeader = ({ onMenuClick }) => {
             opacity: 1;
             transform: translateY(0);
           }
-        }
-        @keyframes pulse {
-          0%, 100% {
-            transform: scale(1);
-          }
-          50% {
-            transform: scale(1.1);
-          }
-        }
-        .notification-list::-webkit-scrollbar {
-          width: 6px;
-        }
-        .notification-list::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        .notification-list::-webkit-scrollbar-thumb {
-          background: #cbd5e1;
-          border-radius: 3px;
-        }
-        .notification-list::-webkit-scrollbar-thumb:hover {
-          background: #94a3b8;
         }
       `}</style>
     </header>

@@ -108,7 +108,7 @@ video {
 /* Dashboard Content */
 .dashboard-content {
   padding: 30px;
-  background: linear-gradient(135deg, #0f2c63 0%, #1e3a72 20%, #2d4a81 40%, #ea580c 70%, #f97316 100%);
+  background: transparent;
   min-height: calc(100vh - 80px);
   overflow-y: auto;
   animation: fadeInUp 0.5s ease-out;
@@ -122,7 +122,7 @@ video {
 
 @media (min-width: 1600px) {
   .dashboard-content.responsive-shell {
-    width: min(1400px, 90%);
+    width: min(1600px, 95%);
   }
 }
 

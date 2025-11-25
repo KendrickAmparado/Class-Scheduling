@@ -144,41 +144,46 @@ const InstructorWorkload = () => {
       padding: 0,
       margin: 0
     }}>
-      <div style={{ maxWidth: 900, margin: '0 auto', padding: '2rem' }}>
+      <div style={{ maxWidth: 1400, margin: '0 auto', padding: '2rem' }}>
         <button
           onClick={() => navigate('/admin/faculty-management')}
           style={{
-            background: 'rgba(37,99,235,0.9)',
+            background: 'linear-gradient(135deg, #2563eb 0%, #1e40af 100%)',
             color: '#fff',
             border: 'none',
             borderRadius: 12,
-            padding: '10px 28px',
+            padding: '12px 24px',
             fontWeight: 600,
-            fontSize: 17,
-            marginBottom: 32,
-            boxShadow: '0 2px 12px rgba(37,99,235,0.13)',
+            fontSize: 15,
+            marginBottom: 24,
+            boxShadow: '0 4px 12px rgba(37,99,235,0.25)',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             gap: 10,
-            transition: 'background 0.2s, transform 0.2s',
+            transition: 'all 0.3s ease',
             outline: 'none',
           }}
-          onMouseOver={e => e.currentTarget.style.background = 'rgba(30,64,175,0.95)'}
-          onMouseOut={e => e.currentTarget.style.background = 'rgba(37,99,235,0.9)'}
+          onMouseOver={e => {
+            e.currentTarget.style.transform = 'translateY(-2px)';
+            e.currentTarget.style.boxShadow = '0 6px 16px rgba(37,99,235,0.35)';
+          }}
+          onMouseOut={e => {
+            e.currentTarget.style.transform = 'translateY(0)';
+            e.currentTarget.style.boxShadow = '0 4px 12px rgba(37,99,235,0.25)';
+          }}
         >
           <FaArrowLeft style={{ fontSize: 18, marginRight: 6 }} />
           Back to Faculty Management
         </button>
         <div ref={cardRef} style={{
-          background: 'rgba(255,255,255,0.18)',
-          borderRadius: 24,
-          boxShadow: '0 8px 32px 0 rgba(31,38,135,0.18)',
-          backdropFilter: 'blur(8px)',
-          WebkitBackdropFilter: 'blur(8px)',
-          border: '2.5px solid',
-          borderImage: 'linear-gradient(120deg, #2563eb 10%, #10b981 40%, #f97316 90%) 1',
-          padding: '2.5rem 2rem 2rem 2rem',
+          background: 'rgba(255,255,255,0.95)',
+          borderRadius: 20,
+          boxShadow: '0 10px 40px rgba(0,0,0,0.1)',
+          backdropFilter: 'blur(10px)',
+          WebkitBackdropFilter: 'blur(10px)',
+          border: '1px solid rgba(255,255,255,0.3)',
+          padding: '2.5rem',
           marginBottom: 24,
           position: 'relative',
           overflow: 'hidden',
@@ -218,22 +223,34 @@ const InstructorWorkload = () => {
               onClick={handleDownload}
               disabled={downloading}
               style={{
-                marginLeft: 24,
-                background: 'linear-gradient(90deg, #2563eb 60%, #10b981 100%)',
+                marginLeft: 'auto',
+                background: downloading ? '#94a3b8' : 'linear-gradient(135deg, #2563eb 0%, #10b981 100%)',
                 color: '#fff',
                 border: 'none',
-                borderRadius: 8,
-                padding: '8px 18px',
+                borderRadius: 10,
+                padding: '10px 20px',
                 fontWeight: 600,
-                fontSize: 15,
-                boxShadow: '0 2px 8px rgba(37,99,235,0.08)',
+                fontSize: 14,
+                boxShadow: downloading ? 'none' : '0 4px 12px rgba(37,99,235,0.25)',
                 cursor: downloading ? 'not-allowed' : 'pointer',
-                transition: 'background 0.2s, transform 0.2s',
+                transition: 'all 0.3s ease',
                 outline: 'none',
                 display: 'flex',
                 alignItems: 'center',
                 gap: 8,
-                opacity: downloading ? 0.7 : 1,
+                opacity: downloading ? 0.6 : 1,
+              }}
+              onMouseOver={e => {
+                if (!downloading) {
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = '0 6px 16px rgba(37,99,235,0.35)';
+                }
+              }}
+              onMouseOut={e => {
+                if (!downloading) {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(37,99,235,0.25)';
+                }
               }}
               title="Download workload report as image"
             >
@@ -241,108 +258,158 @@ const InstructorWorkload = () => {
             </button>
           </div>
           <header className="workload-header" style={{ textAlign: 'center', marginBottom: '2rem' }}>
-            <h1 style={{ fontSize: '2.2rem', color: '#fff', textShadow: '0 2px 8px #1e293b33', marginBottom: 0 }}>Workload Overview</h1>
-            <p style={{ fontSize: '1.1rem', color: '#e0e7ef', marginTop: 6 }}>Summary and breakdown of teaching load</p>
+            <h1 style={{ fontSize: '2rem', color: '#1e293b', fontWeight: '700', marginBottom: 8 }}>Workload Overview</h1>
+            <p style={{ fontSize: '1rem', color: '#64748b', marginTop: 0 }}>Summary and breakdown of teaching load</p>
           </header>
           <section className="workload-summary" style={{ display: 'flex', gap: 18, justifyContent: 'center', marginBottom: 32, flexWrap: 'wrap' }}>
             <div className="summary-card" style={{
-              background: 'rgba(255,255,255,0.85)',
+              background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
               borderRadius: 16,
-              boxShadow: '0 4px 16px rgba(37,99,235,0.07)',
-              padding: '1.5rem 2.2rem',
+              boxShadow: '0 4px 16px rgba(37,99,235,0.15)',
+              border: '2px solid #bfdbfe',
+              padding: '1.5rem 2rem',
               textAlign: 'center',
-              minWidth: 180,
+              minWidth: 200,
               margin: '0 0.5rem',
-              transition: 'transform 0.18s',
+              transition: 'all 0.3s ease',
               cursor: 'pointer',
-            }} title="Total number of classes assigned">
+            }} title="Total number of classes assigned"
+            onMouseOver={e => {
+              e.currentTarget.style.transform = 'translateY(-4px)';
+              e.currentTarget.style.boxShadow = '0 8px 24px rgba(37,99,235,0.25)';
+            }}
+            onMouseOut={e => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = '0 4px 16px rgba(37,99,235,0.15)';
+            }}>
               <h2 style={{ fontSize: '1.15rem', color: '#374151', marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                 Total Classes <FaInfoCircle style={{ color: '#2563eb', fontSize: 15 }} />
               </h2>
               <p style={{ fontSize: '2.1rem', fontWeight: 700, color: '#2563eb', margin: 0 }}>{weeklySummary.totalClasses}</p>
             </div>
             <div className="summary-card" style={{
-              background: 'rgba(255,255,255,0.85)',
+              background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)',
               borderRadius: 16,
-              boxShadow: '0 4px 16px rgba(16,185,129,0.07)',
-              padding: '1.5rem 2.2rem',
+              boxShadow: '0 4px 16px rgba(16,185,129,0.15)',
+              border: '2px solid #bbf7d0',
+              padding: '1.5rem 2rem',
               textAlign: 'center',
-              minWidth: 180,
+              minWidth: 200,
               margin: '0 0.5rem',
-              transition: 'transform 0.18s',
+              transition: 'all 0.3s ease',
               cursor: 'pointer',
-            }} title="Total teaching hours this week">
+            }} title="Total teaching hours this week"
+            onMouseOver={e => {
+              e.currentTarget.style.transform = 'translateY(-4px)';
+              e.currentTarget.style.boxShadow = '0 8px 24px rgba(16,185,129,0.25)';
+            }}
+            onMouseOut={e => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = '0 4px 16px rgba(16,185,129,0.15)';
+            }}>
               <h2 style={{ fontSize: '1.15rem', color: '#374151', marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                 Total Hours <FaInfoCircle style={{ color: '#10b981', fontSize: 15 }} />
               </h2>
               <p style={{ fontSize: '2.1rem', fontWeight: 700, color: '#10b981', margin: 0 }}>{weeklySummary.totalHours} hrs</p>
             </div>
             <div className="summary-card" style={{
-              background: 'rgba(255,255,255,0.85)',
+              background: 'linear-gradient(135deg, #fff7ed 0%, #fed7aa 100%)',
               borderRadius: 16,
-              boxShadow: '0 4px 16px rgba(249,115,22,0.07)',
-              padding: '1.5rem 2.2rem',
+              boxShadow: '0 4px 16px rgba(249,115,22,0.15)',
+              border: '2px solid #fdba74',
+              padding: '1.5rem 2rem',
               textAlign: 'center',
-              minWidth: 180,
+              minWidth: 200,
               margin: '0 0.5rem',
-              transition: 'transform 0.18s',
+              transition: 'all 0.3s ease',
               cursor: 'pointer',
-            }} title="Day with the most teaching hours">
+            }} title="Day with the most teaching hours"
+            onMouseOver={e => {
+              e.currentTarget.style.transform = 'translateY(-4px)';
+              e.currentTarget.style.boxShadow = '0 8px 24px rgba(249,115,22,0.25)';
+            }}
+            onMouseOut={e => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = '0 4px 16px rgba(249,115,22,0.15)';
+            }}>
               <h2 style={{ fontSize: '1.15rem', color: '#374151', marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                 Busiest Day <FaInfoCircle style={{ color: '#f97316', fontSize: 15 }} />
               </h2>
               <p style={{ fontSize: '2.1rem', fontWeight: 700, color: '#f97316', margin: 0 }}>{weeklySummary.busiestDay}</p>
             </div>
           </section>
-          <section className="charts" style={{ display: 'flex', gap: 24, flexWrap: 'wrap', justifyContent: 'center' }}>
+          <section className="charts" style={{ display: 'flex', gap: 24, flexWrap: 'wrap', justifyContent: 'center', marginTop: '2rem' }}>
             <div className="chart" style={{
-              background: 'rgba(255,255,255,0.92)',
-              borderRadius: 18,
-              boxShadow: '0 4px 16px rgba(37,99,235,0.09)',
+              background: 'white',
+              borderRadius: 16,
+              boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+              border: '1px solid #e2e8f0',
               padding: '1.5rem',
               minWidth: 320,
               flex: 1,
-              margin: '1rem 0.5rem',
-              maxWidth: 400,
-              transition: 'box-shadow 0.18s',
+              margin: '0 0.5rem',
+              maxWidth: 500,
+              transition: 'all 0.3s ease',
               animation: 'fadeInChart 0.7s cubic-bezier(.4,0,.2,1)',
+            }}
+            onMouseOver={e => {
+              e.currentTarget.style.boxShadow = '0 8px 30px rgba(0,0,0,0.12)';
+              e.currentTarget.style.transform = 'translateY(-4px)';
+            }}
+            onMouseOut={e => {
+              e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.08)';
+              e.currentTarget.style.transform = 'translateY(0)';
             }}>
-              <h2 style={{ fontSize: '1.15rem', color: '#374151', marginBottom: 16, textAlign: 'center' }}>Daily Breakdown</h2>
+              <h2 style={{ fontSize: '1.1rem', color: '#1e293b', marginBottom: 16, textAlign: 'center', fontWeight: '600' }}>Daily Breakdown</h2>
               <Bar data={barChartData} options={{ animation: { duration: 1200 } }} />
             </div>
             <div className="chart" style={{
-              background: 'rgba(255,255,255,0.92)',
-              borderRadius: 18,
-              boxShadow: '0 4px 16px rgba(16,185,129,0.09)',
+              background: 'white',
+              borderRadius: 16,
+              boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+              border: '1px solid #e2e8f0',
               padding: '1.5rem',
               minWidth: 320,
               flex: 1,
-              margin: '1rem 0.5rem',
-              maxWidth: 400,
-              transition: 'box-shadow 0.18s',
+              margin: '0 0.5rem',
+              maxWidth: 500,
+              transition: 'all 0.3s ease',
               animation: 'fadeInChart 0.7s cubic-bezier(.4,0,.2,1)',
+            }}
+            onMouseOver={e => {
+              e.currentTarget.style.boxShadow = '0 8px 30px rgba(0,0,0,0.12)';
+              e.currentTarget.style.transform = 'translateY(-4px)';
+            }}
+            onMouseOut={e => {
+              e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.08)';
+              e.currentTarget.style.transform = 'translateY(0)';
             }}>
-              <h2 style={{ fontSize: '1.15rem', color: '#374151', marginBottom: 16, textAlign: 'center' }}>Weekly Overview</h2>
+              <h2 style={{ fontSize: '1.1rem', color: '#1e293b', marginBottom: 16, textAlign: 'center', fontWeight: '600' }}>Weekly Overview</h2>
               <Pie data={pieChartData} options={{ animation: { duration: 1200 } }} />
             </div>
           </section>
 
           {/* Weekly Schedule Table */}
-          <section style={{ marginTop: 36 }}>
-            <h2 style={{ fontSize: '1.1rem', color: '#374151', marginBottom: 12, textAlign: 'center' }}>Weekly Schedule</h2>
+          <section style={{ marginTop: 40 }}>
+            <h2 style={{ fontSize: '1.2rem', color: '#1e293b', marginBottom: 16, textAlign: 'center', fontWeight: '600' }}>Weekly Schedule</h2>
             <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', background: 'rgba(255,255,255,0.97)', borderRadius: 12, boxShadow: '0 2px 8px rgba(37,99,235,0.06)', fontSize: 15 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', background: 'white', borderRadius: 12, overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', fontSize: 15 }}>
                 <thead>
-                  <tr style={{ background: '#2563eb22', color: '#2563eb' }}>
-                    <th style={{ padding: 10, borderRadius: '12px 0 0 0' }}>Day</th>
-                    <th style={{ padding: 10 }}>Hours</th>
+                  <tr style={{ background: 'linear-gradient(135deg, #2563eb 0%, #1e40af 100%)', color: 'white' }}>
+                    <th style={{ padding: '14px', textAlign: 'left', fontWeight: '600' }}>Day</th>
+                    <th style={{ padding: '14px', textAlign: 'left', fontWeight: '600' }}>Hours</th>
                   </tr>
                 </thead>
                 <tbody>
                   {workloadData.dailyBreakdown.map((d, i) => (
-                    <tr key={d.day} style={{ background: i % 2 === 0 ? '#f1f5f9' : '#fff' }}>
-                      <td style={{ padding: 10, fontWeight: 600 }}>{d.day}</td>
-                      <td style={{ padding: 10 }}>{d.hours}</td>
+                    <tr key={d.day} style={{ 
+                      background: i % 2 === 0 ? '#f8fafc' : '#fff',
+                      transition: 'background 0.2s ease'
+                    }}
+                    onMouseOver={e => e.currentTarget.style.background = '#eff6ff'}
+                    onMouseOut={e => e.currentTarget.style.background = i % 2 === 0 ? '#f8fafc' : '#fff'}>
+                      <td style={{ padding: '12px 14px', fontWeight: 600, color: '#1e293b' }}>{d.day}</td>
+                      <td style={{ padding: '12px 14px', color: '#64748b' }}>{d.hours}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -351,7 +418,17 @@ const InstructorWorkload = () => {
           </section>
 
           {/* Motivational Tip */}
-          <div style={{ marginTop: 32, textAlign: 'center', color: '#64748b', fontStyle: 'italic', fontSize: 15, opacity: 0.95 }}>
+          <div style={{ 
+            marginTop: 40, 
+            textAlign: 'center', 
+            color: '#64748b', 
+            fontStyle: 'italic', 
+            fontSize: 15, 
+            padding: '20px',
+            background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)',
+            borderRadius: 12,
+            border: '1px solid #e2e8f0'
+          }}>
             "Great teachers inspire hope, ignite the imagination, and instill a love of learning." – Brad Henry
           </div>
         </div>

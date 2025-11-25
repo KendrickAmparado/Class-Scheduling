@@ -242,41 +242,41 @@ const Sidebar = ({ isOpen, onClose }) => {
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '12px',
-            padding: '15px 20px',
-            background: 'rgba(239, 68, 68, 0.2)',
-            color: '#fca5a5',
+            justifyContent: 'center',
+            gap: '10px',
+            padding: '14px 24px',
+            background: 'linear-gradient(135deg, #dc2626 0%, #991b1b 100%)',
+            color: 'white',
             textDecoration: 'none',
-            borderRadius: '10px',
-            fontWeight: '500',
-            border: '1px solid rgba(239, 68, 68, 0.3)',
+            borderRadius: '12px',
+            fontWeight: '600',
+            fontSize: '14px',
+            border: 'none',
             cursor: 'pointer',
             width: '100%',
             position: 'relative',
-            overflow: 'hidden'
+            overflow: 'hidden',
+            boxShadow: '0 4px 12px rgba(220, 38, 38, 0.3)',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'rgba(239, 68, 68, 0.35)';
-            e.currentTarget.style.color = 'white';
-            e.currentTarget.style.transform = 'translateY(-2px)';
-            e.currentTarget.style.boxShadow = '0 4px 12px rgba(239, 68, 68, 0.3)';
-            e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.5)';
+            e.currentTarget.style.background = 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)';
+            e.currentTarget.style.transform = 'translateY(-3px)';
+            e.currentTarget.style.boxShadow = '0 8px 20px rgba(220, 38, 38, 0.4)';
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)';
-            e.currentTarget.style.color = '#fca5a5';
+            e.currentTarget.style.background = 'linear-gradient(135deg, #dc2626 0%, #991b1b 100%)';
             e.currentTarget.style.transform = 'translateY(0)';
-            e.currentTarget.style.boxShadow = 'none';
-            e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+            e.currentTarget.style.boxShadow = '0 4px 12px rgba(220, 38, 38, 0.3)';
           }}
           onMouseDown={(e) => {
-            e.currentTarget.style.transform = 'translateY(0) scale(0.98)';
+            e.currentTarget.style.transform = 'translateY(-1px) scale(0.98)';
           }}
           onMouseUp={(e) => {
-            e.currentTarget.style.transform = 'translateY(-2px) scale(1)';
+            e.currentTarget.style.transform = 'translateY(-3px) scale(1)';
           }}
         >
-          <FontAwesomeIcon icon={faSignOutAlt} />
+          <FontAwesomeIcon icon={faSignOutAlt} style={{ fontSize: '16px' }} />
           <span>Log Out</span>
         </button>
       </div>

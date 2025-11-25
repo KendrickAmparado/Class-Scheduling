@@ -79,13 +79,12 @@ const Header = ({ title, onMenuClick }) => {
     <header
       className="top-header"
       style={{
-        background: 'linear-gradient(135deg, #0f2c63 0%, #1e40af 50%, #f97316 100%)',
-        padding: isMobile ? '18px 20px' : '26px 40px',
+        background: 'linear-gradient(135deg, #0f2c63 45%, #f97316 100%)',
+        padding: isMobile ? '14px 20px' : '18px 40px',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
         boxShadow: '0 6px 24px rgba(0, 0, 0, 0.18)',
-        borderBottom: '3px solid rgba(255, 255, 255, 0.25)',
         position: 'fixed',
         top: 0,
         left: isMobile ? '0' : '280px',
@@ -93,7 +92,7 @@ const Header = ({ title, onMenuClick }) => {
         width: isMobile ? '100%' : 'calc(100% - 280px)',
         zIndex: 999,
         boxSizing: 'border-box',
-        minHeight: isMobile ? '72px' : '92px',
+        minHeight: isMobile ? '60px' : '70px',
         transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
       }}
     >
@@ -292,22 +291,7 @@ const Header = ({ title, onMenuClick }) => {
               alignItems: 'center',
               gap: '12px',
               padding: '10px 16px',
-              background: 'rgba(255, 255, 255, 0.18)',
               borderRadius: '14px',
-              backdropFilter: 'blur(10px)',
-              border: '2px solid rgba(255, 255, 255, 0.25)',
-              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
-              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.25)';
-              e.currentTarget.style.transform = 'translateY(-2px)';
-              e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.18)';
-              e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.1)';
             }}
           >
             <img
@@ -315,19 +299,11 @@ const Header = ({ title, onMenuClick }) => {
               alt="COT Logo"
               className="header-logo"
               style={{
-                width: '58px',
-                height: '58px',
+                width: '78px',
+                height: '78px',
                 objectFit: 'contain',
                 borderRadius: '8px',
                 padding: '4px',
-                opacity: 1,
-                transition: 'transform 0.3s ease',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = 'scale(1.05)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'scale(1)';
               }}
             />
             <img
@@ -335,19 +311,11 @@ const Header = ({ title, onMenuClick }) => {
               alt="Buksu Logo"
               className="header-logo"
               style={{
-                width: '58px',
-                height: '58px',
+                width: '78px',
+                height: '78px',
                 objectFit: 'contain',
                 borderRadius: '8px',
                 padding: '4px',
-                opacity: 1,
-                transition: 'transform 0.3s ease',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = 'scale(1.05)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'scale(1)';
               }}
             />
           </div>

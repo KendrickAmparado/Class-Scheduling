@@ -197,7 +197,7 @@ const InstructorSettings = () => {
               borderRadius: '20px',
               boxShadow: '0 4px 25px rgba(0,0,0,0.1)',
               width: '100%',
-              maxWidth: '850px',
+              maxWidth: '1200px',
               borderLeft: '6px solid #f97316',
             }}
           >
