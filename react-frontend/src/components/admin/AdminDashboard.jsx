@@ -272,7 +272,7 @@ const AdminDashboard = () => {
                 alignItems: 'center',
                 justifyContent: 'center'
               }}>
-                <FontAwesomeIcon icon={faDoorOpen} />
+                <FontAwesomeIcon icon={faLayerGroup} />
               </div>
             </div>
 
