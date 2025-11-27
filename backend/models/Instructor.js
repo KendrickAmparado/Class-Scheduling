@@ -32,6 +32,6 @@ const instructorSchema = new mongoose.Schema({
 // Index for email lookups
 instructorSchema.index({ email: 1 }, { unique: true });
 instructorSchema.index({ status: 1 });
-instructorSchema.index({ instructorId: 1 });
+// Note: instructorId index is auto-created by unique: true in schema definition above
 
 export default mongoose.model('Instructor', instructorSchema);
