@@ -52,7 +52,7 @@ router.get('/:id/workload', async (req, res) => {
     const dailyBreakdown = days.map(day => {
       const daySchedules = schedules.filter(s => (s.day || '').toLowerCase() === day.toLowerCase());
       const hours = daySchedules.reduce((sum, s) => sum + parseHours(s.time), 0);
-      return { day, hours: Math.round(hours * 100) / 100 };
+      return { day, classes: daySchedules.length, hours: Math.round(hours * 100) / 100 };
     });
 
     const totalClasses = schedules.length;

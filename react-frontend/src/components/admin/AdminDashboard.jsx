@@ -15,6 +15,9 @@ import {
   faTrash,
   faUserPlus,
   faLayerGroup,
+  faChalkboardTeacher,
+  faCalendarAlt,
+  faUsers,
 } from '@fortawesome/free-solid-svg-icons';
 import { formatRoomLabel } from '../../utils/roomUtils';
 
@@ -23,6 +26,16 @@ const AdminDashboard = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [alerts, setAlerts] = useState([]);
   const [roomStatus, setRoomStatus] = useState([]);
+  const [summaryStats, setSummaryStats] = useState({
+    totalInstructors: 0,
+    totalSchedules: 0,
+    totalRooms: 0,
+    totalSections: 0
+  });
+  const [weather, setWeather] = useState(null);
+  const [weatherAlert, setWeatherAlert] = useState(null);
+  const [weatherForecast, setWeatherForecast] = useState([]);
+  const [loadingWeather, setLoadingWeather] = useState(false);
   const apiBase = process.env.REACT_APP_API_BASE || 'http://localhost:5000';
 
   useEffect(() => {
@@ -45,8 +58,48 @@ const AdminDashboard = () => {
       }
     };
 
+    const fetchSummaryStats = async () => {
+      try {
+        // Fetch all data in parallel
+        const [instructorsRes, schedulesRes, roomsRes] = await Promise.all([
+          axios.get('http://localhost:5000/api/instructors'),
+          axios.get('http://localhost:5000/api/schedule/all'),
+          axios.get('http://localhost:5000/api/rooms')
+        ]);
+        
+        console.log('Instructors Response:', instructorsRes.data);
+        console.log('Schedules Response:', schedulesRes.data);
+        console.log('Rooms Response:', roomsRes.data);
+        
+        // Fetch sections - try to get unique sections from schedules
+        let totalSections = 0;
+        if (Array.isArray(schedulesRes.data)) {
+          const uniqueSections = new Set();
+          schedulesRes.data.forEach(schedule => {
+            if (schedule.section && schedule.course && schedule.year) {
+              uniqueSections.add(`${schedule.course}-${schedule.year}-${schedule.section}`);
+            }
+          });
+          totalSections = uniqueSections.size;
+        }
+        
+        const stats = {
+          totalInstructors: Array.isArray(instructorsRes.data) ? instructorsRes.data.length : 0,
+          totalSchedules: Array.isArray(schedulesRes.data) ? schedulesRes.data.length : 0,
+          totalRooms: roomsRes.data.rooms?.length || 0,
+          totalSections: totalSections
+        };
+        
+        console.log('Summary Stats:', stats);
+        setSummaryStats(stats);
+      } catch (err) {
+        console.error('Failed to load summary stats', err);
+      }
+    };
+
     fetchAlerts();
     fetchRoomStatus();
+    fetchSummaryStats();
   }, []);
 
   // Fetch weather for Malaybalay City, Bukidnon
@@ -140,105 +193,135 @@ const AdminDashboard = () => {
             <p>Manage your class scheduling system efficiently</p>
           </div>
 
-          {/* Activity Log Section - Clickable */}
-          <div
-            onClick={() => navigate('/admin/activity-logs')}
-            style={{
-              background: 'linear-gradient(135deg, #0f2c63 0%, #1e40af 100%)',
-              padding: '28px 28px 24px 28px',
-              borderRadius: '18px',
-              boxShadow: '0 4px 20px rgba(15, 44, 99, 0.15)',
-              marginBottom: '36px',
-              border: '2px solid #1e40af',
-              cursor: 'pointer',
-              transition: 'all 0.3s ease',
-              position: 'relative',
-            }}
-            onMouseOver={(e) => {
-              e.currentTarget.style.transform = 'translateY(-4px)';
-              e.currentTarget.style.boxShadow = '0 8px 32px rgba(15, 44, 99, 0.25)';
-            }}
-            onMouseOut={(e) => {
-              e.currentTarget.style.transform = '';
-              e.currentTarget.style.boxShadow = '0 4px 20px rgba(15, 44, 99, 0.15)';
-            }}
-          >
-            <div
-              style={{
-                display: 'flex',
+          {/* Summary Overview */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+            gap: '16px',
+            marginBottom: '24px'
+          }}>
+            {/* Total Instructors Card */}
+            <div style={{
+              background: '#fff',
+              borderRadius: '16px',
+              border: '1px solid #e2e8f0',
+              padding: '18px 20px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '16px',
+              boxShadow: '0 6px 18px rgba(15, 23, 63, 0.06)'
+            }}>
+              <div>
+                <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>Total Instructors</p>
+                <h3 style={{ margin: '6px 0 0', fontSize: '22px', color: '#0f172a' }}>{summaryStats.totalInstructors}</h3>
+                <span style={{ fontSize: '12px', color: '#94a3b8' }}>Active faculty members</span>
+              </div>
+              <div style={{ 
+                padding: '12px', 
+                borderRadius: '14px', 
+                background: '#f97316',
+                color: '#fff', 
+                fontSize: '18px',
+                display: 'inline-flex',
                 alignItems: 'center',
-                justifyContent: 'space-between',
-                marginBottom: '20px',
-              }}
-            >
-              <h3
-                style={{
-                  color: '#ffffff',
-                  fontSize: '19px',
-                  fontWeight: '700',
-                  margin: 0,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '14px',
-                }}
-              >
-                <FontAwesomeIcon icon={faClipboardList} style={{ fontSize: 20 }} />
-                Activity Log (Recent Activity)
-              </h3>
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  color: '#ffffff',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                }}
-              >
-                <span>View All</span>
-                <FontAwesomeIcon icon={faArrowRight} />
+                justifyContent: 'center'
+              }}>
+                <FontAwesomeIcon icon={faChalkboardTeacher} />
               </div>
             </div>
-            
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              {alerts.length === 0 && (
-                <p style={{ color: '#e0e7ff', margin: 0 }}>No recent activity.</p>
-              )}
-              {alerts.map((alert) => (
-                <div
-                  key={alert.id}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    justifyContent: 'space-between',
-                    gap: '12px',
-                    padding: '16px 22px',
-                    background: 'rgba(255,255,255,0.95)',
-                    borderRadius: '12px',
-                    borderLeft: '4px solid #3b82f6',
-                    fontWeight: 500,
-                    boxShadow: '0 2px 10px rgba(0,0,0,0.05)',
-                    color: '#1f2937',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', flex: 1 }}>
-                    {renderAlertIcon(alert.type)}
-                    <span style={{ fontSize: '15px', lineHeight: 1.7 }}>{alert.message}</span>
-                  </div>
-                  {alert.timestamp && (
-                    <span
-                      style={{
-                        fontSize: '12px',
-                        color: '#6b7280',
-                        fontWeight: '600',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {formatTimestamp(alert.timestamp)}
-                    </span>
-                  )}
-                </div>
-              ))}
+
+            {/* Total Schedules Card */}
+            <div style={{
+              background: '#fff',
+              borderRadius: '16px',
+              border: '1px solid #e2e8f0',
+              padding: '18px 20px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '16px',
+              boxShadow: '0 6px 18px rgba(15, 23, 63, 0.06)'
+            }}>
+              <div>
+                <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>Total Schedules</p>
+                <h3 style={{ margin: '6px 0 0', fontSize: '22px', color: '#0f172a' }}>{summaryStats.totalSchedules}</h3>
+                <span style={{ fontSize: '12px', color: '#94a3b8' }}>Classes scheduled</span>
+              </div>
+              <div style={{ 
+                padding: '12px', 
+                borderRadius: '14px', 
+                background: '#0ea5e9',
+                color: '#fff', 
+                fontSize: '18px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <FontAwesomeIcon icon={faCalendarAlt} />
+              </div>
+            </div>
+
+            {/* Total Rooms Card */}
+            <div style={{
+              background: '#fff',
+              borderRadius: '16px',
+              border: '1px solid #e2e8f0',
+              padding: '18px 20px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '16px',
+              boxShadow: '0 6px 18px rgba(15, 23, 63, 0.06)'
+            }}>
+              <div>
+                <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>Total Rooms</p>
+                <h3 style={{ margin: '6px 0 0', fontSize: '22px', color: '#0f172a' }}>{summaryStats.totalRooms}</h3>
+                <span style={{ fontSize: '12px', color: '#94a3b8' }}>Available facilities</span>
+              </div>
+              <div style={{ 
+                padding: '12px', 
+                borderRadius: '14px', 
+                background: '#10b981',
+                color: '#fff', 
+                fontSize: '18px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <FontAwesomeIcon icon={faDoorOpen} />
+              </div>
+            </div>
+
+            {/* Total Sections Card */}
+            <div style={{
+              background: '#fff',
+              borderRadius: '16px',
+              border: '1px solid #e2e8f0',
+              padding: '18px 20px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '16px',
+              boxShadow: '0 6px 18px rgba(15, 23, 63, 0.06)'
+            }}>
+              <div>
+                <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>Total Sections</p>
+                <h3 style={{ margin: '6px 0 0', fontSize: '22px', color: '#0f172a' }}>{summaryStats.totalSections}</h3>
+                <span style={{ fontSize: '12px', color: '#94a3b8' }}>Student groups</span>
+              </div>
+              <div style={{ 
+                padding: '12px', 
+                borderRadius: '14px', 
+                background: '#1e293b',
+                color: '#fff', 
+                fontSize: '18px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <FontAwesomeIcon icon={faUsers} />
+              </div>
             </div>
           </div>
 
