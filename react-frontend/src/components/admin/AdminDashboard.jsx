@@ -6,7 +6,6 @@ import axios from 'axios';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faClipboardList,
-  faDoorOpen,
   faCheckCircle,
   faTimesCircle,
   faExclamationTriangle,
@@ -18,24 +17,23 @@ import {
   faChalkboardTeacher,
   faCalendarAlt,
   faUsers,
+  faChartBar,
 } from '@fortawesome/free-solid-svg-icons';
-import { formatRoomLabel } from '../../utils/roomUtils';
+import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [alerts, setAlerts] = useState([]);
-  const [roomStatus, setRoomStatus] = useState([]);
   const [summaryStats, setSummaryStats] = useState({
     totalInstructors: 0,
     totalSchedules: 0,
     totalRooms: 0,
     totalSections: 0
   });
-  const [weather, setWeather] = useState(null);
-  const [weatherAlert, setWeatherAlert] = useState(null);
-  const [weatherForecast, setWeatherForecast] = useState([]);
-  const [loadingWeather, setLoadingWeather] = useState(false);
+  const [scheduleByYear, setScheduleByYear] = useState([]);
+  const [instructorWorkload, setInstructorWorkload] = useState([]);
+  const [roomUsage, setRoomUsage] = useState([]);
   const apiBase = process.env.REACT_APP_API_BASE || 'http://localhost:5000';
 
   useEffect(() => {
@@ -46,15 +44,6 @@ const AdminDashboard = () => {
         setAlerts(res.data.alerts.slice(0, 3));
       } catch (err) {
         console.error('Failed to load alerts', err);
-      }
-    };
-
-    const fetchRoomStatus = async () => {
-      try {
-        const res = await axios.get('http://localhost:5000/api/rooms');
-        setRoomStatus(res.data.rooms);
-      } catch (err) {
-        console.error('Failed to load room status', err);
       }
     };
 
@@ -71,17 +60,50 @@ const AdminDashboard = () => {
         console.log('Schedules Response:', schedulesRes.data);
         console.log('Rooms Response:', roomsRes.data);
         
-        // Fetch sections - try to get unique sections from schedules
+        // Calculate stats
         let totalSections = 0;
+        const scheduleByYearMap = {};
+        const instructorWorkloadMap = {};
+        const roomUsageMap = {};
+
         if (Array.isArray(schedulesRes.data)) {
-          const uniqueSections = new Set();
           schedulesRes.data.forEach(schedule => {
+            // Count unique sections
             if (schedule.section && schedule.course && schedule.year) {
-              uniqueSections.add(`${schedule.course}-${schedule.year}-${schedule.section}`);
+              totalSections = new Set([...new Array(totalSections).keys()].concat([`${schedule.course}-${schedule.year}-${schedule.section}`])).size;
             }
+            
+            // Count schedules by year
+            const year = schedule.year || 'Unknown';
+            scheduleByYearMap[year] = (scheduleByYearMap[year] || 0) + 1;
+            
+            // Count instructor workload
+            const instructor = schedule.instructor || 'Unknown';
+            instructorWorkloadMap[instructor] = (instructorWorkloadMap[instructor] || 0) + 1;
+            
+            // Count room usage
+            const room = schedule.room || 'Unknown';
+            roomUsageMap[room] = (roomUsageMap[room] || 0) + 1;
           });
-          totalSections = uniqueSections.size;
         }
+
+        // Convert maps to chart data
+        const scheduleByYearData = Object.entries(scheduleByYearMap)
+          .map(([year, count]) => ({ year: `Year ${year}`, schedules: count }))
+          .sort((a, b) => a.year.localeCompare(b.year));
+
+        const instructorWorkloadData = Object.entries(instructorWorkloadMap)
+          .map(([instructor, count]) => ({ name: instructor, classes: count }))
+          .sort((a, b) => b.classes - a.classes)
+          .slice(0, 8); // Top 8 instructors
+
+        const roomUsageData = Object.entries(roomUsageMap)
+          .map(([room, count]) => ({ room, uses: count }))
+          .sort((a, b) => b.uses - a.uses);
+
+        setScheduleByYear(scheduleByYearData);
+        setInstructorWorkload(instructorWorkloadData);
+        setRoomUsage(roomUsageData);
         
         const stats = {
           totalInstructors: Array.isArray(instructorsRes.data) ? instructorsRes.data.length : 0,
@@ -98,47 +120,8 @@ const AdminDashboard = () => {
     };
 
     fetchAlerts();
-    fetchRoomStatus();
     fetchSummaryStats();
   }, []);
-
-  // Fetch weather for Malaybalay City, Bukidnon
-  useEffect(() => {
-    const fetchWeather = async () => {
-      setLoadingWeather(true);
-      try {
-        const response = await fetch(`${apiBase}/api/weather/current?city=Malaybalay&countryCode=PH`);
-        if (response.ok) {
-          const data = await response.json();
-          if (data.success) {
-            setWeather(data.weather);
-            setWeatherAlert(data.alert);
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching weather:', error);
-      } finally {
-        setLoadingWeather(false);
-      }
-    };
-
-    const fetchForecast = async () => {
-      try {
-        const response = await fetch(`${apiBase}/api/weather/forecast?city=Malaybalay&countryCode=PH`);
-        if (response.ok) {
-          const data = await response.json();
-          if (data.success) {
-            setWeatherForecast(data.forecast);
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching weather forecast:', error);
-      }
-    };
-
-    fetchWeather();
-    fetchForecast();
-  }, [apiBase]);
 
   const renderAlertIcon = (type) => {
     switch (type) {
@@ -325,125 +308,121 @@ const AdminDashboard = () => {
             </div>
           </div>
 
-          {/* Room Status Overview */}
-          <div
-            style={{
+          {/* Data Visualizations */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(450px, 1fr))', gap: '30px', marginTop: '36px' }}>
+            {/* Schedule Distribution by Year */}
+            <div style={{
               background: '#fff',
               padding: '30px',
               borderRadius: '18px',
               boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)',
-              borderLeft: '5px solid #f97316',
-            }}
-          >
-            <h3
-              style={{
+              borderLeft: '5px solid #3b82f6',
+            }}>
+              <h3 style={{
                 color: '#1e293b',
-                fontSize: '22px',
+                fontSize: '18px',
                 fontWeight: '700',
-                marginBottom: '16px',
+                marginBottom: '20px',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '12px',
-              }}
-            >
-              <FontAwesomeIcon icon={faDoorOpen} />
-              Room Status Overview
-            </h3>
-            <div
-              style={{
-                overflowX: 'auto',
-                borderRadius: '12px',
-                boxShadow: '0 2px 10px rgba(0, 0, 0, 0.09)',
-              }}
-            >
-              <table
-                style={{
-                  width: '100%',
-                  borderCollapse: 'collapse',
-                  background: '#fff',
-                  fontSize: '15px',
-                  borderRadius: '12px',
-                  overflow: 'hidden',
-                }}
-              >
-                <thead>
-                  <tr style={{ background: 'linear-gradient(135deg, #0f2c63 0%, #1e40af 100%)' }}>
-                    <th
-                      style={{
-                        padding: '15px 20px',
-                        textAlign: 'left',
-                        fontWeight: '700',
-                        color: '#efefef',
-                        fontSize: '13px',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.5px',
-                      }}
+                gap: '10px',
+              }}>
+                <FontAwesomeIcon icon={faChartBar} />
+                Schedules by Year Level
+              </h3>
+              {scheduleByYear.length > 0 ? (
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={scheduleByYear}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="year" />
+                    <YAxis />
+                    <Tooltip />
+                    <Bar dataKey="schedules" fill="#3b82f6" radius={[8, 8, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <p style={{ color: '#9ca3af', textAlign: 'center', padding: '40px 0' }}>No data available</p>
+              )}
+            </div>
+
+            {/* Top Instructors by Workload */}
+            <div style={{
+              background: '#fff',
+              padding: '30px',
+              borderRadius: '18px',
+              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)',
+              borderLeft: '5px solid #f59e0b',
+            }}>
+              <h3 style={{
+                color: '#1e293b',
+                fontSize: '18px',
+                fontWeight: '700',
+                marginBottom: '20px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+              }}>
+                <FontAwesomeIcon icon={faChalkboardTeacher} />
+                Top Instructors by Classes
+              </h3>
+              {instructorWorkload.length > 0 ? (
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={instructorWorkload} layout="vertical">
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis type="number" />
+                    <YAxis dataKey="name" type="category" width={120} fontSize={12} />
+                    <Tooltip />
+                    <Bar dataKey="classes" fill="#f59e0b" radius={[0, 8, 8, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <p style={{ color: '#9ca3af', textAlign: 'center', padding: '40px 0' }}>No data available</p>
+              )}
+            </div>
+
+            {/* Room Usage Distribution */}
+            <div style={{
+              background: '#fff',
+              padding: '30px',
+              borderRadius: '18px',
+              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)',
+              borderLeft: '5px solid #10b981',
+            }}>
+              <h3 style={{
+                color: '#1e293b',
+                fontSize: '18px',
+                fontWeight: '700',
+                marginBottom: '20px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+              }}>
+                <FontAwesomeIcon icon={faLayerGroup} />
+                Room Usage Distribution
+              </h3>
+              {roomUsage.length > 0 ? (
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={roomUsage}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={true}
+                      label={({ room, uses }) => `${room} (${uses})`}
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="uses"
                     >
-                      Room
-                    </th>
-                    <th
-                      style={{
-                        padding: '15px 20px',
-                        textAlign: 'left',
-                        fontWeight: '700',
-                        color: '#efefef',
-                        fontSize: '13px',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.5px',
-                      }}
-                    >
-                      Area/Location
-                    </th>
-                    <th
-                      style={{
-                        padding: '15px 20px',
-                        textAlign: 'left',
-                        fontWeight: '700',
-                        color: '#efefef',
-                        fontSize: '13px',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.5px',
-                      }}
-                    >
-                      Status
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {roomStatus.map((room, index) => (
-                    <tr key={index} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                      <td style={{ padding: '15px 20px', color: '#374151' }}>{formatRoomLabel(room.room)}</td>
-                      <td style={{ padding: '15px 20px', color: '#374151' }}>{room.area}</td>
-                      <td style={{ padding: '15px 20px' }}>
-                        <span
-                          style={{
-                            padding: '6px 14px',
-                            borderRadius: '18px',
-                            fontSize: '12px',
-                            fontWeight: '700',
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.7px',
-                            backgroundColor:
-                              room.status === 'available'
-                                ? '#dcfce7'
-                                : room.status === 'occupied'
-                                ? '#fee2e2'
-                                : '#fef3c7',
-                            color:
-                              room.status === 'available'
-                                ? '#16a34a'
-                                : room.status === 'occupied'
-                                ? '#dc2626'
-                                : '#d97706',
-                          }}
-                        >
-                          {room.status.toUpperCase()}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      {roomUsage.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={['#3b82f6', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316'][index % 8]} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <p style={{ color: '#9ca3af', textAlign: 'center', padding: '40px 0' }}>No data available</p>
+              )}
             </div>
           </div>
 
