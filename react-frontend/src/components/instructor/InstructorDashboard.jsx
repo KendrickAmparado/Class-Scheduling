@@ -20,7 +20,6 @@ const InstructorDashboard = () => {
     lastname: '', 
     image: '' 
   });
-  const apiBase = process.env.REACT_APP_API_BASE || 'http://localhost:5000';
 
   const [allSchedules, setAllSchedules] = useState([]);
   const [calendarEvents, setCalendarEvents] = useState([]);

@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import Sidebar from '../common/Sidebar.jsx';
 import Header from '../common/Header.jsx';
 import axios from 'axios';
@@ -9,7 +8,6 @@ import {
   faCheckCircle,
   faTimesCircle,
   faExclamationTriangle,
-  faArrowRight,
   faCalendarPlus,
   faTrash,
   faUserPlus,
@@ -19,12 +17,10 @@ import {
   faUsers,
   faChartBar,
 } from '@fortawesome/free-solid-svg-icons';
-import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 const AdminDashboard = () => {
-  const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [alerts, setAlerts] = useState([]);
   const [summaryStats, setSummaryStats] = useState({
     totalInstructors: 0,
     totalSchedules: 0,
@@ -34,7 +30,6 @@ const AdminDashboard = () => {
   const [scheduleByYear, setScheduleByYear] = useState([]);
   const [instructorWorkload, setInstructorWorkload] = useState([]);
   const [roomUsage, setRoomUsage] = useState([]);
-  const apiBase = process.env.REACT_APP_API_BASE || 'http://localhost:5000';
 
   useEffect(() => {
     const fetchAlerts = async () => {
@@ -123,47 +118,6 @@ const AdminDashboard = () => {
     fetchSummaryStats();
   }, []);
 
-  const renderAlertIcon = (type) => {
-    switch (type) {
-      case 'room-conflict':
-        return <FontAwesomeIcon icon={faExclamationTriangle} style={{ color: '#dc2626', fontSize: 18, marginTop: 2 }} />;
-      case 'pending-approval':
-        return <FontAwesomeIcon icon={faTimesCircle} style={{ color: '#b91c1c', fontSize: 18, marginTop: 2 }} />;
-      case 'availability-update':
-        return <FontAwesomeIcon icon={faCheckCircle} style={{ color: '#059669', fontSize: 18, marginTop: 2 }} />;
-      case 'schedule-created':
-        return <FontAwesomeIcon icon={faCalendarPlus} style={{ color: '#16a34a', fontSize: 18, marginTop: 2 }} />;
-      case 'schedule-deleted':
-        return <FontAwesomeIcon icon={faTrash} style={{ color: '#dc2626', fontSize: 18, marginTop: 2 }} />;
-      case 'section-created':
-        return <FontAwesomeIcon icon={faLayerGroup} style={{ color: '#2563eb', fontSize: 18, marginTop: 2 }} />;
-      case 'yearlevel-added':
-        return <FontAwesomeIcon icon={faLayerGroup} style={{ color: '#0ea5e9', fontSize: 18, marginTop: 2 }} />;
-      case 'instructor-added':
-        return <FontAwesomeIcon icon={faUserPlus} style={{ color: '#4f46e5', fontSize: 18, marginTop: 2 }} />;
-      case 'instructor-notification':
-        return <FontAwesomeIcon icon={faClipboardList} style={{ color: '#4f46e5', fontSize: 18, marginTop: 2 }} />;
-      default:
-        return <FontAwesomeIcon icon={faExclamationTriangle} style={{ color: '#dc2626', fontSize: 18, marginTop: 2 }} />;
-    }
-  };
-
-  const formatTimestamp = (timestamp) => {
-    if (!timestamp) return '';
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diffMs = now - date;
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 7) return `${diffDays}d ago`;
-    
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  };
 
   return (
     <div className="dashboard-container" style={{ display: 'flex' }}>
