@@ -31,7 +31,7 @@ const ScheduleTemplateManager = ({
   const fetchTemplates = React.useCallback(async () => {
     setLoading(true);
     try {
-      const res = await axios.get(`http://localhost:5000/api/schedule-templates?course=${course}&year=${year}`);
+      const res = await axios.get(`http://localhost:5001/api/schedule-templates?course=${course}&year=${year}`);
       if (res.data.success) {
         setTemplates(res.data.templates || []);
       }
@@ -70,7 +70,7 @@ const ScheduleTemplateManager = ({
         room: s.room,
       }));
 
-      const res = await axios.post('http://localhost:5000/api/schedule-templates', {
+      const res = await axios.post('http://localhost:5001/api/schedule-templates', {
         name: templateName.trim(),
         description: templateDescription.trim(),
         course,
@@ -98,7 +98,7 @@ const ScheduleTemplateManager = ({
       message: `Are you sure you want to delete template "${templateName}"? This action cannot be undone.`,
       onConfirm: async () => {
         try {
-          const res = await axios.delete(`http://localhost:5000/api/schedule-templates/${templateId}`);
+          const res = await axios.delete(`http://localhost:5001/api/schedule-templates/${templateId}`);
           if (res.data.success) {
             showToast('Template deleted successfully.', 'success');
             fetchTemplates();

@@ -3,6 +3,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faTimes, faFileImport, faExclamationTriangle, faCheckCircle } from '@fortawesome/free-solid-svg-icons';
 import * as XLSX from 'xlsx-js-style';
 import { useToast } from '../common/ToastProvider.jsx';
+import apiClient from '../../services/apiClient.js';
 
 const ScheduleImporter = ({ show, onClose, course, year, sectionName, onImportComplete }) => {
   const { showToast } = useToast();
@@ -84,22 +85,17 @@ const ScheduleImporter = ({ show, onClose, course, year, sectionName, onImportCo
     if (preview.length === 0) {
       showToast('No valid schedules to import.', 'error');
       return;
-    }
-
-    if (!sectionName) {
-      showToast('Please select a section first.', 'error');
-      return;
-    }
-
-    setImporting(true);
-    let successCount = 0;
-    let errorCount = 0;
-
-    try {
-      for (const schedule of preview) {
-        try {
-          const response = await fetch('http://localhost:5000/api/schedule/create', {
-            method: 'POST',
+                const res = await apiClient.createSchedule({
+                  course,
+                  year,
+                  section: sectionName,
+                  subject: schedule.subject,
+                  instructor: schedule.instructor,
+                  day: schedule.day,
+                  time: schedule.time,
+                  room: schedule.room,
+                });
+                const data = res.data;
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               course,

@@ -18,6 +18,7 @@ import {
   ,faArchive
 } from '@fortawesome/free-solid-svg-icons';
 import axios from 'axios';
+import apiClient from '../../services/apiClient.js';
 import { generateTimeSlots, TIME_SLOT_CONFIGS, timeRangesOverlap, getTimeRangeDuration, minutesToTimeString, timeStringToMinutes } from '../../utils/timeUtils.js';
 import { normalizeRoomName, formatRoomLabel } from '../../utils/roomUtils';
 import Sidebar from '../common/Sidebar.jsx';
@@ -237,7 +238,9 @@ const ScheduleManagementDetails = () => {
   const { showToast } = useToast();
 
   const formatYearParam = (yearParam) => {
-    return yearParam.replace(/(\d+)(st|nd|rd|th)?year/i, '$1st year').toLowerCase();
+    // Extract just the numeric part (1, 2, 3, 4) from year parameter like "1styear" or "1st year"
+    const match = yearParam.match(/(\d+)/);
+    return match ? String(match[1]) : yearParam;
   };
 
   const normalizedYear = formatYearParam(year);
@@ -285,59 +288,48 @@ const ScheduleManagementDetails = () => {
     setLoading(true);
     try {
       const [sectionsRes, schedulesRes, instructorsRes, roomsRes] = await Promise.all([
-        axios.get(`http://localhost:5000/api/sections?course=${course}&year=${normalizedYear}`),
-        axios.get(`http://localhost:5000/api/schedule?course=${course}&year=${normalizedYear}`),
-        axios.get('http://localhost:5000/api/instructors'), // ✅ This endpoint needs to return active instructors
-        axios.get('http://localhost:5000/api/admin/rooms')
+        apiClient.get(`/api/sections?course=${course}&year=${normalizedYear}`),
+        apiClient.get(`/api/schedule?course=${course}&year=${normalizedYear}`),
+        apiClient.get('/api/instructors'),
+        apiClient.get('/api/rooms')
       ]);
   
       // Data fetched successfully
-  
       const sortedSections = (Array.isArray(sectionsRes.data) ? sectionsRes.data : []).sort((a, b) =>
         a.name.localeCompare(b.name)
       );
       setSections(sortedSections);
+      
       // Ensure archived schedules are hidden from active lists
       let schedulesData = [];
       if (Array.isArray(schedulesRes.data)) schedulesData = schedulesRes.data;
       else if (schedulesRes.data && Array.isArray(schedulesRes.data.schedules)) schedulesData = schedulesRes.data.schedules;
       setSchedules(schedulesData.filter(s => !s.archived));
       
-      // ✅ FIX: Handle instructor data properly
+      // Handle instructor data - backend now returns plain array
+      let instructorsArray = [];
       if (Array.isArray(instructorsRes.data)) {
-        // Direct array of instructors
-        const activeInstructors = instructorsRes.data
-          .filter(inst => inst.status === 'active')
-          .map(inst => ({
-            id: inst.instructorId || inst._id,
-            name: `${inst.firstname} ${inst.lastname}`,
-            email: inst.email
-          }));
-        setInstructors(activeInstructors);
-      } else if (instructorsRes.data.instructors && Array.isArray(instructorsRes.data.instructors)) {
-        // Wrapped in an object
-        const activeInstructors = instructorsRes.data.instructors
-          .filter(inst => inst.status === 'active')
-          .map(inst => ({
-            id: inst.instructorId || inst._id,
-            name: `${inst.firstname} ${inst.lastname}`,
-            email: inst.email
-          }));
-        setInstructors(activeInstructors);
-      } else {
-        setInstructors([]);
+        instructorsArray = instructorsRes.data;
+      } else if (instructorsRes.data?.instructors && Array.isArray(instructorsRes.data.instructors)) {
+        instructorsArray = instructorsRes.data.instructors;
       }
+      const activeInstructors = instructorsArray
+        .filter(inst => inst.status === 'active')
+        .map(inst => ({
+          id: inst.instructorId || inst._id,
+          name: `${inst.firstname} ${inst.lastname}`,
+          email: inst.email
+        }));
+      setInstructors(activeInstructors);
       
-      // Handle rooms
+      // Handle rooms - backend now returns plain array
+      let roomsArray = [];
       if (Array.isArray(roomsRes.data)) {
-        setRooms(roomsRes.data);
-      } else if (roomsRes.data.rooms && Array.isArray(roomsRes.data.rooms)) {
-        setRooms(roomsRes.data.rooms);
-      } else {
-        setRooms([]);
+        roomsArray = roomsRes.data;
+      } else if (roomsRes.data?.rooms && Array.isArray(roomsRes.data.rooms)) {
+        roomsArray = roomsRes.data.rooms;
       }
-  
-      // Debug logs removed to avoid dependency warnings
+      setRooms(roomsArray);
     } catch (error) {
       showToast('Error fetching data.', 'error');
       console.error('Error fetching data:', error);
@@ -349,9 +341,9 @@ const ScheduleManagementDetails = () => {
   const fetchArchivedSchedules = async () => {
     setArchivedLoading(true);
     try {
-      const res = await axios.get('http://localhost:5000/api/schedule/archived');
-      if (res.data && Array.isArray(res.data.schedules)) setArchivedSchedules(res.data.schedules);
-      else if (Array.isArray(res.data)) setArchivedSchedules(res.data);
+      const res = await apiClient.get('/api/schedule/archived');
+      if (Array.isArray(res.data)) setArchivedSchedules(res.data);
+      else if (res.data?.schedules && Array.isArray(res.data.schedules)) setArchivedSchedules(res.data.schedules);
       else setArchivedSchedules([]);
     } catch (err) {
       console.error('Error fetching archived schedules', err);
@@ -363,6 +355,8 @@ const ScheduleManagementDetails = () => {
   };
 
   useEffect(() => {
+    // Reset selectedSection when course or year changes to prevent stale section references
+    setSelectedSection(null);
     fetchData();
   }, [fetchData]);
 
@@ -437,7 +431,7 @@ const ScheduleManagementDetails = () => {
 
   const submitSchedule = async (scheduleData, formElement = null) => {
     try {
-      const res = await axios.post('http://localhost:5000/api/schedule/create', scheduleData);
+      const res = await apiClient.createSchedule(scheduleData);
       if (res.data.success) {
         showToast('Schedule added successfully!', 'success');
         setShowAddSchedulePopup(false);
@@ -485,7 +479,7 @@ const ScheduleManagementDetails = () => {
       message: 'Are you sure you want to delete this schedule? This action cannot be undone.',
       onConfirm: async () => {
         try {
-          const res = await axios.delete(`http://localhost:5000/api/schedule/${scheduleId}`);
+          const res = await apiClient.delete(`/api/schedule/${scheduleId}`);
           if (res.data.success) {
             showToast('Schedule deleted successfully.', 'success');
             await fetchData();
@@ -509,7 +503,7 @@ const ScheduleManagementDetails = () => {
       message: 'Are you sure you want to archive this schedule? It will be hidden from active lists.',
       onConfirm: async () => {
         try {
-          const res = await axios.post(`http://localhost:5000/api/schedule/${scheduleId}/archive`);
+          const res = await apiClient.post(`/api/schedule/${scheduleId}/archive`);
           if (res.data.success) {
             showToast('Schedule archived successfully.', 'success');
             await fetchData();
@@ -538,7 +532,7 @@ const ScheduleManagementDetails = () => {
 
   const handleRestoreSchedule = async (scheduleId) => {
     try {
-      const res = await axios.post(`http://localhost:5000/api/schedule/${scheduleId}/restore`);
+      const res = await apiClient.post(`/api/schedule/${scheduleId}/restore`);
       if (res.data.success) {
         showToast('Schedule restored.', 'success');
         await fetchData();
@@ -559,7 +553,7 @@ const ScheduleManagementDetails = () => {
       message: 'This will permanently delete the schedule from the database. This action cannot be undone. Continue?',
       onConfirm: async () => {
         try {
-          const res = await axios.delete(`http://localhost:5000/api/schedule/${scheduleId}`);
+          const res = await apiClient.delete(`/api/schedule/${scheduleId}`);
           if (res.data.success) {
             showToast('Schedule permanently deleted.', 'success');
             await fetchArchivedSchedules();
@@ -684,7 +678,7 @@ const ScheduleManagementDetails = () => {
         room: suggestion.room,
         version: schedule.__v, // Include current version for MVCC conflict detection
       };
-      const res = await axios.put(`http://localhost:5000/api/schedule/${schedule._id}`, update);
+      const res = await apiClient.updateSchedule(schedule._id, update, schedule.__v);
       if (res.data.success) {
         showToast('Schedule rescheduled successfully.', 'success');
         await fetchData();
@@ -695,7 +689,11 @@ const ScheduleManagementDetails = () => {
       }
     } catch (err) {
       console.error('Error applying reschedule', err);
-      showToast('Error rescheduling. Check conflicts or server logs.', 'error');
+      if (err.response?.status === 409) {
+        showToast('⚠️ Schedule was modified. Please refresh and try again.', 'error');
+      } else {
+        showToast('Error rescheduling. Check conflicts or server logs.', 'error');
+      }
       setRescheduleModal(prev => ({ ...prev, loading: false }));
     }
   };
@@ -729,7 +727,7 @@ const ScheduleManagementDetails = () => {
     }
 
     try {
-      const res = await axios.put(`http://localhost:5000/api/schedule/${scheduleToEdit._id}`, scheduleData);
+      const res = await apiClient.updateSchedule(scheduleToEdit._id, scheduleData, scheduleToEdit.__v);
       if (res.data.success) {
         showToast('Schedule updated successfully!', 'success');
         setShowEditSchedulePopup(false);
@@ -740,7 +738,7 @@ const ScheduleManagementDetails = () => {
       }
     } catch (error) {
       if (error.response?.status === 409) {
-        showToast(error.response.data.message || 'Schedule conflict detected.', 'error');
+        showToast('⚠️ Schedule was modified by another user. Please refresh and try again.', 'error');
       } else {
         showToast('Error updating schedule.', 'error');
       }

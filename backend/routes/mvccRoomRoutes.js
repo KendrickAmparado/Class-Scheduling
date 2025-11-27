@@ -12,12 +12,116 @@ import { updateWithVersionControl } from "../utils/mvccManager.js";
 const router = express.Router();
 
 /**
+ * GET /api/rooms/available
+ * Return deduplicated list of rooms that are not archived and not under maintenance
+ * This is intended for room suggestion lists when creating schedules
+ * MUST BE BEFORE router.get('/:id/*') to avoid being caught as a route parameter
+ */
+router.get('/available', async (req, res) => {
+  try {
+    // Find rooms that are not archived and not under maintenance
+    let rooms = await Room.find({ archived: false, status: { $ne: 'maintenance' } })
+      .select('room area status archived createdAt updatedAt _id')
+      .lean();
+
+    // Deduplicate by normalized room name (case-insensitive, trimmed)
+    const byName = new Map();
+    for (const r of rooms) {
+      const key = (r.room || '').toString().trim().toLowerCase();
+      if (!byName.has(key)) {
+        byName.set(key, r);
+        continue;
+      }
+
+      const existing = byName.get(key);
+      // Prefer non-archived entries (all are non-archived here) — prefer most recently updated
+      const existingUpdated = existing.updatedAt ? new Date(existing.updatedAt) : new Date(0);
+      const rUpdated = r.updatedAt ? new Date(r.updatedAt) : new Date(0);
+      if (rUpdated > existingUpdated) {
+        byName.set(key, r);
+      }
+    }
+
+    const deduped = Array.from(byName.values()).sort((a, b) => (a.room || '').localeCompare(b.room || ''));
+
+    // Return an array (legacy-friendly) — frontend suggestion lists expect array
+    res.json(deduped);
+  } catch (error) {
+    console.error('Error fetching available rooms:', error);
+    res.status(500).json({ success: false, message: 'Server error fetching available rooms', error: error.message });
+  }
+});
+
+/**
+ * GET /api/rooms/archived/list
+ * Return archived rooms list
+ * MUST BE BEFORE router.get('/:id/*') to avoid being caught as a route parameter
+ */
+router.get('/archived/list', async (req, res) => {
+  try {
+    const archivedRooms = await Room.find({ archived: true }).select('room area status archived createdAt updatedAt _id').lean();
+    return res.json(archivedRooms || []);
+  } catch (err) {
+    console.error('Error fetching archived rooms (mvcc):', err);
+    res.status(500).json({ success: false, message: 'Error fetching archived rooms', error: err.message });
+  }
+});
+
+/**
+ * GET /api/rooms
+ * Return list of rooms (compatibility read endpoint)
+ */
+router.get('/', async (req, res) => {
+  try {
+    const { showArchived } = req.query;
+    const query = {};
+    
+    // Filter out archived rooms by default unless explicitly requested
+    if (showArchived !== 'true') {
+      query.archived = false;
+    }
+    
+    let rooms = await Room.find(query).select('room area status archived createdAt updatedAt _id __v').lean();
+
+    // Deduplicate rooms by normalized name (case-insensitive, trimmed)
+    const byName = new Map();
+    for (const r of rooms) {
+      const key = (r.room || '').toString().trim().toLowerCase();
+      if (!byName.has(key)) {
+        byName.set(key, r);
+        continue;
+      }
+
+      const existing = byName.get(key);
+      // Prefer non-archived entries
+      if (existing.archived && !r.archived) {
+        byName.set(key, r);
+        continue;
+      }
+
+      // If both have same archived flag, prefer the most recently updated
+      const existingUpdated = existing.updatedAt ? new Date(existing.updatedAt) : new Date(0);
+      const rUpdated = r.updatedAt ? new Date(r.updatedAt) : new Date(0);
+      if (rUpdated > existingUpdated) {
+        byName.set(key, r);
+      }
+    }
+
+    const deduped = Array.from(byName.values()).sort((a, b) => (a.room || '').localeCompare(b.room || ''));
+    res.json(deduped);
+  } catch (error) {
+    console.error('Error fetching rooms list:', error);
+    res.status(500).json({ success: false, message: 'Server error fetching rooms' });
+  }
+});
+
+/**
  * POST create room with MVCC protection
  */
 router.post("/create-mvcc", async (req, res) => {
   try {
-    const { room, area, status } = req.body;
-
+    const { room, area } = req.body;
+    let status = req.body.status;
     if (!room || !area) {
       return res.status(400).json({
         success: false,
@@ -25,9 +129,10 @@ router.post("/create-mvcc", async (req, res) => {
         code: "VALIDATION_ERROR"
       });
     }
-
+    if (!status || !['available', 'occupied', 'maintenance'].includes(status)) {
+      status = 'available';
+    }
     const transaction = new MVCCTransaction(req.userId || 'system', 'room_creation');
-
     // Check for duplicate room
     const existingRoom = await Room.findOne({ room });
     if (existingRoom) {
@@ -37,17 +142,14 @@ router.post("/create-mvcc", async (req, res) => {
         code: "DUPLICATE_ROOM"
       });
     }
-
     const newRoom = new Room({
       room,
       area,
-      status: status || 'available'
+      status
     });
-
     await newRoom.save();
     transaction.addOperation(newRoom._id, 'create', newRoom.__v, newRoom);
     const txnRecord = transaction.commit();
-
     res.status(201).json({
       success: true,
       message: "Room created with MVCC protection",
@@ -497,6 +599,150 @@ router.get("/stats/concurrency", async (req, res) => {
       success: false,
       message: "Server error fetching statistics"
     });
+  }
+});
+
+// ------------------ Compatibility routes (legacy paths for rooms) ------------------
+
+// POST /create (legacy)
+router.post('/create', async (req, res) => {
+  try {
+    const { room, area } = req.body;
+    let status = req.body.status;
+    if (!room || !area) return res.status(400).json({ success: false, message: 'Room name and area are required', code: 'VALIDATION_ERROR' });
+    if (!status || !['available', 'occupied', 'maintenance'].includes(status)) {
+      status = 'available';
+    }
+    const transaction = new MVCCTransaction(req.userId || 'system', 'room_creation');
+    const existingRoom = await Room.findOne({ room });
+    if (existingRoom) return res.status(409).json({ success: false, message: `Room ${room} already exists`, code: 'DUPLICATE_ROOM' });
+    const newRoom = new Room({ room, area, status });
+    await newRoom.save();
+    transaction.addOperation(newRoom._id, 'create', newRoom.__v, newRoom);
+    const txnRecord = transaction.commit();
+    res.status(201).json({ success: true, message: 'Room created', room: newRoom, transaction: txnRecord });
+  } catch (error) {
+    console.error('Compatibility create room error:', error);
+    res.status(500).json({ success: false, message: 'Server error creating room', error: error.message });
+  }
+});
+
+// PATCH /:id/archive (archive/restore compatibility handlers - MUST BE BEFORE PUT /:id)
+router.patch('/:id/archive', async (req, res) => {
+  try {
+    const room = await Room.findByIdAndUpdate(req.params.id, { archived: true }, { new: true });
+    if (!room) return res.status(404).json({ success: false, message: 'Room not found.' });
+    res.json({ success: true, message: 'Room archived successfully.', room });
+  } catch (error) {
+    console.error('Error archiving room (mvcc):', error);
+    res.status(500).json({ success: false, message: 'Server error while archiving room.' });
+  }
+});
+
+router.patch('/:id/restore', async (req, res) => {
+  try {
+    const room = await Room.findByIdAndUpdate(req.params.id, { archived: false }, { new: true });
+    if (!room) return res.status(404).json({ success: false, message: 'Room not found.' });
+    res.json({ success: true, message: 'Room restored successfully.', room });
+  } catch (error) {
+    console.error('Error restoring room (mvcc):', error);
+    res.status(500).json({ success: false, message: 'Server error while restoring room.' });
+  }
+});
+
+router.delete('/:id/permanent', async (req, res) => {
+  try {
+    const deletedRoom = await Room.findByIdAndDelete(req.params.id);
+    if (!deletedRoom) return res.status(404).json({ success: false, message: 'Room not found.' });
+    res.json({ success: true, message: 'Room permanently deleted.' });
+  } catch (error) {
+    console.error('Error permanently deleting room (mvcc):', error);
+    res.status(500).json({ success: false, message: 'Server error while permanently deleting room.' });
+  }
+});
+
+// PUT /:id (legacy) - general update
+router.put('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { version, room, area, status } = req.body;
+
+    if (version !== undefined) {
+      const transaction = new MVCCTransaction(req.userId || 'system', 'room_update');
+      const updatedRoom = await withRetry(async () => {
+        if (room) {
+          const existingRoom = await Room.findOne({ room, _id: { $ne: id } });
+          if (existingRoom) throw new Error(`Room name ${room} already in use`);
+        }
+        return await updateWithVersionControl(Room, id, version, { room, area, status });
+      }, 3, 100);
+
+      transaction.addOperation(id, 'update', updatedRoom.__v, updatedRoom);
+      const txnRecord = transaction.commit();
+      res.json({ success: true, message: 'Room updated', room: updatedRoom, transaction: txnRecord });
+      return;
+    }
+
+    // Legacy fallback
+    const existing = await Room.findById(id);
+    if (!existing) return res.status(404).json({ success: false, message: 'Room not found' });
+    if (room !== undefined) existing.room = room;
+    if (area !== undefined) existing.area = area;
+    if (status !== undefined) existing.status = status;
+    await existing.save();
+    res.json({ success: true, message: 'Room updated (legacy)', room: existing });
+  } catch (error) {
+    if (error.message?.includes('Version conflict')) return res.status(409).json({ success: false, message: 'Concurrent update detected. Please refresh.', code: 'VERSION_CONFLICT' });
+    if (error.message?.includes('already in use')) return res.status(409).json({ success: false, message: error.message, code: 'DUPLICATE_NAME' });
+    console.error('Compatibility room update error:', error);
+    res.status(500).json({ success: false, message: 'Server error updating room', error: error.message });
+  }
+});
+
+/**
+ * GET /api/rooms/:id
+ * Fetch a single room by ID
+ */
+router.get('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Validate MongoDB ObjectId
+    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ success: false, message: 'Invalid room ID' });
+    }
+
+    const room = await Room.findById(id)
+      .select('room area status archived createdAt updatedAt _id __v')
+      .lean();
+    
+    if (!room) {
+      return res.status(404).json({ success: false, message: 'Room not found' });
+    }
+
+    return res.json(room);
+  } catch (error) {
+    console.error('Error fetching room:', error);
+    res.status(500).json({ success: false, message: 'Server error fetching room' });
+  }
+});
+
+// DELETE /:id (legacy)
+router.delete('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { version } = req.body || {};
+    if (version !== undefined) {
+      const deleted = await Room.findOneAndDelete({ _id: id, __v: version });
+      if (!deleted) return res.status(409).json({ success: false, message: 'Version conflict or document not found', code: 'VERSION_CONFLICT' });
+      return res.json({ success: true, message: 'Room deleted', room: deleted });
+    }
+    const deleted = await Room.findByIdAndDelete(id);
+    if (!deleted) return res.status(404).json({ success: false, message: 'Room not found' });
+    res.json({ success: true, message: 'Room deleted', room: deleted });
+  } catch (error) {
+    console.error('Compatibility room delete error:', error);
+    res.status(500).json({ success: false, message: 'Server error deleting room', error: error.message });
   }
 });
 

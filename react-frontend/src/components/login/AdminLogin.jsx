@@ -31,9 +31,12 @@ const AdminLogin = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!recaptchaToken) {
-      setRecaptchaError('Please complete the reCAPTCHA.');
-      return;
+    // Only require reCAPTCHA in production; allow local/dev testing without it
+    if (process.env.NODE_ENV === 'production') {
+      if (!recaptchaToken) {
+        setRecaptchaError('Please complete the reCAPTCHA.');
+        return;
+      }
     }
 
     try {

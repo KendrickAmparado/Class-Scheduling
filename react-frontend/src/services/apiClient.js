@@ -85,8 +85,12 @@ class ApiClient {
               this.handleError(data?.message || 'Resource not found');
               break;
             case 409:
-              // Conflict
-              this.handleError(data?.message || 'Conflict: This resource already exists');
+              // Conflict - Handle version conflict (MVCC) separately
+              if (data?.code === 'VERSION_CONFLICT') {
+                this.handleError(`⚠️ Version Conflict: Resource was modified by another user. Please refresh and try again. (${data?.message || 'Conflict'})`);
+              } else {
+                this.handleError(data?.message || 'Conflict: This resource already exists');
+              }
               break;
             case 422:
               // Validation Error
@@ -211,10 +215,35 @@ class ApiClient {
   }
 
   /**
-   * Update schedule
+   * Get schedule version for optimistic locking
    */
-  async updateSchedule(id, data) {
-    return this.put(`/api/schedule/${id}`, data);
+  async getScheduleVersion(id) {
+    try {
+      const response = await this.get(`/api/schedule/${id}/version`);
+      return response.data?.version || response.data?.__v;
+    } catch (error) {
+      console.warn('Could not fetch schedule version:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Update schedule with version control (MVCC)
+   * Includes __v if available for optimistic locking
+   */
+  async updateSchedule(id, data, version = null) {
+    const payload = { ...data };
+    
+    // Include version if provided or attempt to fetch from data
+    if (version) {
+      payload.version = version;
+    } else if (data.version) {
+      // Version already in data, keep it
+    } else if (data.__v) {
+      payload.version = data.__v;
+    }
+    
+    return this.put(`/api/schedule/${id}`, payload);
   }
 
   /**
@@ -248,10 +277,33 @@ class ApiClient {
   }
 
   /**
-   * Update instructor
+   * Get instructor version for optimistic locking
    */
-  async updateInstructor(id, data) {
-    return this.put(`/api/instructors/${id}`, data);
+  async getInstructorVersion(id) {
+    try {
+      const response = await this.get(`/api/instructors/${id}/version`);
+      return response.data?.version || response.data?.__v;
+    } catch (error) {
+      console.warn('Could not fetch instructor version:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Update instructor with version control (MVCC)
+   */
+  async updateInstructor(id, data, version = null) {
+    const payload = { ...data };
+    
+    if (version) {
+      payload.version = version;
+    } else if (data.version) {
+      // Version already in data, keep it
+    } else if (data.__v) {
+      payload.version = data.__v;
+    }
+    
+    return this.put(`/api/instructors/${id}`, payload);
   }
 
   /**
@@ -271,6 +323,13 @@ class ApiClient {
   }
 
   /**
+   * Get available rooms for suggestions (non-archived, not under maintenance)
+   */
+  async getAvailableRooms(params = {}) {
+    return this.get('/api/rooms/available', { params });
+  }
+
+  /**
    * Get room by ID
    */
   async getRoomById(id) {
@@ -281,14 +340,37 @@ class ApiClient {
    * Create new room
    */
   async createRoom(data) {
-    return this.post('/api/rooms', data);
+    return this.post('/api/rooms/create', data);
   }
 
   /**
-   * Update room
+   * Get room version for optimistic locking
    */
-  async updateRoom(id, data) {
-    return this.put(`/api/rooms/${id}`, data);
+  async getRoomVersion(id) {
+    try {
+      const response = await this.get(`/api/rooms/${id}/version`);
+      return response.data?.version || response.data?.__v;
+    } catch (error) {
+      console.warn('Could not fetch room version:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Update room with version control (MVCC)
+   */
+  async updateRoom(id, data, version = null) {
+    const payload = { ...data };
+    
+    if (version) {
+      payload.version = version;
+    } else if (data.version) {
+      // Version already in data, keep it
+    } else if (data.__v) {
+      payload.version = data.__v;
+    }
+    
+    return this.put(`/api/rooms/${id}`, payload);
   }
 
   /**
@@ -315,10 +397,33 @@ class ApiClient {
   }
 
   /**
-   * Update section
+   * Get section version for optimistic locking
    */
-  async updateSection(id, data) {
-    return this.put(`/api/sections/${id}`, data);
+  async getSectionVersion(id) {
+    try {
+      const response = await this.get(`/api/sections/${id}/version`);
+      return response.data?.version || response.data?.__v;
+    } catch (error) {
+      console.warn('Could not fetch section version:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Update section with version control (MVCC)
+   */
+  async updateSection(id, data, version = null) {
+    const payload = { ...data };
+    
+    if (version) {
+      payload.version = version;
+    } else if (data.version) {
+      // Version already in data, keep it
+    } else if (data.__v) {
+      payload.version = data.__v;
+    }
+    
+    return this.put(`/api/sections/${id}`, payload);
   }
 
   /**
@@ -487,7 +592,8 @@ class ApiClient {
 }
 
 // Export singleton instance
-export default new ApiClient();
+const apiClientInstance = new ApiClient();
+export default apiClientInstance;
 
 // Export class for testing purposes
 export { ApiClient };

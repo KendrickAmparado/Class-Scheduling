@@ -13,7 +13,7 @@ import {
   faTools,
   faArchive
 } from '@fortawesome/free-solid-svg-icons';
-import axios from 'axios';
+import apiClient from '../../services/apiClient.js';
 import { useToast } from '../common/ToastProvider.jsx';
 import ConfirmationDialog from '../common/ConfirmationDialog.jsx';
 import { SkeletonCard } from '../common/SkeletonLoader.jsx';
@@ -50,12 +50,15 @@ const RoomManagement = () => {
   const fetchRooms = async () => {
     try {
       setLoadingRooms(true);
-      const res = await axios.get('http://localhost:5000/api/rooms');
-      if (Array.isArray(res.data.rooms)) {
+      const res = await apiClient.getRooms();
+      // Backend now returns plain array directly
+      if (Array.isArray(res.data)) {
+        setRooms(res.data);
+      } else if (Array.isArray(res.data?.rooms)) {
         setRooms(res.data.rooms);
       } else {
         setRooms([]);
-        console.warn('Rooms data is not an array');
+        console.warn('Rooms data is not an array', res.data);
       }
       setRoomError(null);
     } catch (err) {
@@ -86,7 +89,7 @@ const RoomManagement = () => {
     e.preventDefault();
     setAddLoading(true);
     try {
-      const res = await axios.post('http://localhost:5000/api/rooms', newRoom);
+      const res = await apiClient.createRoom(newRoom);
       if (res.data.success) {
         showToast('Room added successfully!', 'success');
         setShowAddRoomPopup(false);
@@ -114,7 +117,7 @@ const RoomManagement = () => {
     e.preventDefault();
     setEditLoading(true);
     try {
-      const res = await axios.put(`http://localhost:5000/api/rooms/${selectedRoom._id}`, selectedRoom);
+      const res = await apiClient.updateRoom(selectedRoom._id, selectedRoom, selectedRoom.__v);
       if (res.data.success) {
         showToast('Room updated successfully!', 'success');
         setShowEditRoomPopup(false);
@@ -137,7 +140,7 @@ const RoomManagement = () => {
       message: `Are you sure you want to archive room "${room.room}"? You can restore it later from the archived list.`,
       onConfirm: async () => {
         try {
-          const res = await axios.patch(`http://localhost:5000/api/rooms/${room._id}/archive`);
+          const res = await apiClient.patch(`/api/rooms/${room._id}/archive`);
           if (res.data.success) {
             showToast('Room archived successfully!', 'success');
             fetchRooms();
@@ -156,7 +159,7 @@ const RoomManagement = () => {
 
   const handleRestoreRoom = async (room) => {
     try {
-      const res = await axios.patch(`http://localhost:5000/api/rooms/${room._id}/restore`);
+      const res = await apiClient.patch(`/api/rooms/${room._id}/restore`);
       if (res.data.success) {
         showToast('Room restored successfully!', 'success');
         fetchRooms();
@@ -177,7 +180,7 @@ const RoomManagement = () => {
       message: `Are you sure you want to permanently delete room "${room.room}"? This action cannot be undone.`,
       onConfirm: async () => {
         try {
-          const res = await axios.delete(`http://localhost:5000/api/rooms/${room._id}/permanent`);
+          const res = await apiClient.delete(`/api/rooms/${room._id}/permanent`);
           if (res.data.success) {
             showToast('Room deleted permanently!', 'success');
             fetchRooms();
@@ -198,7 +201,7 @@ const RoomManagement = () => {
   const fetchArchivedRooms = async () => {
     setLoadingArchived(true);
     try {
-      const res = await axios.get('http://localhost:5000/api/rooms/archived/list');
+      const res = await apiClient.get('/api/rooms/archived/list');
       setArchivedRooms(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error('Error fetching archived rooms', err);

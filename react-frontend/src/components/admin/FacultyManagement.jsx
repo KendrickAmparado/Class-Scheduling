@@ -21,8 +21,9 @@ import { useToast } from "../common/ToastProvider.jsx";
 import ConfirmationDialog from "../common/ConfirmationDialog.jsx";
 import { SkeletonTable } from "../common/SkeletonLoader.jsx";
 import EmptyState from "../common/EmptyState.jsx";
+import apiClient from '../../services/apiClient.js';
 
-const socket = io("http://localhost:5000", {
+  const socket = io("http://localhost:5000", {
   autoConnect: false,
 });
 
@@ -117,21 +118,31 @@ const FacultyManagement = () => {
   const [completeRegLoading, setCompleteRegLoading] = useState(false);
 
   // Fetch instructors function
-  const fetchInstructors = useCallback(() => {
+  const fetchInstructors = useCallback(async () => {
     setLoading(true);
-    fetch("http://localhost:5000/api/instructors")
-      .then((res) => {
-        if (!res.ok) throw new Error("Failed to fetch instructors");
-        return res.json();
-      })
-      .then((data) => {
+    try {
+      const res = await apiClient.getInstructors();
+      const data = res.data;
+
+      // Normalize response: API may return an array or an object { success, instructors }
+      if (Array.isArray(data)) {
         setInstructors(data);
-        setLoading(false);
-      })
-      .catch(() => {
-        setLoading(false);
-        showToast("Error loading instructors.", 'error');
-      });
+      } else if (data && Array.isArray(data.instructors)) {
+        setInstructors(data.instructors);
+      } else if (data && Array.isArray(data.data)) {
+        // Some older endpoints return { data: [...] }
+        setInstructors(data.data);
+      } else {
+        // Fallback: empty array
+        setInstructors([]);
+      }
+    } catch (err) {
+      console.error('Error loading instructors', err);
+      showToast('Error loading instructors.', 'error');
+      setInstructors([]);
+    } finally {
+      setLoading(false);
+    }
   }, [showToast]);
 
   // Initialize search from URL query (?q=)
@@ -151,15 +162,9 @@ const FacultyManagement = () => {
       fetchInstructors();
     });
 
-    // Auto-refresh data every 30 seconds
-    const autoRefreshInterval = setInterval(() => {
-      fetchInstructors();
-    }, 30000);
-
     return () => {
       socket.off("new-alert");
       socket.disconnect();
-      clearInterval(autoRefreshInterval);
     };
   }, [fetchInstructors]);
 
@@ -305,63 +310,49 @@ const FacultyManagement = () => {
   };
 
   const handleArchive = (id) =>
-    showConfirm("Archive Instructor", "Are you sure you want to archive this instructor?", () => {
-      fetch(`http://localhost:5000/api/instructors/${id}/archive`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-      })
-        .then((res) =>
-          res.ok ? res.json() : Promise.reject(new Error("Failed to archive instructor"))
-        )
-        .then((data) => {
-          if (data.success) {
-            setInstructors((prev) =>
-              prev.map((i) => (i._id === id ? { ...i, status: "archived" } : i))
-            );
-            showToast("Instructor archived successfully.", 'success');
-          }
-        })
-        .catch(() => showToast("Error archiving instructor.", 'error'));
+    showConfirm("Archive Instructor", "Are you sure you want to archive this instructor?", async () => {
+      try {
+        const res = await apiClient.patch(`/api/instructors/${id}/archive`);
+        if (res.data.success) {
+          setInstructors((prev) => prev.map((i) => (i._id === id ? { ...i, status: 'archived' } : i)));
+          showToast('Instructor archived successfully.', 'success');
+        }
+      } catch (err) {
+        console.error('Error archiving instructor', err);
+        showToast('Error archiving instructor.', 'error');
+      }
     });
 
   const handleRestore = (id) =>
-    showConfirm("Restore Instructor", "Restore this instructor to active?", () => {
-      fetch(`http://localhost:5000/api/instructors/${id}/restore`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-      })
-        .then((res) =>
-          res.ok ? res.json() : Promise.reject(new Error("Failed to restore instructor"))
-        )
-        .then((data) => {
-          if (data.success) {
-            setInstructors((prev) =>
-              prev.map((i) => (i._id === id ? { ...i, status: "active" } : i))
-            );
-            showToast("Instructor restored successfully.", 'success');
-          }
-        })
-        .catch(() => showToast("Error restoring instructor.", 'error'));
+    showConfirm("Restore Instructor", "Restore this instructor to active?", async () => {
+      try {
+        const res = await apiClient.patch(`/api/instructors/${id}/restore`);
+        if (res.data.success) {
+          setInstructors((prev) => prev.map((i) => (i._id === id ? { ...i, status: 'active' } : i)));
+          showToast('Instructor restored successfully.', 'success');
+        }
+      } catch (err) {
+        console.error('Error restoring instructor', err);
+        showToast('Error restoring instructor.', 'error');
+      }
     });
 
   const handlePermanentDelete = (id) =>
     showConfirm(
-      "Delete Permanently",
-      "Are you sure you want to permanently delete this instructor? This action cannot be undone.",
-      () => {
-        fetch(`http://localhost:5000/api/instructors/${id}/permanent`, {
-          method: "DELETE",
-        })
-          .then((res) =>
-            res.ok ? res.json() : Promise.reject(new Error("Failed to delete instructor"))
-          )
-          .then((data) => {
-            if (data.success || data.message === "Instructor permanently deleted") {
-              setInstructors((prev) => prev.filter((i) => i._id !== id));
-              showToast("Instructor deleted permanently.", 'success');
-            }
-          })
-          .catch(() => showToast("Error deleting instructor.", 'error'));
+      'Delete Permanently',
+      'Are you sure you want to permanently delete this instructor? This action cannot be undone.',
+      async () => {
+        try {
+          const res = await apiClient.delete(`/api/instructors/${id}/permanent`);
+          const data = res.data;
+          if (data.success || data.message === 'Instructor permanently deleted') {
+            setInstructors((prev) => prev.filter((i) => i._id !== id));
+            showToast('Instructor deleted permanently.', 'success');
+          }
+        } catch (err) {
+          console.error('Error deleting instructor', err);
+          showToast('Error deleting instructor.', 'error');
+        }
       },
       true
     );
@@ -370,17 +361,13 @@ const FacultyManagement = () => {
     e.preventDefault();
     setAddLoading(true);
 
-    fetch("http://localhost:5000/api/registration/send-registration", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: addEmail,
-        department: addDepartment,
-      }),
+    apiClient.post("/api/registration/send-registration", {
+      email: addEmail,
+      department: addDepartment,
     })
       .then(async (res) => {
-        const data = await res.json();
-        if (!res.ok) {
+        const data = res.data;
+        if (!data.success) {
           throw new Error(data.error || data.message || "Failed to send registration email");
         }
         return data;
@@ -408,15 +395,10 @@ const FacultyManagement = () => {
     setCompleteRegLoading(true);
 
     try {
-      const response = await fetch("http://localhost:5000/api/instructors/complete-registration", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(completeRegData),
-      });
+      const response = await apiClient.post("/api/instructors/complete-registration", completeRegData);
+      const data = response.data;
 
-      const data = await response.json();
-
-      if (!response.ok) {
+      if (!data.success) {
         throw new Error(data.message || "Registration failed");
       }
 
@@ -469,11 +451,11 @@ const FacultyManagement = () => {
       `Are you sure you want to archive ${selectedIds.size} instructor(s)?`,
       async () => {
         const promises = Array.from(selectedIds).map(id =>
-          fetch(`http://localhost:5000/api/instructors/${id}/archive`, { method: "PUT" })
+          apiClient.patch(`/api/instructors/${id}/archive`)
         );
         try {
           const results = await Promise.allSettled(promises);
-          const successful = results.filter(r => r.status === 'fulfilled' && r.value.ok).length;
+          const successful = results.filter(r => r.status === 'fulfilled' && r.value?.data?.success).length;
           showToast(`Successfully archived ${successful} of ${selectedIds.size} instructor(s).`, 'success');
           setSelectedIds(new Set());
           setIsSelectMode(false);
@@ -492,11 +474,11 @@ const FacultyManagement = () => {
       `Are you sure you want to permanently delete ${selectedIds.size} instructor(s)? This action cannot be undone.`,
       async () => {
         const promises = Array.from(selectedIds).map(id =>
-          fetch(`http://localhost:5000/api/instructors/${id}/permanent`, { method: "DELETE" })
+          apiClient.delete(`/api/instructors/${id}/permanent`)
         );
         try {
           const results = await Promise.allSettled(promises);
-          const successful = results.filter(r => r.status === 'fulfilled' && r.value.ok).length;
+          const successful = results.filter(r => r.status === 'fulfilled' && r.value?.data?.success).length;
           showToast(`Successfully deleted ${successful} of ${selectedIds.size} instructor(s).`, 'success');
           setSelectedIds(new Set());
           setIsSelectMode(false);

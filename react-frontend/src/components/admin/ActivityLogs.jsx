@@ -2,10 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '../common/Sidebar.jsx';
 import Header from '../common/Header.jsx';
-import axios from 'axios';
+import apiClient from '../../services/apiClient.js';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
-  faArrowLeft,
   faClipboardList,
   faCheckCircle,
   faTimesCircle,
@@ -20,7 +19,6 @@ import jsPDF from 'jspdf';
 import XLSX from 'xlsx-js-style';
 
 const ActivityLogs = () => {
-  const navigate = useNavigate();
   const [alerts, setAlerts] = useState([]);
   const [filteredAlerts, setFilteredAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -56,12 +54,12 @@ const ActivityLogs = () => {
     setLoading(true);
     try {
       // Unified activity endpoint with pagination
-      const res = await axios.get(`http://localhost:5000/api/admin/activity?page=${page}&limit=50`);
+      const res = await apiClient.get(`/api/admin/activity?page=${page}&limit=50`);
       let activities = Array.isArray(res.data.activities) ? res.data.activities : [];
       
       // Fallback: legacy alerts endpoint if unified returns empty
       if (activities.length === 0 && !res.data.pagination) {
-        const legacy = await axios.get('http://localhost:5000/api/admin/alerts');
+        const legacy = await apiClient.get('/api/admin/alerts');
         const legacyAlerts = Array.isArray(legacy.data.alerts) ? legacy.data.alerts : [];
         activities = legacyAlerts.map((a) => ({
           id: String(a._id || a.id || Math.random()),

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Sidebar from '../common/Sidebar.jsx';
 import Header from '../common/Header.jsx';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -11,7 +11,7 @@ import {
   faFilter,
   faClock,
 } from '@fortawesome/free-solid-svg-icons';
-import axios from 'axios';
+import apiClient from '../../services/apiClient.js';
 import { generateTimeSlots, TIME_SLOT_CONFIGS } from '../../utils/timeUtils.js';
 
 import jsPDF from 'jspdf';
@@ -24,7 +24,7 @@ const Reports = () => {
   const [instructors, setInstructors] = useState([]);
   const [rooms, setRooms] = useState([]);
   const [selectedCourse, setSelectedCourse] = useState('bsit');
-  const [selectedYear, setSelectedYear] = useState('1st year');
+  const [selectedYear, setSelectedYear] = useState('1styear');
   const [selectedSection, setSelectedSection] = useState(null);
   const [reportType, setReportType] = useState('schedule'); // 'schedule'|'instructors'|'rooms'|'sections'
   const [loading, setLoading] = useState(false);
@@ -63,21 +63,31 @@ const Reports = () => {
     },
   ];
 
-  const yearLevels = [
-    { id: '1st year', label: '1st Year' },
-    { id: '2nd year', label: '2nd Year' },
-    { id: '3rd year', label: '3rd Year' },
-    { id: '4th year', label: '4th Year' },
-  ];
+  const yearLevels = useMemo(() => [
+    { id: '1styear', label: '1st Year', year: 1 },
+    { id: '2ndyear', label: '2nd Year', year: 2 },
+    { id: '3rdyear', label: '3rd Year', year: 3 },
+    { id: '4thyear', label: '4th Year', year: 4 },
+  ], []);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
+      // Convert year ID to numeric year value
+      const yearLevel = yearLevels.find(y => y.id === selectedYear);
+      const yearValue = yearLevel ? String(yearLevel.year) : selectedYear;
+      
+      console.log('📊 Reports: Fetching data for', { selectedCourse, selectedYear, yearValue });
+      
       const [sectionsRes, schedulesRes, instructorsRes] = await Promise.all([
-        axios.get(`http://localhost:5000/api/sections?course=${selectedCourse}&year=${selectedYear}`),
-        axios.get(`http://localhost:5000/api/schedule?course=${selectedCourse}&year=${selectedYear}`),
-        axios.get(`http://localhost:5000/api/instructors`),
+        apiClient.get(`/api/sections?course=${selectedCourse}&year=${yearValue}`),
+        apiClient.get(`/api/schedule?course=${selectedCourse}&year=${yearValue}`),
+        apiClient.getInstructors(),
       ]);
+
+      console.log('📊 Reports: Sections Response:', sectionsRes.data);
+      console.log('📊 Reports: Schedules Response:', schedulesRes.data);
+      console.log('📊 Reports: Instructors Response:', instructorsRes.data);
 
       const sortedSections = (Array.isArray(sectionsRes.data) ? sectionsRes.data : []).sort((a, b) =>
         a.name.localeCompare(b.name)
@@ -86,21 +96,23 @@ const Reports = () => {
       setSections(sortedSections);
       setSchedules(Array.isArray(schedulesRes.data) ? schedulesRes.data : []);
       setInstructors(Array.isArray(instructorsRes.data) ? instructorsRes.data : []);
+      
+      console.log('📊 Reports: Data set. Sections:', sortedSections.length, 'Schedules:', (Array.isArray(schedulesRes.data) ? schedulesRes.data : []).length);
     } catch (error) {
-      console.error('Error fetching data:', error);
+      console.error('📊 Reports: Error fetching data:', error);
     } finally {
       setLoading(false);
     }
-  }, [selectedCourse, selectedYear]);
+  }, [selectedCourse, selectedYear, yearLevels]);
 
   // Fetch rooms independently so room reports are not tied to selectedYear
   useEffect(() => {
     let mounted = true;
     const fetchRoomsOnly = async () => {
       try {
-        const res = await axios.get(`http://localhost:5000/api/rooms`);
+        const res = await apiClient.getRooms();
         if (!mounted) return;
-        // backend returns { rooms: [...] }
+        // backend returns plain array directly
         if (Array.isArray(res.data)) {
           setRooms(res.data);
         } else if (Array.isArray(res.data.rooms)) {
@@ -143,7 +155,9 @@ const Reports = () => {
   };
 
   const getSectionSchedules = (sectionName) => {
-    return schedules.filter((sched) => sched.section === sectionName);
+    const filtered = schedules.filter((sched) => sched.section === sectionName);
+    console.log(`📊 Reports: getSectionSchedules('${sectionName}') - Searching in ${schedules.length} schedules. Sections: ${schedules.map(s => s.section).join(', ')}. Found: ${filtered.length}`);
+    return filtered;
   };
 
   // PDF Export: Professional table format schedule report

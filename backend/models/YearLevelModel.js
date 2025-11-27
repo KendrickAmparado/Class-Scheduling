@@ -8,4 +8,5 @@ const YearLevelSchema = new mongoose.Schema({
   collection: 'year-levels'  // explicitly match the collection name in MongoDB
 });
 
-export default mongoose.model('YearLevel', YearLevelSchema);
+const YearLevel = mongoose.models.YearLevel || mongoose.model('YearLevel', YearLevelSchema);
+export default YearLevel;

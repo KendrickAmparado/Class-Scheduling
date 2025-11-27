@@ -137,23 +137,27 @@ mongoose
       res.json({ success: true, message: 'Triggered test rejections. Check Sentry.' });
     });
 
-    // ============== MVCC ROUTES (Concurrency Control) ==============
-    app.use('/api/schedule/mvcc', mvccScheduleRoutes);
-    app.use('/api/section/mvcc', mvccSectionRoutes);
-    app.use('/api/room/mvcc', mvccRoomRoutes);
-    app.use('/api/instructor/mvcc', mvccInstructorRoutes);
-    
-    // ============== EXISTING ROUTES ==============
+    // ============== MVCC ROUTES (Concurrency Control) - DEFAULT ==============
+    // Mount MVCC-enabled routes as the primary endpoints so all write operations
+    // use optimistic locking, conflict detection and transaction logging by default.
+    app.use('/api/schedule', mvccScheduleRoutes);
+    app.use('/api/sections', mvccSectionRoutes);
+    app.use('/api/rooms', mvccRoomRoutes);
+    app.use('/api/instructors', mvccInstructorRoutes);
+
+    // ============== EXISTING (LEGACY) ROUTES ==============
+    // Keep the original non-MVCC routes available under /api/legacy/* for
+    // compatibility and gradual migration.
     app.use('/api/admin', adminRoutes);
     app.use('/api/admin', alertsRoutes);
     app.use('/api/instructor', instructorNotificationRoutes);
-    app.use('/api/schedule', scheduleRoutes);
+    app.use('/api/legacy/schedule', scheduleRoutes);
     app.use('/api/instructor', instructorAuthRoutes);
-    app.use('/api/instructors', instructorRoutes);
-    app.use('/api/rooms', roomRoutes);
+    app.use('/api/legacy/instructors', instructorRoutes);
+    app.use('/api/legacy/rooms', roomRoutes);
     app.use('/api/year-levels', yearLevelRoutes);
     app.use('/api/registration', registrationRoutes);
-    app.use('/api/sections', sectionRoutes);
+    app.use('/api/legacy/sections', sectionRoutes);
     app.use('/api/schedule-templates', scheduleTemplateRoutes);
     app.use('/api/password-reset', passwordResetRoutes);
     app.use('/api/public', publicRoutes);

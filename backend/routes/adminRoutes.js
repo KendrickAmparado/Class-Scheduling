@@ -4,6 +4,12 @@ import Room from '../models/Room.js';
 import Alert from '../models/Alert.js';
 import InstructorNotification from '../models/InstructorNotification.js';
 import bcrypt from 'bcryptjs';
+import archiver from 'archiver';
+import Schedule from '../models/Schedule.js';
+import Instructor from '../models/Instructor.js';
+import ScheduleTemplate from '../models/ScheduleTemplate.js';
+import Section from '../models/Section.js';
+import YearLevelModel from '../models/YearLevelModel.js';
 import { logActivity } from '../utils/activityLogger.js';
 
 const router = express.Router();
@@ -405,6 +411,106 @@ router.delete('/alerts', async (req, res) => {
     res.status(500).json({ 
       success: false, 
       message: 'Error deleting alerts' 
+    });
+  }
+});
+
+// GET /api/admin/backup - Download system data as ZIP
+router.get('/backup', async (req, res) => {
+  try {
+    // Backup authorization: require ADMIN_BACKUP_KEY header or query param
+    const adminKey = process.env.ADMIN_BACKUP_KEY;
+    if (adminKey) {
+      const providedKey = req.headers['x-admin-backup-key'] || req.query.key;
+      if (!providedKey || String(providedKey) !== String(adminKey)) {
+        return res.status(403).json({ success: false, message: 'Forbidden: invalid backup key' });
+      }
+    } else {
+      // If no admin key configured, only allow in development for convenience
+      if (process.env.NODE_ENV === 'production') {
+        return res.status(403).json({ success: false, message: 'Backup endpoint disabled. Configure ADMIN_BACKUP_KEY to enable.' });
+      }
+    }
+    // Fetch all collections
+    const [schedules, instructors, rooms, sections, templates, yearLevels, alerts, notifications] = await Promise.all([
+      Schedule.find({}).lean(),
+      Instructor.find({}).lean(),
+      Room.find({}).lean(),
+      Section.find({}).lean(),
+      ScheduleTemplate.find({}).lean(),
+      YearLevelModel.find({}).lean(),
+      Alert.find({}).lean(),
+      InstructorNotification.find({}).lean(),
+    ]);
+
+    // Create backup data object
+    const backupData = {
+      metadata: {
+        exportDate: new Date().toISOString(),
+        version: '1.0',
+        collections: {
+          schedules: schedules.length,
+          instructors: instructors.length,
+          rooms: rooms.length,
+          sections: sections.length,
+          templates: templates.length,
+          yearLevels: yearLevels.length,
+          alerts: alerts.length,
+          notifications: notifications.length,
+        },
+      },
+      data: {
+        schedules,
+        instructors,
+        rooms,
+        sections,
+        templates,
+        yearLevels,
+        alerts,
+        notifications,
+      },
+    };
+
+    // Set response headers for ZIP download
+    const timestamp = new Date().toISOString().split('T')[0];
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename=\"class-scheduling-backup-${timestamp}.zip\"`);
+
+    // Create archive
+    const archive = archiver('zip', { zlib: { level: 9 } });
+    
+    archive.on('error', (err) => {
+      console.error('Archive error:', err);
+      // Only send JSON error if headers not sent yet
+      if (!res.headersSent) res.status(500).json({ success: false, message: 'Error creating backup' });
+    });
+
+    // Pipe archive to response
+    archive.pipe(res);
+
+    // Add JSON file to archive
+    archive.append(JSON.stringify(backupData, null, 2), {
+      name: `backup-${timestamp}/data.json`,
+    });
+
+    // Add README with backup info
+    const readme = `# Class Scheduling System Backup\\n\\n## Export Date: ${new Date().toLocaleString()}\\n## Version: 1.0\\n\\n### Collections Included:\\n- Schedules: ${schedules.length}\\n- Instructors: ${instructors.length}\\n- Rooms: ${rooms.length}\\n- Sections: ${sections.length}\\n- Templates: ${templates.length}\\n- Year Levels: ${yearLevels.length}\\n- Alerts: ${alerts.length}\\n- Notifications: ${notifications.length}\\n\\n### How to Use:\\n1. Extract this ZIP file\\n2. The 'data.json' file contains all system data\\n3. Keep this backup in a safe location\\n4. For restoration, contact your system administrator\\n\\n### Backup Information:\\n- Format: JSON\\n- Compression: ZIP\\n- Total Items: ${schedules.length + instructors.length + rooms.length + sections.length + templates.length + yearLevels.length + alerts.length + notifications.length}\\n`;
+
+    archive.append(readme, {
+      name: `backup-${timestamp}/README.md`,
+    });
+
+    // Finalize archive
+    await archive.finalize();
+
+    // Log the backup action
+    await logActivity('BACKUP', 'DATA_EXPORT', `System backup created with ${schedules.length + instructors.length + rooms.length} items`, 'admin');
+
+  } catch (error) {
+    console.error('❌ Error creating backup:', error);
+    if (!res.headersSent) res.status(500).json({ 
+      success: false, 
+      message: 'Error creating backup' 
     });
   }
 });

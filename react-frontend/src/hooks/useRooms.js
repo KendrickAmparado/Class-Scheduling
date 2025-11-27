@@ -30,6 +30,23 @@ export const useRooms = (filters = {}) => {
   });
 };
 
+export const useAvailableRooms = (filters = {}) => {
+  return useQuery({
+    queryKey: ['rooms', 'available', filters],
+    queryFn: async () => {
+      const response = await apiClient.getAvailableRooms(filters);
+      return response.data;
+    },
+    staleTime: 1 * 60 * 1000, // 1 minute
+    select: (data) => {
+      if (Array.isArray(data)) return data;
+      if (data?.rooms && Array.isArray(data.rooms)) return data.rooms;
+      if (data?.data && Array.isArray(data.data)) return data.data;
+      return [];
+    },
+  });
+};
+
 export const useRoom = (id) => {
   return useQuery({
     queryKey: roomKeys.detail(id),

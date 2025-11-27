@@ -301,6 +301,63 @@ export async function createScheduleWithValidation(
   return newSchedule;
 }
 
+/**
+ * Fetch a single document under MVCC snapshot isolation when supported.
+ * Attempts to start a session + transaction with readConcern: 'snapshot'
+ * and reads the document inside the transaction so the read sees a
+ * single, consistent committed version. If the server does not support
+ * snapshot reads or the transaction fails, falls back to a majority read.
+ *
+ * @param {Object} model - Mongoose model
+ * @param {String} id - Document id to fetch
+ * @returns {Object|null} - The document (lean) or null if not found
+ */
+export async function fetchSnapshotDocument(model, id) {
+  // Lazy require mongoose to avoid circular imports
+  let mongoose;
+  try {
+    mongoose = await import('mongoose');
+  } catch (err) {
+    mongoose = require('mongoose');
+  }
+
+  const session = await mongoose.startSession();
+  try {
+    // Try to start a transaction with snapshot readConcern (Atlas / replica sets)
+    await session.startTransaction({ readConcern: { level: 'snapshot' } });
+
+    const doc = await model.findById(id).session(session).lean();
+
+    // Commit transaction (no writes, but commits the read snapshot)
+    await session.commitTransaction();
+    return doc;
+  } catch (err) {
+    // If snapshot transactions not supported or any error occurs,
+    // abort and fall back to a majority read to get a stable committed version.
+    try {
+      await session.abortTransaction();
+    } catch (e) {
+      // ignore
+    }
+
+    try {
+      // Use collection-level read with majority readConcern if possible
+      // Mongoose Query API supports setOptions for readConcern on the driver
+      const query = model.findById(id).lean();
+      if (typeof query.setOptions === 'function') {
+        query.setOptions({ readConcern: { level: 'majority' } });
+      }
+      const doc = await query.exec();
+      return doc;
+    } catch (fallbackErr) {
+      // Last resort: simple findById
+      return await model.findById(id).lean();
+    }
+  } finally {
+    session.endSession();
+  }
+}
+
 export default {
   checkVersionConflict,
   updateWithVersionControl,
@@ -311,4 +368,5 @@ export default {
   updateInstructorWithConflictResolution,
   batchUpdateWithVersionControl,
   createScheduleWithValidation
+  ,fetchSnapshotDocument
 };

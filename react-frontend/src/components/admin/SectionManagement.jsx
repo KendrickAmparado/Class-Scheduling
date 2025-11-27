@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Sidebar from '../common/Sidebar.jsx';
 import Header from '../common/Header.jsx';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -11,7 +11,7 @@ import {
   faUsers,
   faExclamationCircle
 } from '@fortawesome/free-solid-svg-icons';
-import axios from 'axios';
+import apiClient from '../../services/apiClient.js';
 import { useToast } from '../common/ToastProvider.jsx';
 import ConfirmationDialog from '../common/ConfirmationDialog.jsx';
 
@@ -53,12 +53,12 @@ const SectionManagement = () => {
     }
   ];
 
-  const yearLevels = [
-    { id: '1st year', label: '1st Year' },
-    { id: '2nd year', label: '2nd Year' },
-    { id: '3rd year', label: '3rd Year' },
-    { id: '4th year', label: '4th Year' }
-  ];
+  const yearLevels = useMemo(() => [
+    { id: '1styear', label: '1st Year', year: 1 },
+    { id: '2ndyear', label: '2nd Year', year: 2 },
+    { id: '3rdyear', label: '3rd Year', year: 3 },
+    { id: '4thyear', label: '4th Year', year: 4 }
+  ], []);
 
 
   const fetchSections = useCallback(async () => {
@@ -71,9 +71,9 @@ const SectionManagement = () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await axios.get(
-        `http://localhost:5000/api/sections?course=${selectedCourse}&year=${selectedYear}`
-      );
+      const yearLevel = yearLevels.find(y => y.id === selectedYear);
+      const yearValue = yearLevel ? String(yearLevel.year) : selectedYear;
+      const response = await apiClient.get(`/api/sections?course=${selectedCourse}&year=${yearValue}`);
       if (Array.isArray(response.data)) {
         const sortedSections = response.data.sort((a, b) => 
           a.name.localeCompare(b.name)
@@ -84,7 +84,7 @@ const SectionManagement = () => {
         setSections([]);
       }
       setLoadingArchived(true);
-      const archivedRes = await axios.get(`http://localhost:5000/api/sections/archived/list?course=${selectedCourse}&year=${selectedYear}`);
+      const archivedRes = await apiClient.get(`/api/sections/archived/list?course=${selectedCourse}&year=${yearValue}`);
       setArchivedSections(Array.isArray(archivedRes.data) ? archivedRes.data : []);
       setLoadingArchived(false);
     } catch (err) {
@@ -95,7 +95,7 @@ const SectionManagement = () => {
     } finally {
       setLoading(false);
     }
-  }, [selectedCourse, selectedYear]);
+  }, [selectedCourse, selectedYear, yearLevels]);
 
   useEffect(() => {
     fetchSections();
@@ -113,9 +113,11 @@ const SectionManagement = () => {
     }
     setAddingSection(true);
     try {
-      const response = await axios.post('http://localhost:5000/api/sections/create', {
+      const yearLevel = yearLevels.find(y => y.id === selectedYear);
+      const yearValue = yearLevel ? String(yearLevel.year) : selectedYear;
+      const response = await apiClient.post('/api/sections/create', {
         course: selectedCourse,
-        year: selectedYear,
+        year: yearValue,
         name: newSectionName.trim(),
       });
       if (response.data.success) {
@@ -141,7 +143,7 @@ const SectionManagement = () => {
       message: `Are you sure you want to permanently delete section "${section.name}" and all its associated schedules? This cannot be undone.`,
       onConfirm: async () => {
         try {
-          await axios.delete(`http://localhost:5000/api/sections/${section._id}/permanent`);
+          await apiClient.delete(`/api/sections/${section._id}/permanent`);
           showToast('Section deleted permanently', 'success');
           fetchSections();
           setArchivedSections(archivedSections.filter(s => s._id !== section._id));
@@ -154,8 +156,8 @@ const SectionManagement = () => {
   };
 
   const handleRestoreSection = async (section) => {
-    try {
-      await axios.patch(`http://localhost:5000/api/sections/${section._id}/restore`);
+      try {
+        await apiClient.patch(`/api/sections/${section._id}/restore`);
       showToast('Section restored successfully', 'success');
       fetchSections();
       setArchivedSections(archivedSections.filter(s => s._id !== section._id));
@@ -178,7 +180,9 @@ const SectionManagement = () => {
   const fetchArchivedSections = async () => {
     setLoadingArchived(true);
     try {
-      const res = await axios.get(`http://localhost:5000/api/sections/archived/list?course=${selectedCourse}&year=${selectedYear}`);
+      const yearLevel = yearLevels.find(y => y.id === selectedYear);
+      const yearValue = yearLevel ? String(yearLevel.year) : selectedYear;
+      const res = await apiClient.get(`/api/sections/archived/list?course=${selectedCourse}&year=${yearValue}`);
       setArchivedSections(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error('Error fetching archived sections', err);
@@ -196,7 +200,7 @@ const SectionManagement = () => {
       message: `Are you sure you want to archive section "${section.name}"? You can restore it later from the archived list.`,
       onConfirm: async () => {
         try {
-          await axios.patch(`http://localhost:5000/api/sections/${section._id}/archive`);
+          await apiClient.patch(`/api/sections/${section._id}/archive`);
           showToast('Section archived successfully', 'success');
           fetchSections();
         } catch {

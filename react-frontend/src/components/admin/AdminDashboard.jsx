@@ -1,16 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from '../common/Sidebar.jsx';
 import Header from '../common/Header.jsx';
-import axios from 'axios';
+import apiClient from '../../services/apiClient.js';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
-  faClipboardList,
-  faCheckCircle,
-  faTimesCircle,
-  faExclamationTriangle,
-  faCalendarPlus,
-  faTrash,
-  faUserPlus,
   faLayerGroup,
   faChalkboardTeacher,
   faCalendarAlt,
@@ -34,48 +27,65 @@ const AdminDashboard = () => {
   useEffect(() => {
     const fetchSummaryStats = async () => {
       try {
-        // Fetch all data in parallel
-        const [instructorsRes, schedulesRes, roomsRes] = await Promise.all([
-          axios.get('http://localhost:5000/api/instructors'),
-          axios.get('http://localhost:5000/api/schedule/all'),
-          axios.get('http://localhost:5000/api/rooms')
+        // Fetch all data in parallel using apiClient
+        const [instructorsRes, schedulesRes, roomsRes, sectionsRes] = await Promise.all([
+          apiClient.get('/api/instructors'),
+          apiClient.get('/api/schedule'),
+          apiClient.get('/api/rooms'),
+          apiClient.get('/api/sections') // Fetch sections directly for accurate count
         ]);
         
         console.log('Instructors Response:', instructorsRes.data);
         console.log('Schedules Response:', schedulesRes.data);
         console.log('Rooms Response:', roomsRes.data);
+        console.log('Sections Response:', sectionsRes.data);
+        
+        // Handle both plain array and wrapper responses
+        const instructorsArray = Array.isArray(instructorsRes.data) ? instructorsRes.data : instructorsRes.data?.instructors || [];
+        const schedulesArray = Array.isArray(schedulesRes.data) ? schedulesRes.data : schedulesRes.data?.schedules || [];
+        const roomsArray = Array.isArray(roomsRes.data) ? roomsRes.data : roomsRes.data?.rooms || [];
+        const sectionsArray = Array.isArray(sectionsRes.data) ? sectionsRes.data : sectionsRes.data?.sections || [];
         
         // Calculate stats
-        let totalSections = 0;
         const scheduleByYearMap = {};
         const instructorWorkloadMap = {};
         const roomUsageMap = {};
 
-        if (Array.isArray(schedulesRes.data)) {
-          schedulesRes.data.forEach(schedule => {
-            // Count unique sections
-            if (schedule.section && schedule.course && schedule.year) {
-              totalSections = new Set([...new Array(totalSections).keys()].concat([`${schedule.course}-${schedule.year}-${schedule.section}`])).size;
+        if (Array.isArray(schedulesArray)) {
+          schedulesArray.forEach(schedule => {
+            // Count schedules by year (only active/non-archived)
+            if (!schedule.archived) {
+              const year = schedule.year || 'Unknown';
+              scheduleByYearMap[year] = (scheduleByYearMap[year] || 0) + 1;
+              
+              // Count instructor workload
+              const instructor = schedule.instructor || 'Unknown';
+              instructorWorkloadMap[instructor] = (instructorWorkloadMap[instructor] || 0) + 1;
+              
+              // Count room usage
+              const room = schedule.room || 'Unknown';
+              roomUsageMap[room] = (roomUsageMap[room] || 0) + 1;
             }
-            
-            // Count schedules by year
-            const year = schedule.year || 'Unknown';
-            scheduleByYearMap[year] = (scheduleByYearMap[year] || 0) + 1;
-            
-            // Count instructor workload
-            const instructor = schedule.instructor || 'Unknown';
-            instructorWorkloadMap[instructor] = (instructorWorkloadMap[instructor] || 0) + 1;
-            
-            // Count room usage
-            const room = schedule.room || 'Unknown';
-            roomUsageMap[room] = (roomUsageMap[room] || 0) + 1;
           });
         }
 
+        // Use directly fetched sections for accurate count (not derived from schedules)
+        const totalSections = Array.isArray(sectionsArray) ? sectionsArray.length : 0;
+
+        // Helper function to convert year number to ordinal (1st, 2nd, 3rd, 4th)
+        const getOrdinalYear = (year) => {
+          const num = parseInt(year);
+          if (isNaN(num)) return `Year ${year}`;
+          const suffixes = ['th', 'st', 'nd', 'rd'];
+          const suffix = (num % 100 >= 11 && num % 100 <= 13) ? 'th' : suffixes[num % 10] || 'th';
+          return `${num}${suffix} Year`;
+        };
+
         // Convert maps to chart data
         const scheduleByYearData = Object.entries(scheduleByYearMap)
-          .map(([year, count]) => ({ year: `Year ${year}`, schedules: count }))
-          .sort((a, b) => a.year.localeCompare(b.year));
+          .map(([year, count]) => ({ year: getOrdinalYear(year), yearNum: parseInt(year) || 999, schedules: count }))
+          .sort((a, b) => a.yearNum - b.yearNum)
+          .map(({ year, schedules }) => ({ year, schedules }));
 
         const instructorWorkloadData = Object.entries(instructorWorkloadMap)
           .map(([instructor, count]) => ({ name: instructor, classes: count }))
@@ -91,9 +101,9 @@ const AdminDashboard = () => {
         setRoomUsage(roomUsageData);
         
         const stats = {
-          totalInstructors: Array.isArray(instructorsRes.data) ? instructorsRes.data.length : 0,
-          totalSchedules: Array.isArray(schedulesRes.data) ? schedulesRes.data.length : 0,
-          totalRooms: roomsRes.data.rooms?.length || 0,
+          totalInstructors: instructorsArray.length,
+          totalSchedules: schedulesArray.length,
+          totalRooms: roomsArray.length,
           totalSections: totalSections
         };
         

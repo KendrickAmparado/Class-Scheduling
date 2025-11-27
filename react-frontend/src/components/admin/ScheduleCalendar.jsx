@@ -12,7 +12,7 @@ import {
   faMinusCircle,
   faArrowLeft,
 } from '@fortawesome/free-solid-svg-icons';
-import axios from 'axios';
+import apiClient from '../../services/apiClient.js';
 import Sidebar from '../common/Sidebar.jsx';
 import Header from '../common/Header.jsx';
 import { useToast } from '../common/ToastProvider.jsx';
@@ -25,7 +25,9 @@ const ScheduleCalendar = () => {
   const { showToast } = useToast();
 
   const formatYearParam = (yearParam) => {
-    return yearParam.replace(/(\d+)(st|nd|rd|th)?year/i, '$1st year').toLowerCase();
+    // Extract just the numeric part (1, 2, 3, 4) from year parameter like "1styear" or "1st year"
+    const match = yearParam.match(/(\d+)/);
+    return match ? String(match[1]) : yearParam;
   };
 
   const normalizedYear = formatYearParam(year);
@@ -74,12 +76,8 @@ const ScheduleCalendar = () => {
     setLoadingSchedules(true);
     try {
       const [sectionsRes, schedulesRes] = await Promise.all([
-        axios.get(`http://localhost:5000/api/sections?course=${course}&year=${normalizedYear}`, {
-          headers: { 'Cache-Control': 'no-cache' }
-        }),
-        axios.get(`http://localhost:5000/api/schedule?course=${course}&year=${normalizedYear}`, {
-          headers: { 'Cache-Control': 'no-cache' }
-        })
+        apiClient.get(`/api/sections?course=${course}&year=${normalizedYear}`, { headers: { 'Cache-Control': 'no-cache' } }),
+        apiClient.get(`/api/schedule?course=${course}&year=${normalizedYear}`, { headers: { 'Cache-Control': 'no-cache' } })
       ]);
 
       const sortedSections = (Array.isArray(sectionsRes.data) ? sectionsRes.data : []).sort((a, b) =>
@@ -96,6 +94,8 @@ const ScheduleCalendar = () => {
   }, [course, normalizedYear, showToast]);
 
   useEffect(() => {
+    // Reset selectedSection when course or year changes to prevent stale section references
+    setSelectedSection(null);
     fetchAllData();
   }, [fetchAllData]);
 
@@ -143,7 +143,7 @@ const ScheduleCalendar = () => {
       message: `Are you sure you want to remove section "${sectionName}"? This action cannot be undone.`,
       onConfirm: async () => {
         try {
-          const response = await axios.delete(`http://localhost:5000/api/sections/${sectionId}`);
+          const response = await apiClient.delete(`/api/sections/${sectionId}`);
           
           if (response.data.success) {
             showToast('Section removed successfully.', 'success');
@@ -184,7 +184,7 @@ const ScheduleCalendar = () => {
     setAddingSection(true);
   
     try {
-      const res = await axios.post('http://localhost:5000/api/sections/create', {
+      const res = await apiClient.post('/api/sections/create', {
         course,
         year: normalizedYear,
         name: trimmedName,
