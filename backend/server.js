@@ -123,6 +123,20 @@ mongoose
     startWeatherScheduler(io);
 
     // Route Mounting
+    // ============== DEBUG ROUTES ==============
+    // Temporary endpoints to test Sentry integration
+    app.get('/api/debug/sentry/throw', (req, res) => {
+      throw new Error('Sentry test error - thrown');
+    });
+
+    app.get('/api/debug/sentry/reject', (req, res) => {
+      // Trigger an unhandled rejection
+      Promise.reject(new Error('Sentry test rejection - unhandled')).catch(() => {});
+      // Also create a rejection that is not caught to ensure process handler catches it
+      setTimeout(() => { Promise.reject(new Error('Sentry delayed test rejection')); }, 0);
+      res.json({ success: true, message: 'Triggered test rejections. Check Sentry.' });
+    });
+
     // ============== MVCC ROUTES (Concurrency Control) ==============
     app.use('/api/schedule/mvcc', mvccScheduleRoutes);
     app.use('/api/section/mvcc', mvccSectionRoutes);
