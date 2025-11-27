@@ -1,7 +1,7 @@
 import InstructorSidebar from '../common/InstructorSidebar.jsx';
 import InstructorHeader from '../common/InstructorHeader.jsx';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faUser, faCalendarAlt, faClock, faMapMarkerAlt, faFilter, faCalendarWeek, faSync, faExternalLinkAlt, faCheckCircle, faExclamationCircle, faChevronDown, faChevronUp } from '@fortawesome/free-solid-svg-icons';
+import { faUser, faCalendarAlt, faClock, faMapMarkerAlt, faFilter, faCalendarWeek, faSync, faExternalLinkAlt, faCheckCircle, faExclamationCircle, faChevronDown, faChevronUp, faListCheck, faPlus, faTrash } from '@fortawesome/free-solid-svg-icons';
 import '../../styles/InstructorDashboard.css';
 import { AuthContext } from '../../context/AuthContext.jsx';
 import React, { useState, useEffect, useContext, useMemo } from 'react';
@@ -29,6 +29,45 @@ const InstructorDashboard = () => {
   const [loadingCalendar, setLoadingCalendar] = useState(false);
   const [weeklyWorkload, setWeeklyWorkload] = useState({ classes: 0, totalMinutes: 0, averageDailyMinutes: 0, daysWithClasses: 0 });
   const [calendarMinimized, setCalendarMinimized] = useState(true);
+  
+  // To-Do List State
+  const [todos, setTodos] = useState([]);
+  const [newTodo, setNewTodo] = useState('');
+
+  // Load todos from localStorage on mount
+  useEffect(() => {
+    const savedTodos = localStorage.getItem(`todos_${userEmail}`);
+    if (savedTodos) {
+      setTodos(JSON.parse(savedTodos));
+    }
+  }, [userEmail]);
+
+  // Save todos to localStorage whenever they change
+  useEffect(() => {
+    if (userEmail && todos.length >= 0) {
+      localStorage.setItem(`todos_${userEmail}`, JSON.stringify(todos));
+    }
+  }, [todos, userEmail]);
+
+  // Add new todo
+  const handleAddTodo = () => {
+    if (newTodo.trim()) {
+      setTodos([...todos, { id: Date.now(), text: newTodo.trim(), completed: false }]);
+      setNewTodo('');
+    }
+  };
+
+  // Toggle todo completion
+  const handleToggleTodo = (id) => {
+    setTodos(todos.map(todo => 
+      todo.id === id ? { ...todo, completed: !todo.completed } : todo
+    ));
+  };
+
+  // Delete todo
+  const handleDeleteTodo = (id) => {
+    setTodos(todos.filter(todo => todo.id !== id));
+  };
 
   // Filter schedules based on selected day
   const filteredSchedules = 'all' 
@@ -450,6 +489,170 @@ const InstructorDashboard = () => {
                 <FontAwesomeIcon icon={faFilter} />
               </div>
             </article>
+          </div>
+
+          {/* To-Do List Section */}
+          <div style={{ 
+            background: 'white', 
+            borderRadius: '16px', 
+            boxShadow: '0 4px 20px rgba(0,0,0,0.08)', 
+            padding: '24px',
+            marginBottom: '30px',
+            border: '2px solid #e5e7eb'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+              <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '10px', color: '#1e293b', fontSize: '20px', fontWeight: '700' }}>
+                <FontAwesomeIcon icon={faListCheck} style={{ color: '#f97316' }} />
+                My To-Do List
+              </h3>
+              <span style={{ 
+                background: 'linear-gradient(135deg, #0f2c63 0%, #f97316 100%)', 
+                color: 'white', 
+                padding: '4px 12px', 
+                borderRadius: '20px', 
+                fontSize: '12px', 
+                fontWeight: '600' 
+              }}>
+                {todos.filter(t => !t.completed).length} pending
+              </span>
+            </div>
+
+            {/* Add Todo Input */}
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+              <input
+                type="text"
+                value={newTodo}
+                onChange={(e) => setNewTodo(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleAddTodo()}
+                placeholder="Add a new task..."
+                style={{
+                  flex: 1,
+                  padding: '12px 16px',
+                  border: '2px solid #e5e7eb',
+                  borderRadius: '10px',
+                  fontSize: '14px',
+                  outline: 'none',
+                  transition: 'border-color 0.2s',
+                }}
+                onFocus={(e) => e.target.style.borderColor = '#f97316'}
+                onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
+              />
+              <button
+                onClick={handleAddTodo}
+                style={{
+                  background: 'linear-gradient(135deg, #0f2c63 0%, #f97316 100%)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '10px',
+                  padding: '12px 24px',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  transition: 'transform 0.2s, box-shadow 0.2s',
+                  boxShadow: '0 2px 10px rgba(15, 44, 99, 0.2)'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = '0 4px 16px rgba(15, 44, 99, 0.3)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '0 2px 10px rgba(15, 44, 99, 0.2)';
+                }}
+              >
+                <FontAwesomeIcon icon={faPlus} />
+                Add Task
+              </button>
+            </div>
+
+            {/* Todo List */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {todos.length === 0 ? (
+                <div style={{ 
+                  textAlign: 'center', 
+                  padding: '40px 20px', 
+                  color: '#94a3b8',
+                  fontSize: '14px'
+                }}>
+                  <FontAwesomeIcon icon={faListCheck} style={{ fontSize: '48px', marginBottom: '12px', opacity: 0.3 }} />
+                  <p style={{ margin: 0 }}>No tasks yet. Add your first task above!</p>
+                </div>
+              ) : (
+                todos.map((todo) => (
+                  <div
+                    key={todo.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      padding: '14px 16px',
+                      background: todo.completed ? '#f8fafc' : 'white',
+                      border: `2px solid ${todo.completed ? '#e2e8f0' : '#e5e7eb'}`,
+                      borderRadius: '10px',
+                      transition: 'all 0.2s',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!todo.completed) {
+                        e.currentTarget.style.borderColor = '#f97316';
+                        e.currentTarget.style.boxShadow = '0 2px 10px rgba(249, 115, 22, 0.1)';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = todo.completed ? '#e2e8f0' : '#e5e7eb';
+                      e.currentTarget.style.boxShadow = 'none';
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={todo.completed}
+                      onChange={() => handleToggleTodo(todo.id)}
+                      style={{
+                        width: '20px',
+                        height: '20px',
+                        cursor: 'pointer',
+                        accentColor: '#f97316'
+                      }}
+                    />
+                    <span
+                      style={{
+                        flex: 1,
+                        fontSize: '14px',
+                        color: todo.completed ? '#94a3b8' : '#1e293b',
+                        textDecoration: todo.completed ? 'line-through' : 'none',
+                        fontWeight: todo.completed ? '400' : '500'
+                      }}
+                    >
+                      {todo.text}
+                    </span>
+                    <button
+                      onClick={() => handleDeleteTodo(todo.id)}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: '#ef4444',
+                        cursor: 'pointer',
+                        padding: '6px 10px',
+                        borderRadius: '6px',
+                        transition: 'background 0.2s',
+                        fontSize: '14px'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = '#fee2e2';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'transparent';
+                      }}
+                      title="Delete task"
+                    >
+                      <FontAwesomeIcon icon={faTrash} />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
 
           

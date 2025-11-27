@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { FaArrowLeft, FaInfoCircle, FaUserCircle, FaDownload, FaCheckCircle, FaClock } from 'react-icons/fa';
+import { FaInfoCircle, FaUserCircle, FaDownload, FaCheckCircle, FaClock } from 'react-icons/fa';
 import html2canvas from 'html2canvas';
 import { Bar, Pie } from 'react-chartjs-2';
 import 'chart.js/auto';
@@ -145,37 +145,6 @@ const InstructorWorkload = () => {
       margin: 0
     }}>
       <div style={{ maxWidth: 1400, margin: '0 auto', padding: '2rem' }}>
-        <button
-          onClick={() => navigate('/admin/faculty-management')}
-          style={{
-            background: 'linear-gradient(135deg, #2563eb 0%, #1e40af 100%)',
-            color: '#fff',
-            border: 'none',
-            borderRadius: 12,
-            padding: '12px 24px',
-            fontWeight: 600,
-            fontSize: 15,
-            marginBottom: 24,
-            boxShadow: '0 4px 12px rgba(37,99,235,0.25)',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            transition: 'all 0.3s ease',
-            outline: 'none',
-          }}
-          onMouseOver={e => {
-            e.currentTarget.style.transform = 'translateY(-2px)';
-            e.currentTarget.style.boxShadow = '0 6px 16px rgba(37,99,235,0.35)';
-          }}
-          onMouseOut={e => {
-            e.currentTarget.style.transform = 'translateY(0)';
-            e.currentTarget.style.boxShadow = '0 4px 12px rgba(37,99,235,0.25)';
-          }}
-        >
-          <FaArrowLeft style={{ fontSize: 18, marginRight: 6 }} />
-          Back to Faculty Management
-        </button>
         <div ref={cardRef} style={{
           background: 'rgba(255,255,255,0.95)',
           borderRadius: 20,

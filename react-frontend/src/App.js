@@ -35,6 +35,7 @@ const InstructorDashboard = lazy(() => import('./components/instructor/Instructo
 const InstructorNotifications = lazy(() => import('./components/instructor/InstructorNotifications.jsx'));
 const InstructorReports = lazy(() => import('./components/instructor/InstructorReports.jsx'));
 const InstructorSettings = lazy(() => import('./components/instructor/InstructorSettings.jsx'));
+const InstructorWorkloadView = lazy(() => import('./components/instructor/InstructorWorkloadView.jsx'));
 
 
 
@@ -76,6 +77,7 @@ function App() {
                     <Route path="/instructor/dashboard" element={<InstructorDashboard />} />
                     <Route path="/instructor/notifications" element={<InstructorNotifications />} />
                     <Route path="/instructor/reports" element={<InstructorReports />} />
+                    <Route path="/instructor/workload" element={<InstructorWorkloadView />} />
                     <Route path="/instructor/settings" element={<InstructorSettings />} />
                   </Routes>
                 </Suspense>

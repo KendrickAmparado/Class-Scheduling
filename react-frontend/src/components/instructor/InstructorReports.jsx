@@ -4,7 +4,7 @@ import InstructorHeader from "../common/InstructorHeader.jsx";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faDownload, faFileAlt, faCalendarAlt, faClock, faUser,
-  faSearch, faDoorOpen, faGraduationCap, faTable,
+  faSearch, faDoorOpen, faGraduationCap, faTable, faChartBar,
 } from "@fortawesome/free-solid-svg-icons";
 import { AuthContext } from "../../context/AuthContext.jsx";
 import {
@@ -705,6 +705,10 @@ const InstructorReports = () => {
             <button onClick={exportToExcel} style={{ padding: '10px 17px', borderRadius: 10, fontWeight: 700, border: 'none', background: 'linear-gradient(100deg,#22d3ee,#0e7490)', color: 'white', cursor: 'pointer', fontSize: 14, display: 'flex', gap: 8, alignItems: 'center', boxShadow: '0 2px 10px rgba(34, 211, 238, 0.3)' }}>
               <FontAwesomeIcon icon={faDownload}/>
               Excel
+          </button>
+            <button onClick={() => window.open('/instructor/workload', '_blank')} style={{ padding: '10px 17px', borderRadius: 10, fontWeight: 700, border: 'none', background: 'linear-gradient(100deg,#8b5cf6,#6d28d9)', color: 'white', cursor: 'pointer', fontSize: 14, display: 'flex', gap: 8, alignItems: 'center', boxShadow: '0 2px 10px rgba(139, 92, 246, 0.3)' }}>
+              <FontAwesomeIcon icon={faChartBar}/>
+              Workload
           </button>
             <button onClick={downloadReport} style={{ padding: '10px 19px', borderRadius: 10, fontWeight: 700, border: 'none', background: 'linear-gradient(100deg,#0f2c63,#1e40af)', color: 'white', cursor: 'pointer', fontSize: 14, display: 'flex', gap: 8, alignItems: 'center', boxShadow: '0 2px 10px #1e40af33' }}>
               <FontAwesomeIcon icon={faDownload}/>

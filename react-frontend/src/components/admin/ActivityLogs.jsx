@@ -337,37 +337,6 @@ const ActivityLogs = () => {
       <main className="main-content" style={{ flex: 1, padding: '1rem', overflowY: 'auto' }}>
         <Header title="Activity Logs" />
         <div className="dashboard-content" style={{ marginTop: '140px' }}>
-          {/* Back Button */}
-          <button
-            onClick={() => navigate('/admin/dashboard')}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '10px',
-              padding: '12px 20px',
-              background: 'rgba(255, 255, 255, 0.95)',
-              border: '2px solid #e5e7eb',
-              borderRadius: '12px',
-              color: '#374151',
-              fontWeight: '600',
-              cursor: 'pointer',
-              marginBottom: '20px',
-              fontSize: '14px',
-              transition: 'all 0.2s ease',
-            }}
-            onMouseOver={(e) => {
-              e.currentTarget.style.background = '#f9fafb';
-              e.currentTarget.style.borderColor = '#d1d5db';
-            }}
-            onMouseOut={(e) => {
-              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.95)';
-              e.currentTarget.style.borderColor = '#e5e7eb';
-            }}
-          >
-            <FontAwesomeIcon icon={faArrowLeft} />
-            <span>Back to Dashboard</span>
-          </button>
-
           {/* Header Section - WHITE TEXT */}
           <div style={{ marginBottom: '24px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '6px' }}>
