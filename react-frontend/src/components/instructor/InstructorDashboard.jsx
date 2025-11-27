@@ -326,44 +326,6 @@ const InstructorDashboard = () => {
     fetchCalendarEvents();
   }, [userEmail]);
 
-  // Fetch weather for Malaybalay City, Bukidnon
-  useEffect(() => {
-    const fetchWeather = async () => {
-      setLoadingWeather(true);
-      try {
-        const response = await fetch(`${apiBase}/api/weather/current?city=Malaybalay&countryCode=PH`);
-        if (response.ok) {
-          const data = await response.json();
-          if (data.success) {
-            setWeather(data.weather);
-            setWeatherAlert(data.alert);
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching weather:', error);
-      } finally {
-        setLoadingWeather(false);
-      }
-    };
-
-    const fetchForecast = async () => {
-      try {
-        const response = await fetch(`${apiBase}/api/weather/forecast?city=Malaybalay&countryCode=PH`);
-        if (response.ok) {
-          const data = await response.json();
-          if (data.success) {
-            setWeatherForecast(data.forecast);
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching weather forecast:', error);
-      }
-    };
-
-    fetchWeather();
-    fetchForecast();
-  }, [apiBase]);
-
   // Setup Socket.io for real-time room status notifications
   useEffect(() => {
     const socket = io('http://localhost:5000', { autoConnect: true });
