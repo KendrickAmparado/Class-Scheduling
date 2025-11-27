@@ -7,7 +7,7 @@ import { Server as SocketIOServer } from 'socket.io';
 
 // Initialize Sentry BEFORE anything else
 import * as Sentry from '@sentry/node';
-import { initSentry, isSentryReady } from './utils/sentry.js';
+import { initSentry, isSentryReady, flushSentry } from './utils/sentry.js';
 
 // Initialize Sentry
 const sentryInitialized = initSentry();
@@ -157,6 +157,22 @@ mongoose
       app.use(Sentry.Handlers.errorHandler());
     }
 
+    // Final Express error handler - capture to Sentry (if available) and respond
+    app.use((err, req, res, next) => {
+      try {
+        console.error('Unhandled route error:', err && (err.stack || err.message || err));
+        if (isSentryReady()) {
+          Sentry.captureException(err);
+        }
+      } catch (e) {
+        console.error('Error while reporting to Sentry:', e);
+      }
+
+      // If headers already sent, delegate to default handler
+      if (res.headersSent) return next(err);
+      res.status(err && err.status ? err.status : 500).json({ success: false, message: 'Internal server error' });
+    });
+
     // Existing health check, error handlers, socket handlers, etc.
 
     io.on('connection', (socket) => {
@@ -183,13 +199,45 @@ mongoose
     // Graceful shutdown handler remains unchanged
     process.on('SIGTERM', () => {
       console.log('⚠️ SIGTERM received: closing server');
-      server.close(() => {
-        console.log('✅ HTTP server closed');
-        mongoose.connection.close(false, () => {
-          console.log('✅ MongoDB connection closed');
-          process.exit(0);
+      // Flush Sentry events then close
+      (async () => {
+        if (isSentryReady()) await flushSentry(2000);
+        server.close(() => {
+          console.log('✅ HTTP server closed');
+          mongoose.connection.close(false, () => {
+            console.log('✅ MongoDB connection closed');
+            process.exit(0);
+          });
         });
-      });
+      })();
+    });
+
+    // Capture unhandled promise rejections and uncaught exceptions
+    process.on('unhandledRejection', async (reason) => {
+      console.error('Unhandled Rejection at:', reason);
+      try {
+        if (isSentryReady()) {
+          Sentry.captureException(reason);
+          await flushSentry(2000);
+        }
+      } catch (e) {
+        console.error('Error flushing Sentry on unhandledRejection:', e);
+      }
+    });
+
+    process.on('uncaughtException', async (err) => {
+      console.error('Uncaught Exception:', err);
+      try {
+        if (isSentryReady()) {
+          Sentry.captureException(err);
+          await flushSentry(2000);
+        }
+      } catch (e) {
+        console.error('Error flushing Sentry on uncaughtException:', e);
+      } finally {
+        // After flushing, exit to avoid undefined state
+        process.exit(1);
+      }
     });
 
   })

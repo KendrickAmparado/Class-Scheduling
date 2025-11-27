@@ -146,3 +146,17 @@ export const clearUser = () => {
 
 export default Sentry;
 
+/**
+ * Flush pending Sentry events (useful during shutdown)
+ * @param {number} timeoutMs
+ */
+export const flushSentry = async (timeoutMs = 2000) => {
+  try {
+    if (isSentryInitialized && Sentry && typeof Sentry.flush === 'function') {
+      await Sentry.flush(timeoutMs);
+    }
+  } catch (e) {
+    // ignore flush errors
+  }
+};
+
