@@ -32,16 +32,6 @@ const AdminDashboard = () => {
   const [roomUsage, setRoomUsage] = useState([]);
 
   useEffect(() => {
-    const fetchAlerts = async () => {
-      try {
-        const res = await axios.get('http://localhost:5000/api/admin/alerts');
-        // Limit to the 3 most recent alerts
-        setAlerts(res.data.alerts.slice(0, 3));
-      } catch (err) {
-        console.error('Failed to load alerts', err);
-      }
-    };
-
     const fetchSummaryStats = async () => {
       try {
         // Fetch all data in parallel
