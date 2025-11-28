@@ -7,6 +7,7 @@ import express from "express";
 import Schedule from "../models/Schedule.js";
 import Room from "../models/Room.js";
 import Section from "../models/Section.js";
+import InstructorNotification from "../models/InstructorNotification.js";
 import { withRetry, MVCCTransaction, detectChanges, createAuditLog } from "../middleware/mvccTransaction.js";
 import {
   detectScheduleConflict,
@@ -15,6 +16,47 @@ import {
 } from "../utils/mvccManager.js";
 
 const router = express.Router();
+
+/**
+ * Helper: Create notification for instructor
+ */
+async function createInstructorNotification(instructorEmail, title, message, link = null) {
+  try {
+    const notification = new InstructorNotification({
+      instructorEmail: instructorEmail.toLowerCase(),
+      title,
+      message,
+      link,
+      read: false
+    });
+    await notification.save();
+    return notification;
+  } catch (err) {
+    console.error('Error creating notification:', err);
+    return null;
+  }
+}
+
+/**
+ * Helper: Broadcast notification via Socket.IO
+ */
+function broadcastNotification(req, instructorEmail, notification) {
+  if (req.io && instructorEmail) {
+    setImmediate(() => {
+      req.io.emit(`notification-${instructorEmail}`, {
+        action: 'new-notification',
+        notification: notification,
+        timestamp: new Date()
+      });
+      // Also emit to global notifications channel
+      req.io.emit('notifications', {
+        instructorEmail: instructorEmail,
+        notification: notification,
+        timestamp: new Date()
+      });
+    });
+  }
+}
 
 /**
  * GET /api/schedule
@@ -126,6 +168,26 @@ router.post("/create-mvcc", async (req, res) => {
     
     transaction.addOperation(newSchedule._id, 'create', newSchedule.__v, newSchedule);
     const txnRecord = transaction.commit();
+
+    // Broadcast real-time update (non-blocking, don't wait for socket emission)
+    if (req.io) {
+      setImmediate(() => {
+        req.io.emit('schedule-created', {
+          action: 'created',
+          schedule: newSchedule,
+          timestamp: new Date(),
+          userId: req.userId || 'system'
+        });
+        // Also emit for specific instructor
+        if (newSchedule.instructorEmail) {
+          req.io.emit(`schedule-update-${newSchedule.instructorEmail}`, {
+            action: 'created',
+            schedule: newSchedule,
+            timestamp: new Date()
+          });
+        }
+      });
+    }
 
     res.status(201).json({
       success: true,
@@ -450,8 +512,56 @@ router.post('/create', async (req, res) => {
     const newSchedule = new Schedule({ course, year, section, subject, instructor, instructorEmail: instructorEmail?.toLowerCase(), day, time, room });
     await newSchedule.save();
 
+    // Google Calendar sync (best-effort)
+    try {
+      const { isGoogleCalendarConfigured, createCalendarEvent } = await import('../services/googleCalendarService.js');
+      if (isGoogleCalendarConfigured()) {
+        const eventId = await createCalendarEvent(newSchedule, instructorEmail?.toLowerCase());
+        if (eventId) {
+          newSchedule.googleCalendarEventId = eventId;
+          await newSchedule.save();
+          console.log(`✅ Schedule ${newSchedule._id} synced to Google Calendar: ${eventId}`);
+        }
+      }
+    } catch (calendarError) {
+      console.warn('⚠️ Failed to sync to Google Calendar (create):', calendarError.message);
+    }
+
     transaction.addOperation(newSchedule._id, 'create', newSchedule.__v, newSchedule);
     const txnRecord = transaction.commit();
+
+    // Create notification for instructor
+    if (instructorEmail) {
+      const notification = await createInstructorNotification(
+        instructorEmail,
+        '📅 New Schedule Created',
+        `Your ${subject} class has been scheduled for ${day} at ${time} in room ${room}`,
+        `/instructor/dashboard`
+      );
+      if (notification) {
+        broadcastNotification(req, instructorEmail, notification);
+      }
+    }
+
+    // Broadcast real-time creation (non-blocking)
+    if (req.io) {
+      setImmediate(() => {
+        req.io.emit('schedule-created', {
+          action: 'created',
+          schedule: newSchedule,
+          timestamp: new Date(),
+          userId: req.userId || 'system'
+        });
+        // Also emit for specific instructor
+        if (newSchedule.instructorEmail) {
+          req.io.emit(`schedule-update-${newSchedule.instructorEmail}`, {
+            action: 'created',
+            schedule: newSchedule,
+            timestamp: new Date()
+          });
+        }
+      });
+    }
 
     res.status(201).json({ success: true, message: 'Schedule created', schedule: newSchedule, transaction: txnRecord });
   } catch (error) {
@@ -479,8 +589,54 @@ router.put('/:id', async (req, res) => {
         return updated;
       }, 3, 100);
 
+      // Google Calendar sync (best-effort) - update existing event if present
+      try {
+        const { isGoogleCalendarConfigured, updateCalendarEvent } = await import('../services/googleCalendarService.js');
+        if (isGoogleCalendarConfigured() && updatedSchedule.googleCalendarEventId && instructorEmail) {
+          const success = await updateCalendarEvent(updatedSchedule.googleCalendarEventId, updatedSchedule, instructorEmail?.toLowerCase());
+          if (success) {
+            console.log(`✅ Schedule ${updatedSchedule._id} updated in Google Calendar`);
+          }
+        }
+      } catch (calendarError) {
+        console.warn('⚠️ Failed to sync to Google Calendar (update):', calendarError.message);
+      }
+
       transaction.addOperation(id, 'update', updatedSchedule.__v, updatedSchedule);
       const txnRecord = transaction.commit();
+
+      // Create notification for instructor about update
+      if (instructorEmail) {
+        const notification = await createInstructorNotification(
+          instructorEmail,
+          '✏️ Schedule Updated',
+          `Your ${subject} class schedule has been updated: ${day} at ${time} in room ${room}`,
+          `/instructor/dashboard`
+        );
+        if (notification) {
+          broadcastNotification(req, instructorEmail, notification);
+        }
+      }
+
+      // Broadcast real-time update (non-blocking)
+      if (req.io) {
+        setImmediate(() => {
+          req.io.emit('schedule-updated', {
+            action: 'updated',
+            schedule: updatedSchedule,
+            timestamp: new Date(),
+            userId: req.userId || 'system'
+          });
+          // Also emit for specific instructor
+          if (updatedSchedule.instructorEmail) {
+            req.io.emit(`schedule-update-${updatedSchedule.instructorEmail}`, {
+              action: 'updated',
+              schedule: updatedSchedule,
+              timestamp: new Date()
+            });
+          }
+        });
+      }
 
       res.json({ success: true, message: 'Schedule updated', schedule: updatedSchedule, transaction: txnRecord });
       return;
@@ -492,6 +648,39 @@ router.put('/:id', async (req, res) => {
     const fields = ['course','year','section','subject','instructor','instructorEmail','day','time','room'];
     fields.forEach(f => { if (req.body[f] !== undefined) schedule[f] = req.body[f]; });
     await schedule.save();
+
+    // Google Calendar sync (best-effort) for legacy update
+    try {
+      const { isGoogleCalendarConfigured, updateCalendarEvent } = await import('../services/googleCalendarService.js');
+      if (isGoogleCalendarConfigured() && schedule.googleCalendarEventId && schedule.instructorEmail) {
+        const success = await updateCalendarEvent(schedule.googleCalendarEventId, schedule, schedule.instructorEmail?.toLowerCase());
+        if (success) {
+          console.log(`✅ Schedule ${schedule._id} updated in Google Calendar (legacy)`);
+        }
+      }
+    } catch (calendarError) {
+      console.warn('⚠️ Failed to sync to Google Calendar (legacy update):', calendarError.message);
+    }
+
+    // Broadcast real-time update (non-blocking)
+    if (req.io) {
+      setImmediate(() => {
+        req.io.emit('schedule-updated', {
+          action: 'updated',
+          schedule: schedule,
+          timestamp: new Date(),
+          userId: req.userId || 'system'
+        });
+        // Also emit for specific instructor
+        if (schedule.instructorEmail) {
+          req.io.emit(`schedule-update-${schedule.instructorEmail}`, {
+            action: 'updated',
+            schedule: schedule,
+            timestamp: new Date()
+          });
+        }
+      });
+    }
 
     res.json({ success: true, message: 'Schedule updated (legacy)', schedule });
   } catch (error) {
@@ -537,11 +726,105 @@ router.delete('/:id', async (req, res) => {
     if (version !== undefined) {
       const deleted = await Schedule.findOneAndDelete({ _id: id, __v: version });
       if (!deleted) return res.status(409).json({ success: false, message: 'Version conflict or document not found', code: 'VERSION_CONFLICT' });
+      
+      // Google Calendar delete sync (best-effort)
+      try {
+        if (deleted.googleCalendarEventId && deleted.instructorEmail) {
+          const { deleteCalendarEvent } = await import('../services/googleCalendarService.js');
+          await deleteCalendarEvent(deleted.googleCalendarEventId, deleted.instructorEmail);
+          console.log(`✅ Schedule ${deleted._id} deleted from Google Calendar`);
+        }
+      } catch (calendarError) {
+        console.warn('⚠️ Failed to delete from Google Calendar:', calendarError.message);
+      }
+      
+      // Create and broadcast deletion notification
+      if (deleted.instructorEmail) {
+        const deletionMessage = `🗑️ Schedule Removed\n📚 Course: ${deleted.course}\n📅 Day: ${deleted.day}\n⏰ Time: ${deleted.startTime} - ${deleted.endTime}\n🏛️ Room: ${deleted.room}`;
+        const notification = await createInstructorNotification(
+          deleted.instructorEmail,
+          '🗑️ Schedule Removed',
+          deletionMessage,
+          null
+        );
+        if (notification) {
+          broadcastNotification(req, deleted.instructorEmail, notification);
+        }
+      }
+      
+      // Broadcast real-time update (non-blocking)
+      if (req.io) {
+        setImmediate(() => {
+          req.io.emit('schedule-deleted', {
+            action: 'deleted',
+            scheduleId: deleted._id,
+            schedule: deleted,
+            timestamp: new Date(),
+            userId: req.userId || 'system'
+          });
+          // Also emit for specific instructor
+          if (deleted.instructorEmail) {
+            req.io.emit(`schedule-update-${deleted.instructorEmail}`, {
+              action: 'deleted',
+              scheduleId: deleted._id,
+              timestamp: new Date()
+            });
+          }
+        });
+      }
+      
       return res.json({ success: true, message: 'Schedule deleted', schedule: deleted });
     }
 
     const deleted = await Schedule.findByIdAndDelete(id);
     if (!deleted) return res.status(404).json({ success: false, message: 'Schedule not found' });
+    
+    // Google Calendar delete sync (best-effort) for legacy delete
+    try {
+      if (deleted.googleCalendarEventId && deleted.instructorEmail) {
+        const { deleteCalendarEvent } = await import('../services/googleCalendarService.js');
+        await deleteCalendarEvent(deleted.googleCalendarEventId, deleted.instructorEmail);
+        console.log(`✅ Schedule ${deleted._id} deleted from Google Calendar (legacy)`);
+      }
+    } catch (calendarError) {
+      console.warn('⚠️ Failed to delete from Google Calendar (legacy):', calendarError.message);
+    }
+    
+    // Create and broadcast deletion notification
+    if (deleted.instructorEmail) {
+      const deletionMessage = `🗑️ Schedule Removed\n📚 Course: ${deleted.course}\n📅 Day: ${deleted.day}\n⏰ Time: ${deleted.startTime} - ${deleted.endTime}\n🏛️ Room: ${deleted.room}`;
+      const notification = await createInstructorNotification(
+        deleted.instructorEmail,
+        '🗑️ Schedule Removed',
+        deletionMessage,
+        null
+      );
+      if (notification) {
+        broadcastNotification(req, deleted.instructorEmail, notification);
+      }
+    }
+    
+    // Broadcast real-time update (non-blocking)
+    if (req.io) {
+      setImmediate(() => {
+        req.io.emit('schedule-deleted', {
+          action: 'deleted',
+          scheduleId: deleted._id,
+          schedule: deleted,
+          timestamp: new Date(),
+          userId: req.userId || 'system'
+        });
+        // Also emit for specific instructor
+        if (deleted.instructorEmail) {
+          req.io.emit(`schedule-update-${deleted.instructorEmail}`, {
+            action: 'deleted',
+            scheduleId: deleted._id,
+            timestamp: new Date()
+          });
+        }
+      });
+    }
+    
     res.json({ success: true, message: 'Schedule deleted', schedule: deleted });
   } catch (error) {
     console.error('Compatibility schedule delete error:', error);

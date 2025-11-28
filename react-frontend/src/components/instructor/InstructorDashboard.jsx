@@ -325,12 +325,16 @@ const InstructorDashboard = () => {
     fetchCalendarEvents();
   }, [userEmail]);
 
-  // Setup Socket.io for real-time room status notifications
+  // Setup Socket.io for real-time room status notifications and schedule updates
   useEffect(() => {
     const socket = io('http://localhost:5000', { autoConnect: true });
 
     socket.on('connect', () => {
       console.log('✅ Connected to server for notifications');
+      // Subscribe to instructor-specific updates
+      if (userEmail) {
+        socket.emit('join-instructor-channel', { email: userEmail });
+      }
     });
 
     socket.on('connect_error', (error) => {
@@ -343,6 +347,67 @@ const InstructorDashboard = () => {
       showToast(data.message, 'info');
     });
 
+    // Real-time schedule creation
+    socket.on('schedule-created', (data) => {
+      console.log('📢 New schedule created:', data);
+      // Refresh schedules without page flickering
+      setAllSchedules(prev => [...prev, data.schedule]);
+      showToast('✓ New schedule added', 'success', 2000);
+    });
+
+    // Real-time schedule updates
+    socket.on('schedule-updated', (data) => {
+      console.log('📢 Schedule updated:', data);
+      // Update the schedule in state without full refresh
+      setAllSchedules(prev => 
+        prev.map(s => s._id === data.schedule._id ? data.schedule : s)
+      );
+      showToast('✓ Schedule updated', 'success', 2000);
+    });
+
+    // Real-time schedule deletions
+    socket.on('schedule-deleted', (data) => {
+      console.log('📢 Schedule deleted:', data);
+      // Remove the schedule from state
+      setAllSchedules(prev => prev.filter(s => s._id !== data.scheduleId));
+      showToast('✓ Schedule removed', 'info', 2000);
+    });
+
+    // Instructor-specific updates (only affects this instructor)
+    socket.on(`schedule-update-${userEmail}`, (data) => {
+      console.log('📢 Your schedule changed:', data);
+      if (data.action === 'created') {
+        setAllSchedules(prev => [...prev, data.schedule]);
+      } else if (data.action === 'updated') {
+        setAllSchedules(prev => 
+          prev.map(s => s._id === data.schedule._id ? data.schedule : s)
+        );
+      } else if (data.action === 'deleted') {
+        setAllSchedules(prev => prev.filter(s => s._id !== data.scheduleId));
+      }
+      showToast(`✓ Your schedule ${data.action}`, 'success', 2000);
+    });
+
+    // Real-time instructor notifications
+    socket.on(`notification-${userEmail}`, (data) => {
+      console.log('🔔 New notification received:', data);
+      if (data.action === 'new-notification' && data.notification) {
+        // Show notification toast with the title and message preview
+        const messagePreview = data.notification.message.split('\n')[0];
+        showToast(messagePreview, 'info', 3000);
+      }
+    });
+
+    // Global notifications for system-wide broadcasts
+    socket.on('notifications', (data) => {
+      console.log('📢 Global notification broadcast:', data);
+      if (data.instructorEmail === userEmail && data.notification) {
+        // Show notification toast
+        const messagePreview = data.notification.message.split('\n')[0];
+        showToast(messagePreview, 'info', 3000);
+      }
+    });
+
     socket.on('disconnect', () => {
       console.log('❌ Disconnected from server');
     });
@@ -350,7 +415,7 @@ const InstructorDashboard = () => {
     return () => {
       socket.disconnect();
     };
-  }, [showToast]);
+  }, [userEmail, showToast]);
 
   if (!userEmail) {
     return <p>Loading user information...</p>;
@@ -542,7 +607,17 @@ const InstructorDashboard = () => {
                   <p style={{ margin: 0 }}>No tasks yet. Add your first task above!</p>
                 </div>
               ) : (
-                todos.map((todo) => (
+                <div style={{
+                  maxHeight: '350px',
+                  overflowY: 'auto',
+                  overflowX: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '10px',
+                  paddingRight: '8px',
+                  scrollBehavior: 'smooth'
+                }}>
+                  {todos.map((todo) => (
                   <div
                     key={todo.id}
                     style={{
@@ -611,7 +686,19 @@ const InstructorDashboard = () => {
                       <FontAwesomeIcon icon={faTrash} />
                     </button>
                   </div>
-                ))
+                  ))}
+                </div>
+              )}
+              {todos.length > 5 && (
+                <div style={{
+                  textAlign: 'center',
+                  padding: '12px',
+                  fontSize: '12px',
+                  color: '#94a3b8',
+                  fontStyle: 'italic'
+                }}>
+                  Showing 5 of {todos.length} tasks (scroll to see more)
+                </div>
               )}
             </div>
           </div>

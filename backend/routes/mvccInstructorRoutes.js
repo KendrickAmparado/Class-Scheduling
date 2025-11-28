@@ -102,7 +102,7 @@ router.get('/profile/me', async (req, res) => {
     }
 
     const instructor = await Instructor.findById(userId)
-      .select('instructorId firstname lastname email contact department status archived createdAt updatedAt _id __v')
+      .select('instructorId firstname lastname email contact department image status archived createdAt updatedAt _id __v')
       .lean();
 
     if (!instructor) {
@@ -639,6 +639,34 @@ router.get("/stats/concurrency", async (req, res) => {
 
 // ------------------ Compatibility routes (legacy paths for instructors) ------------------
 
+// PUT /profile - update logged-in instructor's profile (convenience endpoint)
+router.put('/profile', async (req, res) => {
+  try {
+    if (!req.userId) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+    
+    const { firstname, lastname, contact, department } = req.body;
+    
+    const instructor = await Instructor.findById(req.userId);
+    if (!instructor) {
+      return res.status(404).json({ success: false, message: 'Instructor not found' });
+    }
+    
+    if (firstname !== undefined) instructor.firstname = firstname;
+    if (lastname !== undefined) instructor.lastname = lastname;
+    if (contact !== undefined) instructor.contact = contact;
+    if (department !== undefined) instructor.department = department;
+    
+    await instructor.save();
+    
+    return res.json({ success: true, message: 'Profile updated', instructor });
+  } catch (error) {
+    console.error('Error updating profile:', error);
+    return res.status(500).json({ success: false, message: 'Server error updating instructor' });
+  }
+});
+
 // PUT /:id (legacy) - update instructor profile
 router.put('/:id', async (req, res) => {
   try {
@@ -652,7 +680,13 @@ router.put('/:id', async (req, res) => {
       }, 3, 100);
 
       if (email) {
-        await Schedule.updateMany({ instructor: `${(await Instructor.findById(id)).firstname} ${(await Instructor.findById(id)).lastname}` }, { instructorEmail: email.toLowerCase() });
+        const currInstructor = await Instructor.findById(id);
+        if (currInstructor) {
+          await Schedule.updateMany(
+            { instructor: `${currInstructor.firstname} ${currInstructor.lastname}` },
+            { instructorEmail: email.toLowerCase() }
+          );
+        }
       }
 
       transaction.addOperation(id, 'update', updatedInstructor.__v, updatedInstructor);
@@ -671,147 +705,13 @@ router.put('/:id', async (req, res) => {
     if (status !== undefined) instructor.status = status;
     await instructor.save();
 
-    res.json({ success: true, message: 'Instructor updated (legacy)', instructor });
+    return res.json({ success: true, message: 'Instructor updated (legacy)', instructor });
   } catch (error) {
     if (error.message?.includes('Version conflict')) return res.status(409).json({ success: false, message: 'Concurrent update detected. Please refresh and try again.', code: 'VERSION_CONFLICT' });
     if (error.message?.includes('already in use') || error.message?.includes('Email')) return res.status(409).json({ success: false, message: error.message, code: 'EMAIL_CONFLICT' });
     console.error('Compatibility instructor update error:', error);
-    res.status(500).json({ success: false, message: 'Server error updating instructor', error: error.message });
+    return res.status(500).json({ success: false, message: 'Server error updating instructor', error: error.message });
   }
 });
 
 export default router;
-
-// ------------------ Additional compatibility: archive/restore/delete ------------------
-// These handlers mirror the legacy behavior so frontend calls to /api/instructors/:id/archive etc. work
-
-// Archive instructor (soft)
-router.put('/:id/archive', async (req, res) => {
-  try {
-    const instructor = await Instructor.findByIdAndUpdate(
-      req.params.id,
-      { status: 'archived', archivedDate: new Date() },
-      { new: true }
-    );
-    if (!instructor) return res.status(404).json({ success: false, error: 'Instructor not found' });
-    res.json({ success: true, message: 'Instructor archived', instructor });
-  } catch (err) {
-    console.error('Error archiving instructor:', err);
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// Restore instructor
-router.put('/:id/restore', async (req, res) => {
-  try {
-    const instructor = await Instructor.findByIdAndUpdate(
-      req.params.id,
-      { status: 'active', archivedDate: null },
-      { new: true }
-    );
-    if (!instructor) return res.status(404).json({ success: false, error: 'Instructor not found' });
-    res.json({ success: true, message: 'Instructor restored', instructor });
-  } catch (err) {
-    console.error('Error restoring instructor:', err);
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-/**
- * GET /api/instructors/:id
- * Fetch a single instructor by ID
- */
-router.get('/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    
-    // Validate MongoDB ObjectId
-    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
-      return res.status(400).json({ success: false, message: 'Invalid instructor ID' });
-    }
-
-    const instructor = await Instructor.findById(id)
-      .select('instructorId firstname lastname email contact department status archived createdAt updatedAt _id __v')
-      .lean();
-    
-    if (!instructor) {
-      return res.status(404).json({ success: false, message: 'Instructor not found' });
-    }
-
-    return res.json(instructor);
-  } catch (error) {
-    console.error('Error fetching instructor:', error);
-    res.status(500).json({ success: false, message: 'Server error fetching instructor' });
-  }
-});
-
-// Move to archive (soft delete) via DELETE
-router.delete('/:id', async (req, res) => {
-  try {
-    const instructor = await Instructor.findByIdAndUpdate(
-      req.params.id,
-      { status: 'archived', archivedDate: new Date() },
-      { new: true }
-    );
-    if (!instructor) return res.status(404).json({ success: false, error: 'Instructor not found' });
-    res.json({ success: true, message: 'Instructor moved to archive', instructor });
-  } catch (err) {
-    console.error('Error moving instructor to archive:', err);
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// Permanently delete instructor
-router.delete('/:id/permanent', async (req, res) => {
-  try {
-    const instructor = await Instructor.findByIdAndDelete(req.params.id);
-    if (!instructor) return res.status(404).json({ success: false, error: 'Instructor not found' });
-    res.json({ success: true, message: 'Instructor permanently deleted' });
-  } catch (err) {
-    console.error('Error permanently deleting instructor:', err);
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// PATCH aliases for frontend (many places use PATCH)
-router.patch('/:id/archive', async (req, res) => {
-  try {
-    const instructor = await Instructor.findByIdAndUpdate(
-      req.params.id,
-      { status: 'archived', archivedDate: new Date() },
-      { new: true }
-    );
-    if (!instructor) return res.status(404).json({ success: false, error: 'Instructor not found' });
-    res.json({ success: true, message: 'Instructor archived', instructor });
-  } catch (err) {
-    console.error('Error archiving instructor (patch):', err);
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-router.patch('/:id/restore', async (req, res) => {
-  try {
-    const instructor = await Instructor.findByIdAndUpdate(
-      req.params.id,
-      { status: 'active', archivedDate: null },
-      { new: true }
-    );
-    if (!instructor) return res.status(404).json({ success: false, error: 'Instructor not found' });
-    res.json({ success: true, message: 'Instructor restored', instructor });
-  } catch (err) {
-    console.error('Error restoring instructor (patch):', err);
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// Permanently delete (alias for DELETE /:id/permanent) via DELETE already exists; also support PATCH /:id/permanent
-router.patch('/:id/permanent', async (req, res) => {
-  try {
-    const instructor = await Instructor.findByIdAndDelete(req.params.id);
-    if (!instructor) return res.status(404).json({ success: false, error: 'Instructor not found' });
-    res.json({ success: true, message: 'Instructor permanently deleted' });
-  } catch (err) {
-    console.error('Error permanently deleting instructor (patch):', err);
-    res.status(500).json({ success: false, error: err.message });
-  }
-});

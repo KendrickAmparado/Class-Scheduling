@@ -61,10 +61,13 @@ app.use(express.json());
 app.use(async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization || req.headers.Authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) return next();
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return next();
+    }
     const token = authHeader.split(' ')[1];
-    if (!token) return next();
-    if (!process.env.JWT_SECRET) return next();
+    if (!token || !process.env.JWT_SECRET) {
+      return next();
+    }
 
     let decoded;
     try {
@@ -89,10 +92,10 @@ app.use(async (req, res, next) => {
         req.user = { id: req.userId, email: user.email };
       }
     }
+    next();
   } catch (err) {
     console.warn('Auth population middleware error:', err && err.message ? err.message : err);
-  } finally {
-    return next();
+    next();
   }
 });
 

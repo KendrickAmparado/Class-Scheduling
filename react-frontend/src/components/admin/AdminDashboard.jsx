@@ -3,6 +3,8 @@ import Sidebar from '../common/Sidebar.jsx';
 import Header from '../common/Header.jsx';
 import apiClient from '../../services/apiClient.js';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { io } from 'socket.io-client';
+import { useToast } from '../common/ToastProvider.jsx';
 import {
   faLayerGroup,
   faChalkboardTeacher,
@@ -13,6 +15,7 @@ import {
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 const AdminDashboard = () => {
+  const { showToast } = useToast();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [summaryStats, setSummaryStats] = useState({
     totalInstructors: 0,
@@ -116,6 +119,56 @@ const AdminDashboard = () => {
 
     fetchSummaryStats();
   }, []);
+
+  // Setup Socket.io for real-time updates (admin sees all changes)
+  useEffect(() => {
+    const socket = io('http://localhost:5000', { autoConnect: true });
+
+    socket.on('connect', () => {
+      console.log('✅ Admin connected to real-time updates');
+    });
+
+    socket.on('connect_error', (error) => {
+      console.error('❌ Socket.io connection error:', error);
+    });
+
+    // Real-time schedule creation
+    socket.on('schedule-created', (data) => {
+      console.log('📢 New schedule created:', data);
+      // Increment schedule count and show notification
+      setSummaryStats(prev => ({
+        ...prev,
+        totalSchedules: prev.totalSchedules + 1
+      }));
+      showToast('✓ New schedule created in system', 'success', 2000);
+    });
+
+    // Real-time schedule updates
+    socket.on('schedule-updated', (data) => {
+      console.log('📢 Schedule updated:', data);
+      // Show notification without changing count (same number of schedules)
+      showToast('✓ Schedule updated', 'info', 2000);
+    });
+
+    // Real-time schedule deletions
+    socket.on('schedule-deleted', (data) => {
+      console.log('📢 Schedule deleted:', data);
+      // Decrement schedule count and show notification
+      setSummaryStats(prev => ({
+        ...prev,
+        totalSchedules: Math.max(0, prev.totalSchedules - 1)
+      }));
+      showToast('✓ Schedule removed from system', 'info', 2000);
+    });
+
+    socket.on('disconnect', () => {
+      console.log('❌ Disconnected from real-time updates');
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [showToast]);
 
 
   return (

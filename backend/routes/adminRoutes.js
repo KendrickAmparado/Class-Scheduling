@@ -83,7 +83,7 @@ router.post("/login", async (req, res) => {
     }
   } catch (err) {
     console.error('Admin login error:', err);
-    res.status(500).json({ 
+    return res.status(500).json({ 
       success: false, 
       message: "Server error." 
     });
@@ -96,10 +96,10 @@ router.post("/login", async (req, res) => {
 router.get('/alerts', async (req, res) => {
   try {
     const alerts = await Alert.find().sort({ createdAt: -1 });
-    res.json({ success: true, alerts });
+    return res.json({ success: true, alerts });
   } catch (err) {
     console.error('Failed to fetch alerts:', err);
-    res.status(500).json({ 
+    return res.status(500).json({ 
       success: false, 
       message: 'Server error while fetching alerts.' 
     });
@@ -128,7 +128,7 @@ router.get('/activity', async (req, res) => {
     const total = normalized.length;
     const paginated = normalized.slice(skip, skip + limit);
 
-    res.json({ 
+    return res.json({ 
       success: true, 
       activities: paginated,
       pagination: {
@@ -142,7 +142,7 @@ router.get('/activity', async (req, res) => {
     });
   } catch (err) {
     console.error('Failed to fetch activity:', err);
-    res.status(500).json({ success: false, message: 'Server error while fetching activity' });
+    return res.status(500).json({ success: false, message: 'Server error while fetching activity' });
   }
 });
 
@@ -278,7 +278,7 @@ router.get('/search', async (req, res) => {
       ] }).skip(schedulesSkip).limit(limit).lean(),
     ]);
 
-    res.json({ 
+    return res.json({ 
       rooms, 
       instructors, 
       schedules,
@@ -311,7 +311,7 @@ router.get('/search', async (req, res) => {
     });
   } catch (err) {
     console.error('Search failed:', err);
-    res.status(500).json({ rooms: [], instructors: [], schedules: [], pagination: { rooms: {}, instructors: {}, schedules: {} } });
+    return res.status(500).json({ rooms: [], instructors: [], schedules: [], pagination: { rooms: {}, instructors: {}, schedules: {} } });
   }
 });
 
@@ -325,13 +325,13 @@ router.delete('/alerts/cleanup', async (req, res) => {
     
     console.log(`✅ Cleaned up ${result.deletedCount} invalid alerts`);
     
-    res.json({ 
+    return res.json({ 
       success: true, 
       message: `Cleaned up ${result.deletedCount} invalid alerts` 
     });
   } catch (error) {
     console.error('❌ Error cleaning alerts:', error);
-    res.status(500).json({ 
+    return res.status(500).json({ 
       success: false, 
       message: 'Error cleaning alerts' 
     });
@@ -351,13 +351,13 @@ router.delete('/alerts/:id', async (req, res) => {
       });
     }
     
-    res.json({ 
+    return res.json({ 
       success: true, 
       message: 'Alert deleted successfully' 
     });
   } catch (error) {
     console.error('Error deleting alert:', error);
-    res.status(500).json({ 
+    return res.status(500).json({ 
       success: false, 
       message: 'Error deleting alert' 
     });
@@ -381,14 +381,14 @@ router.put('/alerts/:id/read', async (req, res) => {
       });
     }
     
-    res.json({ 
+    return res.json({ 
       success: true, 
       message: 'Alert marked as read',
       alert 
     });
   } catch (error) {
     console.error('Error marking alert as read:', error);
-    res.status(500).json({ 
+    return res.status(500).json({ 
       success: false, 
       message: 'Error updating alert' 
     });
@@ -402,13 +402,13 @@ router.delete('/alerts', async (req, res) => {
     
     console.log(`✅ Deleted all ${result.deletedCount} alerts`);
     
-    res.json({ 
+    return res.json({ 
       success: true, 
       message: `Deleted all ${result.deletedCount} alerts` 
     });
   } catch (error) {
     console.error('❌ Error deleting all alerts:', error);
-    res.status(500).json({ 
+    return res.status(500).json({ 
       success: false, 
       message: 'Error deleting alerts' 
     });

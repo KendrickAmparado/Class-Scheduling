@@ -4,9 +4,11 @@ import InstructorHeader from '../common/InstructorHeader.jsx';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faUser, faEnvelope, faPhone, faIdCard } from '@fortawesome/free-solid-svg-icons';
 import { AuthContext } from '../../context/AuthContext.jsx';
+import { useToast } from '../common/ToastProvider.jsx';
 
 const InstructorSettings = () => {
   const { userEmail } = useContext(AuthContext);
+  const { showToast } = useToast();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileData, setProfileData] = useState({
     instructorId: '',
@@ -125,9 +127,10 @@ const InstructorSettings = () => {
         throw new Error(data.message || 'Failed to update profile');
       }
       setProfileData(prev => ({ ...prev, ...data.instructor }));
+      showToast('✓ Profile updated successfully!', 'success', 3000);
     } catch (err) {
       console.error('Failed to update profile:', err);
-      alert('Failed to update profile. Please try again.');
+      showToast(`✗ ${err.message || 'Failed to update profile'}`, 'error', 3000);
     } finally {
       setSaving(false);
     }
@@ -140,25 +143,25 @@ const InstructorSettings = () => {
     const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     const maxBytes = 20 * 1024 * 1024; // 20MB
     if (!allowed.includes(file.type)) {
-      alert('Unsupported file type. Please use JPG, PNG, GIF, or WEBP.');
+      showToast('✗ Unsupported file type. Please use JPG, PNG, GIF, or WEBP.', 'error', 3000);
       return;
     }
     if (file.size > maxBytes) {
-      alert('File too large. Please use an image under 20MB.');
+      showToast('✗ File too large. Please use an image under 20MB.', 'error', 3000);
       return;
     }
     try {
       const token = getToken();
       if (!token) {
-        alert('You are not logged in. Please login again.');
+        showToast('✗ You are not logged in. Please login again.', 'error', 3000);
         return;
       }
       const auth = await ensureAuthenticated();
       if (!auth.ok) {
         if (auth.status === 401) {
-          alert('Session expired or invalid token. Please login again.');
+          showToast('✗ Session expired or invalid token. Please login again.', 'error', 3000);
         } else {
-          alert('Unable to verify your session. Please try again.');
+          showToast('✗ Unable to verify your session. Please try again.', 'error', 3000);
         }
         return;
       }
@@ -178,9 +181,10 @@ const InstructorSettings = () => {
       const newUrl = data.image ? resolveImageUrl(data.image) : URL.createObjectURL(file);
       setProfileImage(newUrl);
       setProfileData(prev => ({ ...prev, image: data.image || prev.image }));
+      showToast('✓ Profile photo updated successfully!', 'success', 3000);
     } catch (err) {
       console.error('Image upload failed:', err);
-      alert(`Image upload failed: ${err.message || 'Please use a JPG/PNG/GIF/WEBP under 20MB.'}`);
+      showToast(`✗ Image upload failed: ${err.message || 'Please use a JPG/PNG/GIF/WEBP under 20MB.'}`, 'error', 3000);
     }
   };
 
