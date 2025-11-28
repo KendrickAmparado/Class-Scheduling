@@ -1,12 +1,15 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faEnvelope, faLock, faCalendarAlt, faRightToBracket, faCheckCircle, faTimes } from '@fortawesome/free-solid-svg-icons';
-import axios from 'axios';
+import apiClient from '../../services/apiClient.js';
 import ReCAPTCHA from 'react-google-recaptcha';
+import executeRecaptchaWithRetry from '../../utils/recaptchaClient.js';
 import { AuthContext } from '../../context/AuthContext.jsx';
 
-const RECAPTCHA_SITE_KEY = '6LcxZ_wrAAAAADV8aWfxkks2Weu6DuHNYnGw7jnT';
+const RECAPTCHA_SITE_KEY = process.env.REACT_APP_RECAPTCHA_SITE_KEY || '';
+const REQUIRE_RECAPTCHA = process.env.REACT_APP_REQUIRE_RECAPTCHA === 'true';
+const RECAPTCHA_INVISIBLE = process.env.REACT_APP_RECAPTCHA_INVISIBLE === 'true';
 
 const InstructorLogin = () => {
   const [formData, setFormData] = useState({
@@ -19,6 +22,7 @@ const InstructorLogin = () => {
   const [instructorName, setInstructorName] = useState('');
   const [recaptchaToken, setRecaptchaToken] = useState('');
   const [recaptchaError, setRecaptchaError] = useState('');
+  const recaptchaRef = useRef(null);
   const navigate = useNavigate();
   const { login: contextLogin } = useContext(AuthContext);
 
@@ -38,18 +42,41 @@ const InstructorLogin = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!recaptchaToken) {
-      setRecaptchaError('Please complete the reCAPTCHA.');
-      return;
-    }
     setLoading(true);
     setError('');
 
+    // Acquire/verify token.
+    let token = recaptchaToken;
+    if (REQUIRE_RECAPTCHA) {
+      if (RECAPTCHA_INVISIBLE) {
+        try {
+          const result = await executeRecaptchaWithRetry(recaptchaRef, { maxAttempts: 4 });
+          token = result || recaptchaToken;
+          if (!token) {
+            setRecaptchaError('reCAPTCHA failed to provide a token. Please try again.');
+            setLoading(false);
+            return;
+          }
+          setRecaptchaToken(token);
+        } catch (err) {
+          console.error('reCAPTCHA execute error:', err);
+          setRecaptchaError('reCAPTCHA execution failed. Please try again.');
+          setLoading(false);
+          return;
+        }
+      } else {
+        // Visible widget: ensure user completed it already
+        if (!recaptchaToken) {
+          setRecaptchaError('Please complete the reCAPTCHA.');
+          setLoading(false);
+          return;
+        }
+        token = recaptchaToken;
+      }
+    }
+
     try {
-      const res = await axios.post('http://localhost:5001/api/instructors/login', {
-        email: formData.email,
-        password: formData.password
-      });
+      const res = await apiClient.login(formData.email, formData.password, 'instructor', token);
 
       if (res.data.success) {
         // Store JWT for authenticated requests (must be under 'token' for the app)
@@ -295,15 +322,17 @@ const InstructorLogin = () => {
             </div>
 
             <ReCAPTCHA
+              ref={recaptchaRef}
               sitekey={RECAPTCHA_SITE_KEY}
               onChange={handleRecaptcha}
+              size={RECAPTCHA_INVISIBLE ? 'invisible' : undefined}
               style={{ margin: '20px 0', alignSelf: 'center' }}
             />
             {recaptchaError && <div style={{ color:'#ef4444', marginBottom:10 }}>{recaptchaError}</div>}
 
             <button 
               type="submit" 
-              disabled={loading || !recaptchaToken}
+              disabled={loading || (REQUIRE_RECAPTCHA && !RECAPTCHA_INVISIBLE && !recaptchaToken)}
               className="login-btn2 instructor-btn2"
               style={{
                 display: "flex",

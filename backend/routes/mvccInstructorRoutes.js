@@ -4,12 +4,42 @@
  */
 
 import express from "express";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
+import { verifyToken } from "../middleware/authMiddleware.js";
+import { logActivity } from "../utils/activityLogger.js";
 import Instructor from "../models/Instructor.js";
 import Schedule from "../models/Schedule.js";
 import { withRetry, MVCCTransaction } from "../middleware/mvccTransaction.js";
 import { updateInstructorWithConflictResolution, updateWithVersionControl } from "../utils/mvccManager.js";
 
 const router = express.Router();
+
+// Multer storage for profile images (compatibility with legacy route)
+const uploadsRoot = path.join(process.cwd(), "uploads", "profiles");
+if (!fs.existsSync(uploadsRoot)) {
+  fs.mkdirSync(uploadsRoot, { recursive: true });
+}
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, uploadsRoot);
+  },
+  filename: function (req, file, cb) {
+    const ext = path.extname(file.originalname || "");
+    const safeEmail = (req.userEmail || req.user?.email || "user").replace(/[^a-zA-Z0-9-_\.]/g, "_");
+    cb(null, `${safeEmail}-${Date.now()}${ext}`);
+  },
+});
+const upload = multer({
+  storage,
+  limits: { fileSize: 20 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+    if (allowed.includes(file.mimetype)) return cb(null, true);
+    return cb(new Error("Only image files are allowed"));
+  },
+});
 
 /**
  * GET /api/instructors
@@ -40,6 +70,25 @@ router.get('/', async (req, res) => {
 });
 
 /**
+ * GET instructor profile by email (compatibility)
+ * Supports frontend calls to `/api/instructors/profile/by-email/:email`
+ */
+router.get('/profile/by-email/:email', async (req, res) => {
+  try {
+    const emailParam = req.params.email;
+    const instructor = await Instructor.findOne({ email: { $regex: new RegExp(`^${emailParam}$`, 'i') } })
+      .select('instructorId firstname lastname email contact department image status archived createdAt updatedAt _id __v')
+      .lean();
+
+    if (!instructor) return res.status(404).json({ success: false, message: 'Instructor not found' });
+    return res.json(instructor);
+  } catch (error) {
+    console.error('Error fetching instructor by email:', error);
+    return res.status(500).json({ success: false, message: 'Server error fetching instructor by email', error: error.message });
+  }
+});
+
+/**
  * GET /api/instructors/profile/me
  * Get current user profile (authenticated)
  */
@@ -64,6 +113,37 @@ router.get('/profile/me', async (req, res) => {
   } catch (error) {
     console.error('Error fetching profile:', error);
     res.status(500).json({ success: false, message: 'Server error fetching profile' });
+  }
+});
+
+// SELF: Upload/replace profile image (compatibility)
+router.post('/profile/image', verifyToken, upload.single('image'), async (req, res) => {
+  try {
+    console.log('📥 POST /api/instructors/profile/image called by', req.userEmail || req.user?.email || 'unknown');
+    if (!req.file) return res.status(400).json({ success: false, message: 'No image uploaded' });
+    const relativePath = `/uploads/profiles/${req.file.filename}`;
+    const updated = await Instructor.findOneAndUpdate(
+      { email: req.userEmail || req.user?.email },
+      { $set: { image: relativePath } },
+      { new: true }
+    ).select('instructorId firstname lastname email contact department image status');
+    if (!updated) return res.status(404).json({ success: false, message: 'Instructor not found' });
+
+    // Log image upload activity
+    await logActivity({
+      type: 'instructor-image-uploaded',
+      message: `${updated.firstname} ${updated.lastname} uploaded profile image`,
+      source: 'instructor',
+      userEmail: req.userEmail || req.user?.email,
+      link: '/instructor/settings',
+      meta: { imagePath: relativePath },
+      io: req.io
+    });
+
+    res.json({ success: true, instructor: updated, image: relativePath });
+  } catch (err) {
+    console.error('Error uploading profile image (mvcc):', err);
+    res.status(500).json({ success: false, message: 'Error uploading image', error: err.message });
   }
 });
 

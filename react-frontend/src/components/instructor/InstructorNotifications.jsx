@@ -11,7 +11,7 @@ const InstructorNotifications = () => {
   const { userEmail } = useContext(AuthContext);
   const { showToast } = useToast();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const apiBase = process.env.REACT_APP_API_BASE || 'http://localhost:5001';
+  const apiBase = process.env.REACT_APP_API_BASE || 'http://localhost:5000';
   
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -100,7 +100,7 @@ const InstructorNotifications = () => {
         }
       } catch (error) {
         console.error('Cannot connect to backend:', error);
-        showToast('Cannot connect to backend server. Please ensure the server is running on http://localhost:5001', 'error');
+        showToast(`Cannot connect to backend server. Please ensure the server is running on ${process.env.REACT_APP_API_BASE || 'http://localhost:5000'}`, 'error');
       }
     };
 
@@ -114,7 +114,7 @@ const InstructorNotifications = () => {
 
   // Setup Socket.io for real-time notification updates
   useEffect(() => {
-    const socket = io('http://localhost:5001', { autoConnect: true });
+    const socket = io(process.env.REACT_APP_API_BASE || 'http://localhost:5000', { autoConnect: true });
 
     socket.on('connect', () => {
       console.log('✅ Connected to server for real-time notifications');

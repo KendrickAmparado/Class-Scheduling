@@ -292,7 +292,7 @@ const InstructorReports = () => {
   // Log report download activity
   const logReportDownload = async (reportType) => {
     try {
-      await axios.post('http://localhost:5001/api/instructors/log-activity', {
+      await axios.post(`${process.env.REACT_APP_API_BASE || 'http://localhost:5000'}/api/instructors/log-activity`, {
         type: 'report-downloaded',
         reportType: reportType,
         message: `Downloaded ${reportType} report`,

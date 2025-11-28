@@ -50,7 +50,7 @@ const InstructorWorkloadView = () => {
       setLoading(true);
       try {
         // Fetch instructor profile first to get ID
-        const profileRes = await fetch('http://localhost:5001/api/instructors/profile/me', {
+        const profileRes = await fetch(`${process.env.REACT_APP_API_BASE || 'http://localhost:5000'}/api/instructors/profile/me`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`,
           },
@@ -60,7 +60,7 @@ const InstructorWorkloadView = () => {
         setInstructor(profile);
 
         // Fetch workload data using the MongoDB _id
-        const workloadRes = await fetch(`http://localhost:5001/api/instructors/${profile._id}/workload`);
+        const workloadRes = await fetch(`${process.env.REACT_APP_API_BASE || 'http://localhost:5000'}/api/instructors/${profile._id}/workload`);
         if (!workloadRes.ok) throw new Error('Failed to fetch workload data');
         const workload = await workloadRes.json();
         setWorkloadData(workload);

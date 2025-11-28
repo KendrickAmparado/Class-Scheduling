@@ -10,7 +10,7 @@ import XLSX from 'xlsx-js-style';
 const Search = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const apiBase = process.env.REACT_APP_API_BASE || 'http://localhost:5001';
+  const apiBase = process.env.REACT_APP_API_BASE || 'http://localhost:5000';
   const [q, setQ] = useState('');
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState({ rooms: [], instructors: [], schedules: [] });

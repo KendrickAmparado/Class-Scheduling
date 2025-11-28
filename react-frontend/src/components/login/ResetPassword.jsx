@@ -34,7 +34,7 @@ const ResetPassword = () => {
       }
 
       try {
-        const res = await axios.get('http://localhost:5001/api/password-reset/verify', {
+        const res = await axios.get(`${process.env.REACT_APP_API_BASE || 'http://localhost:5000'}/api/password-reset/verify`, {
           params: { token, email, userType }
         });
 
@@ -82,7 +82,7 @@ const ResetPassword = () => {
     setLoading(true);
 
     try {
-      const res = await axios.post('http://localhost:5001/api/password-reset/reset', {
+      const res = await axios.post(`${process.env.REACT_APP_API_BASE || 'http://localhost:5000'}/api/password-reset/reset`, {
         token,
         email,
         userType,

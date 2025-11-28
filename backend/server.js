@@ -35,6 +35,7 @@ import mvccInstructorRoutes from './routes/mvccInstructorRoutes.js';
 import { versionConflictHandler } from './middleware/mvccTransaction.js';
 import { startWeatherScheduler } from './services/weatherScheduler.js';
 import Instructor from './models/Instructor.js'; // Import the model for index management
+import jwt from 'jsonwebtoken';
 
 dotenv.config();
 
@@ -54,6 +55,46 @@ if (isSentryReady()) {
 }
 
 app.use(express.json());
+
+// Populate req.userId (and req.user) from JWT for MVCC routes and audit
+// This middleware is forgiving: if token is missing/invalid we just continue
+app.use(async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization || req.headers.Authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) return next();
+    const token = authHeader.split(' ')[1];
+    if (!token) return next();
+    if (!process.env.JWT_SECRET) return next();
+
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+    } catch (e) {
+      // invalid token
+      return next();
+    }
+
+    // If token already contains a user id, use it
+    if (decoded?.id || decoded?.userId) {
+      req.userId = decoded.id || decoded.userId;
+      req.user = { id: req.userId, email: decoded.email };
+      return next();
+    }
+
+    // Otherwise try to resolve user by email (token includes email from legacy login)
+    if (decoded?.email) {
+      const user = await Instructor.findOne({ email: { $regex: new RegExp(`^${decoded.email}$`, 'i') } }).select('_id email').lean();
+      if (user) {
+        req.userId = user._id.toString();
+        req.user = { id: req.userId, email: user.email };
+      }
+    }
+  } catch (err) {
+    console.warn('Auth population middleware error:', err && err.message ? err.message : err);
+  } finally {
+    return next();
+  }
+});
 
 // MongoDB connection URI
 const mongoURI = process.env.MONGO_URI;

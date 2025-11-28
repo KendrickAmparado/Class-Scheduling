@@ -389,6 +389,45 @@ router.get("/stats/concurrency", async (req, res) => {
 // `version` is provided in the request body. If `version` is omitted they
 // fall back to legacy behavior to preserve backward compatibility.
 
+// GET schedules for an instructor by email (compatibility)
+router.get('/instructor/:email', async (req, res) => {
+  try {
+    const emailParam = req.params.email;
+    console.log('📥 GET /api/schedule/instructor/:email called with', { emailParam });
+    if (!emailParam) return res.status(400).json({ success: false, message: 'Email is required' });
+    const email = emailParam.toString().toLowerCase();
+
+    const query = { instructorEmail: { $regex: new RegExp(`^${email}$`, 'i') }, archived: false };
+    const schedules = await Schedule.find(query).select('course year section subject instructor instructorEmail day time room archived createdAt updatedAt _id __v').lean();
+    console.log(`🔎 Found ${Array.isArray(schedules) ? schedules.length : 0} schedules for email=${email}`);
+
+    return res.json(Array.isArray(schedules) ? schedules : []);
+  } catch (error) {
+    console.error('Error fetching schedules by instructor email:', error);
+    res.status(500).json({ success: false, message: 'Server error fetching schedules by email', error: error.message });
+  }
+});
+
+// GET schedules for an instructor by full name (compatibility)
+router.get('/instructor/by-name/:name', async (req, res) => {
+  try {
+    const nameParam = req.params.name;
+    console.log('📥 GET /api/schedule/instructor/by-name/:name called with', { nameParam });
+    if (!nameParam) return res.status(400).json({ success: false, message: 'Name is required' });
+    const name = nameParam.toString().trim();
+
+    // Match instructor field (full name) case-insensitively
+    const query = { instructor: { $regex: new RegExp(`^${name}$`, 'i') }, archived: false };
+    const schedules = await Schedule.find(query).select('course year section subject instructor instructorEmail day time room archived createdAt updatedAt _id __v').lean();
+    console.log(`🔎 Found ${Array.isArray(schedules) ? schedules.length : 0} schedules for name="${name}"`);
+
+    return res.json(Array.isArray(schedules) ? schedules : []);
+  } catch (error) {
+    console.error('Error fetching schedules by instructor name:', error);
+    res.status(500).json({ success: false, message: 'Server error fetching schedules by name', error: error.message });
+  }
+});
+
 // POST /create (legacy)
 router.post('/create', async (req, res) => {
   try {

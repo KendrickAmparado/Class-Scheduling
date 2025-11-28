@@ -3,14 +3,18 @@ import bcrypt from 'bcryptjs';
 import Instructor from '../models/Instructor.js';
 import Alert from '../models/Alert.js';
 import axios from 'axios';
+import { verifyRecaptcha } from '../utils/recaptcha.js';
 import validator from 'validator';
 import rateLimit from 'express-rate-limit';
 import { logActivity, getUserEmailFromRequest } from '../utils/activityLogger.js';
+import jwt from 'jsonwebtoken';
 
+// Rate limiter for login attempts. Skip during development to avoid blocking local testing.
 const loginLimiter = rateLimit({
   windowMs: 10 * 60 * 1000,
   max: 10,
-  message: "Too many login attempts. Please wait."
+  message: "Too many login attempts. Please wait.",
+  skip: () => process.env.NODE_ENV === 'development'
 });
 
 const router = express.Router();
@@ -151,14 +155,15 @@ router.post('/login', loginLimiter, async (req, res) => {
     return res.status(400).json({ message: 'Please complete the reCAPTCHA' });
   }
   try {
-    const secretKey = process.env.RECAPTCHA_SECRET_KEY || 'YOUR_SECRET_KEY_HERE';
-    const verify = await axios.post('https://www.google.com/recaptcha/api/siteverify', null, {
-      params: { secret: secretKey, response: recaptchaToken },
-    });
-    if (!verify.data.success) {
-      return res.status(400).json({ message: 'reCAPTCHA verification failed' });
+    const vr = await verifyRecaptcha(recaptchaToken);
+    if (vr.skipped) {
+      console.warn('⚠️ reCAPTCHA verification skipped (no secret configured)');
+    } else if (!vr.success) {
+      console.error('❌ reCAPTCHA verification failed for login:', vr);
+      return res.status(400).json({ message: 'reCAPTCHA verification failed', details: vr.errorCodes || vr });
     }
   } catch (err) {
+    console.error('Error during reCAPTCHA validation:', err);
     return res.status(500).json({ message: 'Error during reCAPTCHA validation' });
   }
 
@@ -230,11 +235,21 @@ router.post('/login', loginLimiter, async (req, res) => {
       io: req.io
     });
   
+    // Issue JWT token for the instructor
+    if (!process.env.JWT_SECRET) {
+      console.error('JWT_SECRET is not set in environment variables!');
+      return res.status(500).json({ message: 'Server configuration error.' });
+    }
 
-    // Return instructor data (without password)
+    const token = jwt.sign({ id: instructor._id, email: instructor.email }, process.env.JWT_SECRET, {
+      expiresIn: '1d'
+    });
+
+    // Return instructor data (without password) and token
     res.json({
       success: true,
       message: 'Login successful',
+      token,
       instructor: {
         id: instructor._id,
         instructorId: instructor.instructorId,

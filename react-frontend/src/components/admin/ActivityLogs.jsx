@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import Sidebar from '../common/Sidebar.jsx';
 import Header from '../common/Header.jsx';
 import apiClient from '../../services/apiClient.js';

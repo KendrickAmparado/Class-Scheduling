@@ -17,7 +17,6 @@ import {
   faEdit
   ,faArchive
 } from '@fortawesome/free-solid-svg-icons';
-import axios from 'axios';
 import apiClient from '../../services/apiClient.js';
 import { generateTimeSlots, TIME_SLOT_CONFIGS, timeRangesOverlap, getTimeRangeDuration, minutesToTimeString, timeStringToMinutes } from '../../utils/timeUtils.js';
 import { normalizeRoomName, formatRoomLabel } from '../../utils/roomUtils';

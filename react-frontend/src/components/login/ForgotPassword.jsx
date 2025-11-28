@@ -1,11 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faEnvelope, faCalendarAlt, faArrowLeft, faCheckCircle } from '@fortawesome/free-solid-svg-icons';
 import axios from 'axios';
 import ReCAPTCHA from 'react-google-recaptcha';
+import executeRecaptchaWithRetry from '../../utils/recaptchaClient.js';
 
-const RECAPTCHA_SITE_KEY = '6LcxZ_wrAAAAADV8aWfxkks2Weu6DuHNYnGw7jnT';
+const RECAPTCHA_SITE_KEY = process.env.REACT_APP_RECAPTCHA_SITE_KEY || '';
+const REQUIRE_RECAPTCHA = process.env.REACT_APP_REQUIRE_RECAPTCHA === 'true';
+const RECAPTCHA_INVISIBLE = process.env.REACT_APP_RECAPTCHA_INVISIBLE === 'true';
 
 const ForgotPassword = () => {
   const userType = 'instructor'; // Only instructors can reset password
@@ -18,6 +21,7 @@ const ForgotPassword = () => {
   const [success, setSuccess] = useState(false);
   const [recaptchaToken, setRecaptchaToken] = useState('');
   const [recaptchaError, setRecaptchaError] = useState('');
+  const recaptchaRef = useRef(null);
 
   const handleChange = (e) => {
     setFormData({
@@ -35,17 +39,42 @@ const ForgotPassword = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (!recaptchaToken) {
-      setRecaptchaError('Please complete the reCAPTCHA.');
-      return;
-    }
-
     setLoading(true);
     setError('');
     setSuccess(false);
 
+    // If reCAPTCHA is required, obtain a token.
+    let token = recaptchaToken;
+    if (REQUIRE_RECAPTCHA) {
+      if (RECAPTCHA_INVISIBLE) {
+        try {
+          const result = await executeRecaptchaWithRetry(recaptchaRef, { maxAttempts: 4 });
+          token = result || recaptchaToken;
+          if (!token) {
+            setRecaptchaError('reCAPTCHA failed to provide a token. Please try again.');
+            setLoading(false);
+            return;
+          }
+          setRecaptchaToken(token);
+        } catch (err) {
+          console.error('reCAPTCHA execute error:', err);
+          setRecaptchaError('reCAPTCHA execution failed. Please try again.');
+          setLoading(false);
+          return;
+        }
+      } else {
+        if (!recaptchaToken) {
+          setRecaptchaError('Please complete the reCAPTCHA.');
+          setLoading(false);
+          return;
+        }
+        token = recaptchaToken;
+      }
+    }
+
     try {
-      const res = await axios.post('http://localhost:5000/api/password-reset/forgot', {
+      const apiBase = process.env.REACT_APP_API_BASE || 'http://localhost:5000';
+      const res = await axios.post(`${apiBase}/api/password-reset/forgot`, {
         email: formData.email,
         userType: userType,
         recaptchaToken: recaptchaToken
@@ -247,16 +276,20 @@ const ForgotPassword = () => {
                   </div>
                 </div>
 
-                <ReCAPTCHA
-                  sitekey={RECAPTCHA_SITE_KEY}
-                  onChange={handleRecaptcha}
-                  style={{ margin: '20px 0', alignSelf: 'center' }}
-                />
+                {RECAPTCHA_SITE_KEY ? (
+                  <ReCAPTCHA
+                    ref={recaptchaRef}
+                    sitekey={RECAPTCHA_SITE_KEY}
+                    onChange={handleRecaptcha}
+                    size={RECAPTCHA_INVISIBLE ? 'invisible' : undefined}
+                    style={{ margin: '20px 0', alignSelf: 'center' }}
+                  />
+                ) : null}
                 {recaptchaError && <div style={{ color:'#ef4444', marginBottom:10 }}>{recaptchaError}</div>}
 
                 <button 
                   type="submit" 
-                  disabled={loading || !recaptchaToken}
+                  disabled={loading}
                   className="login-btn"
                   style={{
                     display: "flex",

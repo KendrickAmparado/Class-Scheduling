@@ -21,7 +21,7 @@ import {
 import axios from 'axios';
 import { useToast } from '../common/ToastProvider.jsx';
 
-const apiBase = process.env.REACT_APP_API_BASE || 'http://localhost:5001';
+const apiBase = process.env.REACT_APP_API_BASE || 'http://localhost:5000';
 
 const WeatherManagement = () => {
   const { showToast } = useToast();

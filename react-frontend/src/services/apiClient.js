@@ -503,9 +503,12 @@ class ApiClient {
 
   /**
    * Login
+   * Accepts optional recaptchaToken which will be forwarded to the server
    */
-  async login(email, password, userType = 'instructor') {
-    return this.post(`/api/${userType}/login`, { email, password });
+  async login(email, password, userType = 'instructor', recaptchaToken = null) {
+    const payload = { email, password };
+    if (recaptchaToken) payload.recaptchaToken = recaptchaToken;
+    return this.post(`/api/${userType}/login`, payload);
   }
 
   /**
@@ -517,9 +520,12 @@ class ApiClient {
 
   /**
    * Forgot password
+   * Optionally accepts recaptchaToken when required
    */
-  async forgotPassword(email) {
-    return this.post('/api/password-reset/forgot', { email });
+  async forgotPassword(email, recaptchaToken = null) {
+    const payload = { email };
+    if (recaptchaToken) payload.recaptchaToken = recaptchaToken;
+    return this.post('/api/password-reset/forgot', payload);
   }
 
   /**

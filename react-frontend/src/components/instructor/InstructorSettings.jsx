@@ -20,7 +20,7 @@ const InstructorSettings = () => {
 
   const [profileImage, setProfileImage] = useState('/images/tiger.png');
   const [saving, setSaving] = useState(false);
-  const apiBase = process.env.REACT_APP_API_BASE || 'http://localhost:5001';
+  const apiBase = process.env.REACT_APP_API_BASE || 'http://localhost:5000';
 
   const resolveImageUrl = useCallback((value) => {
     if (!value) return '/images/tiger.png';
